@@ -3,10 +3,12 @@ import type { Teacher } from "@/types/admin/teacher";
 
 interface TeacherRowProps {
     teacher: Teacher;
+    onDelete?: (id: number) => void;
 }
 
 export default function TeacherRow({
     teacher,
+    onDelete,
 }: TeacherRowProps) {
 
     return (
@@ -117,6 +119,7 @@ export default function TeacherRow({
                     </button>
 
                     <button
+                        onClick={() => onDelete?.(teacher.id)}
                         className="p-2 rounded-lg hover:bg-red-100 dark:hover:bg-red-900/30 text-red-600 transition"
                         title="Delete Teacher"
                     >

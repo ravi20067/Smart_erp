@@ -145,3 +145,60 @@ export async function switchToCurrentSession(yearId: number) {
 
     return response.data;
 }
+
+
+// =========================================================
+// EXTRA UPDATE / DELETE OPERATIONS
+// Existing API functions above are intentionally unchanged.
+// =========================================================
+
+export const updateAcademicYear = async (
+    academicYearId: number,
+    data: {
+        name: string;
+        startDate: string;
+        endDate: string;
+    }
+) => {
+    const response = await api.put(
+        `/admin/academic-years/${academicYearId}`,
+        data
+    );
+    return response.data;
+};
+
+export const deleteAcademicYear = async (academicYearId: number) => {
+    const response = await api.delete(
+        `/admin/academic-years/${academicYearId}`
+    );
+    return response.data;
+};
+
+export const updateClass = async (
+    classId: number,
+    data: {
+        name: string;
+        displayOrder: number;
+    }
+) => {
+    const response = await api.put(
+        `/admin/academic-years/classes/${classId}`,
+        data
+    );
+    return response.data;
+};
+
+export const updateSection = async (
+    sectionId: number,
+    data: {
+        name: string;
+        roomNumber: string;
+        capacity: number;
+    }
+) => {
+    const response = await api.put(
+        `/admin/academic-years/section/${sectionId}`,
+        data
+    );
+    return response.data;
+};

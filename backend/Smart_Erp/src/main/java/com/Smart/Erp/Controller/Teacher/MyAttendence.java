@@ -40,7 +40,7 @@ public class MyAttendence {
     }
 
     /**
-     * Today's Attendance
+     * Today's
      */
     @GetMapping("/today")
     public ResponseEntity<TodayAttendanceDto> getTodayAttendance() {

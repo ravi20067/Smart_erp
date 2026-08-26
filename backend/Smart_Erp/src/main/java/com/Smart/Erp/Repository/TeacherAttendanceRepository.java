@@ -10,16 +10,6 @@ import java.util.Optional;
 
 public interface TeacherAttendanceRepository
         extends JpaRepository<TeacherAttendance, Long> {
-
-    List<TeacherAttendance> findByTeacherId(Long teacherId);
-
-    List<TeacherAttendance> findByAttendanceDate(LocalDate date);
-
-    boolean existsByTeacherIdAndAttendanceDate(
-            Long teacherId,
-            LocalDate attendanceDate
-    );
-
     Optional<TeacherAttendance> findByTeacherAndAttendanceDate(
             Teacher teacher,
             LocalDate attendanceDate

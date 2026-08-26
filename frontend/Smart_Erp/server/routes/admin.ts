@@ -7,21 +7,6 @@ type AcademicYear = { id: number; name: string; startDate: string; endDate: stri
 
 // Initial Mock data
 const mockStudents = [
-  {
-    id: 1,
-    admissionNo: "20260001",
-    rollNumber: 1,
-    firstName: "Ravi",
-    lastName: "Kumar",
-    gender: "MALE",
-    schoolClass: "CLASS_10",
-    section: "A",
-    phone: "9876543210",
-    status: "Active",
-    email: "ravi@example.com",
-    dateOfBirth: "2010-01-01",
-    address: "123 Main St",
-  },
 ];
 
 const initialAcademicYears: AcademicYear[] = [
@@ -35,40 +20,8 @@ const initialTeachers: Teacher[] = [
   { id: 4, name: "David Miller", subject: "Physics" },
 ];
 
+
 let schoolClassesStore: SchoolClass[] = [
-  {
-    id: 1,
-    name: "CLASS_10",
-    displayOrder: 1,
-    isActive: true,
-    academicYearId: 1,
-    sections: [
-      { id: 101, name: "A", classTeacher: { id: 1, name: "Sarah Jenkins", subject: "Mathematics" }, studentCount: 38, capacity: 40, roomNumber: "Room 101" },
-      { id: 102, name: "B", classTeacher: { id: 2, name: "Michael Vance", subject: "Science" }, studentCount: 35, capacity: 40, roomNumber: "Room 102" },
-      { id: 103, name: "C", classTeacher: null, studentCount: 30, capacity: 40, roomNumber: "Room 103" }
-    ]
-  },
-  {
-    id: 2,
-    name: "CLASS_11",
-    displayOrder: 2,
-    isActive: true,
-    academicYearId: 1,
-    sections: [
-      { id: 201, name: "A", classTeacher: { id: 3, name: "Anita Roy", subject: "English" }, studentCount: 42, capacity: 45, roomNumber: "Room 201" },
-      { id: 202, name: "B", classTeacher: null, studentCount: 40, capacity: 45, roomNumber: "Room 202" }
-    ]
-  },
-  {
-    id: 3,
-    name: "CLASS_12",
-    displayOrder: 3,
-    isActive: true,
-    academicYearId: 1,
-    sections: [
-      { id: 301, name: "A", classTeacher: { id: 4, name: "David Miller", subject: "Physics" }, studentCount: 40, capacity: 45, roomNumber: "Room 301" }
-    ]
-  }
 ];
 
 export const loadClasses: RequestHandler = (_req: Request, res: Response) => {
@@ -198,4 +151,66 @@ export const assignTeacher: RequestHandler = (req: Request, res: Response) => {
 
 export const copyStructure: RequestHandler = (_req: Request, res: Response) => {
   res.json({ success: true });
+};
+
+// Admin Device handlers
+let mockDevices: any[] = [
+  { id: 1, deviceEPid: "DEV-1001", location: "Main Gate", password: "••••••••", status: "Active" },
+  { id: 2, deviceEPid: "DEV-1002", location: "Library Entrance", password: "••••••••", status: "Active" },
+  { id: 3, deviceEPid: "DEV-1003", location: "Science Block", password: "••••••••", status: "Inactive" }
+];
+
+export const loadDevicesHandler: RequestHandler = (_req: Request, res: Response) => {
+  res.json(mockDevices);
+};
+
+export const addDeviceHandler: RequestHandler = (req: Request, res: Response) => {
+  const { location, password } = req.body;
+  const newDevice = {
+    id: Date.now(),
+    deviceEPid: `DEV-${Math.floor(1000 + Math.random() * 9000)}`,
+    location: location || "Unassigned",
+    password: password || "123456",
+    status: "Active"
+  };
+  mockDevices.push(newDevice);
+  res.json(newDevice);
+};
+
+export const updateDeviceHandler: RequestHandler = (req: Request, res: Response) => {
+  const id = Number(req.params.id) || req.params.id;
+  const { location, password } = req.body;
+  const device = mockDevices.find(d => d.id == id);
+  if (device) {
+    if (location !== undefined) device.location = location;
+    if (password !== undefined) device.password = password;
+    return res.json(device);
+  }
+  res.status(404).json({ message: "Device not found" });
+};
+
+export const deleteDeviceHandler: RequestHandler = (req: Request, res: Response) => {
+  const id = Number(req.params.id) || req.params.id;
+  mockDevices = mockDevices.filter(d => d.id != id);
+  res.json({ success: true, message: "Device deleted" });
+};
+
+export const deleteStudentHandler: RequestHandler = (req: Request, res: Response) => {
+  const id = Number(req.params.id);
+  const index = mockStudents.findIndex((s) => s.id === id);
+  if (index !== -1) {
+    mockStudents.splice(index, 1);
+    return res.json({ success: true, message: "Student deleted" });
+  }
+  res.status(404).json({ message: "Student not found" });
+};
+
+export const deleteTeacherHandler: RequestHandler = (req: Request, res: Response) => {
+  const id = Number(req.params.id);
+  const index = initialTeachers.findIndex((t) => t.id === id);
+  if (index !== -1) {
+    initialTeachers.splice(index, 1);
+    return res.json({ success: true, message: "Teacher deleted" });
+  }
+  res.status(404).json({ message: "Teacher not found" });
 };

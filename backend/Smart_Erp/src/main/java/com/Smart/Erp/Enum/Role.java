@@ -8,7 +8,13 @@ public enum Role {
     FINANCE("FIN"),
     ADMISSION("ADM"),
     EXAMINATION("EXM"),
-    DEVICES("DEV");
+    DEVICES("DEV"),
+    DEAN("TEA"),
+    SCHOOL_DEAN("TEA"),
+    HOD("TEA"),
+    PC("TEA"),
+    MENTOR("TEA");
+
 
     private final String code;
 

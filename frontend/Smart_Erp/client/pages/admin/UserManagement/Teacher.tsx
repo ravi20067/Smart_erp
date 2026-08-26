@@ -53,6 +53,8 @@ export default function Teacher() {
 
         handleAddTeacherSubmit,
 
+        handleDeleteTeacher,
+
         handleDownloadReceipt,
 
         handleExport,
@@ -127,6 +129,7 @@ export default function Teacher() {
 
                             <TeacherTable
                                 teachers={filteredTeachers}
+                                onDelete={handleDeleteTeacher}
                             />
 
                             <TeacherPagination

@@ -1,9 +1,11 @@
 package com.Smart.Erp.Entity;
 
 
+import io.jsonwebtoken.lang.Classes;
 import jakarta.persistence.*;
 import lombok.*;
 
+import java.util.ArrayList;
 import java.util.List;
 
 @Entity
@@ -22,9 +24,28 @@ public class Course {
 
     private String courseCode;
 
-    @OneToMany(mappedBy = "course")
-    private List<Section> sections;
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "department_id")
+    private Department department;
 
-    @OneToMany(mappedBy = "course")
-    private List<Subject> subjects;
+    // Course → CourseSubject
+    @OneToMany(
+            mappedBy = "course",
+            cascade = CascadeType.ALL,
+            orphanRemoval = true
+    )
+    private List<CourseSubject> courseSubjects = new ArrayList<>();
+
+    // Course → CourseSection
+    @OneToMany(
+            mappedBy = "course",
+            cascade = CascadeType.ALL,
+            orphanRemoval = true
+    )
+    private List<Section> sections = new ArrayList<>();
+
+    // Assignment only
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "program_coordinator_id")
+    private Teacher programCoordinator;
 }

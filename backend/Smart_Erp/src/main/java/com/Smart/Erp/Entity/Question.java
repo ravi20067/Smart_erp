@@ -2,10 +2,7 @@ package com.Smart.Erp.Entity;
 
 
 import jakarta.persistence.*;
-import lombok.AllArgsConstructor;
-import lombok.Builder;
-import lombok.Data;
-import lombok.NoArgsConstructor;
+import lombok.*;
 
 @Entity
 @Table(name = "questions")
@@ -27,10 +24,6 @@ public class Question {
     private String difficulty;
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "miniChapter_id", nullable = false)
+    @JoinColumn(name = "mini_chapter_id")
     private MiniChapter miniChapter;
-
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "question_bank_id", nullable = false)
-    private QuestionBank questionBank;
 }

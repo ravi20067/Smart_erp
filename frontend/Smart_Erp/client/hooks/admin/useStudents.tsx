@@ -6,6 +6,7 @@ import {
     getSections,
     getStudents,
     addStudent,
+    deleteStudent,
 } from "@/services/admin/studentService";
 
 import type {
@@ -51,8 +52,8 @@ export default function useStudents() {
             email: "",
             phone: "",
             address: "",
-            schoolClass: "CLASS_10",
-            section: "A",
+            schoolClass: "",
+            section: "",
         });
 
     const [stats, setStats] =
@@ -77,32 +78,32 @@ export default function useStudents() {
                 }
             })
             .catch(console.error);
-
-        getSections(formData.schoolClass)
-            .then((data) => {
-                if (Array.isArray(data)) {
-                    setSections(data);
-                }
-            })
-            .catch(console.error);
     }, []);
 
     const handleClassChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
         const cls = e.target.value;
         // update form data class
         setFormData(prev => ({ ...prev, schoolClass: cls }));
-        // load sections for the selected class
-        getSections(cls)
-            .then((data) => {
-                if (Array.isArray(data)) {
-                    setSections(data);
-                    setFormData((prev) => ({
-                        ...prev,
-                        section: "",
-                    }));
-                }
-            })
-            .catch(() => setSections([]));
+        // load sections only if a class is selected
+        if (cls) {
+            getSections(cls)
+                .then((data) => {
+                    if (Array.isArray(data)) {
+                        setSections(data);
+                        setFormData((prev) => ({
+                            ...prev,
+                            section: "",
+                        }));
+                    }
+                })
+                .catch(() => setSections([]));
+        } else {
+            setSections([]);
+            setFormData((prev) => ({
+                ...prev,
+                section: "",
+            }));
+        }
     };
     const handleSearch = async () => {
         setLoadingStudents(true);
@@ -121,7 +122,7 @@ export default function useStudents() {
                     name: `${s.firstName} ${s.lastName}`,
                     gender: (s.gender === "FEMALE" ? "Female" : "Male") as "Female" | "Male",
                     dateOfBirth: s.dateOfBirth || "",
-                    className: s.schoolClass ? s.schoolClass.replace("CLASS_", "") : "10",
+                    className: s.schoolClass,
                     section: s.section || "A",
                     phone: s.phone || "",
                     email: s.email || "",
@@ -151,7 +152,7 @@ export default function useStudents() {
             email: "",
             phone: "",
             address: "",
-            schoolClass: "CLASS_10",
+            schoolClass: "",
             section: "A",
         });
     };
@@ -169,7 +170,7 @@ export default function useStudents() {
                     rollNo: data.rollNumber || 0,
                     name: `${data.firstName} ${data.lastName}`,
                     gender: (data.gender === "FEMALE" ? "Female" : "Male") as "Female" | "Male",
-                    className: data.schoolClass ? data.schoolClass.replace("CLASS_", "") : "10",
+                    className: data.schoolClass,
                     section: data.section || "A",
                     phone: data.phone || "",
                     status: "Active",
@@ -229,6 +230,18 @@ Please retain this copy for future reference.
     const handleExport = () => {
         exportStudentsToCSV(filteredStudents);
     };
+    const handleDeleteStudent = async (id: number) => {
+        if (!window.confirm("Are you sure you want to delete this student?")) {
+            return;
+        }
+        try {
+            await deleteStudent(id);
+            setStudentList((prev) => prev.filter((s) => s.id !== id));
+        } catch (err: any) {
+            console.error("Error deleting student:", err);
+            alert(err.response?.data?.message || "Failed to delete student. Please try again.");
+        }
+    };
     return {
 
         search,
@@ -276,6 +289,8 @@ Please retain this copy for future reference.
         handleCloseAddStudent,
 
         handleAddStudentSubmit,
+
+        handleDeleteStudent,
 
         handleDownloadReceipt,
 

@@ -18,11 +18,12 @@ public class CustomUserDetailService implements UserDetailsService {
     public UserDetails loadUserByUsername(String username) throws UsernameNotFoundException {
         Optional<User> user = userRepository.findByUsername(username);
         String password = user.get().getPassword();
-
+        if (!user.get().getEnabled()){
+            throw new UsernameNotFoundException("User not found username : "+ username);
+        }
         if (password == null) {
             password = "{noop}oauth2user";
         }
-
         if(user.isPresent()){
             return org.springframework.security.core.userdetails.User.builder()
                     .username(user.get().getUsername())

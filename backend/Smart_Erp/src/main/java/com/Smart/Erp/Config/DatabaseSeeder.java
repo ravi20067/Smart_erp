@@ -1,12 +1,19 @@
 package com.Smart.Erp.Config;
 
+import com.Smart.Erp.Entity.BasicDetail;
+import com.Smart.Erp.Entity.University;
 import com.Smart.Erp.Entity.User;
 import com.Smart.Erp.Enum.Role;
+import com.Smart.Erp.Repository.UniversityRepo;
 import com.Smart.Erp.Repository.UserRepo;
+import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Component;
+
+import java.util.ArrayList;
+import java.util.List;
 
 @Component
 @RequiredArgsConstructor
@@ -14,18 +21,60 @@ public class DatabaseSeeder implements CommandLineRunner {
 
     private final UserRepo userRepository;
     private final PasswordEncoder passwordEncoder;
+    private final AdminProperties admin;
+    private final UniversityRepo universityRepo;
 
+    @Transactional
     @Override
     public void run(String... args) {
 
         if (userRepository.count() == 0) {
 
-            User admin = new User();
-            admin.setUsername("admin");
-            admin.setPassword(passwordEncoder.encode("admin123"));
-            admin.setRoleUser(Role.ADMIN);
+            University university = University.builder()
+                    .name(admin.getFirstName())
+                    .build();
 
-            userRepository.save(admin);
+            university = universityRepo.save(university);
+
+            String password = passwordEncoder.encode(admin.getPassword());
+
+            List<User> admins = new ArrayList<>();
+
+            for (Role role : Role.values()) {
+
+                String userName = role.name().toLowerCase();
+
+                if (role != Role.ADMIN) {
+                    userName = userName + role.name().toLowerCase() ;
+                }
+
+                User user = User.builder()
+                        .registrationNo(123456L)
+                        .username(userName)
+                        .password(password)
+                        .enabled(true)
+                        .roleUser(role)
+                        .university(university)
+                        .build();
+
+                BasicDetail basicDetail = BasicDetail.builder()
+                        .firstName(admin.getFirstName())
+                        .lastName(admin.getLastName())
+                        .phone(admin.getPhone())
+                        .email(admin.getEmail())
+                        .fatherName(admin.getFatherName())
+                        .motherName(admin.getMotherName())
+                        .guardianMobileNumber(admin.getGuardianMobileNumber())
+                        .address(admin.getAddress())
+                        .user(user)                 
+                        .build();
+
+                user.setBasicDetail(basicDetail);
+
+                admins.add(user);
+            }
+
+            userRepository.saveAll(admins);
         }
     }
 }

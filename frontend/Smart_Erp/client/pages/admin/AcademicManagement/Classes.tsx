@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import {
     Plus,
     Search,
@@ -11,6 +12,8 @@ import {
     X,
     ChevronDown,
     RefreshCw,
+    Pencil,
+    Eye,
 } from "lucide-react";
 import {
     getAcademicYears,
@@ -24,6 +27,10 @@ import {
     deleteSection,
     copyPreviousStructure,
     switchToCurrentSession,
+    updateAcademicYear,
+    deleteAcademicYear,
+    updateClass,
+    updateSection,
 } from "@/services/admin/academicManagement";
 
 import Header from "@/components/Header";
@@ -82,6 +89,9 @@ export default function Classes() {
     const [showYearModal, setShowYearModal] = useState(false);
     const [showSectionModal, setShowSectionModal] = useState(false);
     const [showTeacherModal, setShowTeacherModal] = useState(false);
+    const [showEditYearModal, setShowEditYearModal] = useState(false);
+    const [showEditClassModal, setShowEditClassModal] = useState(false);
+    const [showEditSectionModal, setShowEditSectionModal] = useState(false);
 
     const [selectedClass, setSelectedClass] =
         useState<SchoolClass | null>(null);
@@ -106,16 +116,42 @@ export default function Classes() {
         capacity: 40,
     });
 
+    const [editYearForm, setEditYearForm] = useState({
+        id: 0,
+        name: "",
+        startDate: "",
+        endDate: "",
+    });
+
+    const [editClassForm, setEditClassForm] = useState({
+        id: 0,
+        name: "",
+        displayOrder: 1,
+    });
+
+    const [editSectionForm, setEditSectionForm] = useState({
+        id: 0,
+        name: "",
+        roomNumber: "",
+        capacity: 40,
+    });
+
     const [selectedTeacherId, setSelectedTeacherId] = useState<number | "">(
         ""
     );
 
     const { toast } = useToast();
+    const navigate = useNavigate();
     const [errorMsg, setErrorMsg] = useState("");
 
     const handleError = (error: any, fallback: string) => {
+        const responseData = error?.response?.data;
         const msg =
-            error?.response?.data?.message ||
+            responseData?.message ||
+            responseData?.error ||
+            (Array.isArray(responseData?.errors)
+                ? responseData.errors.map((item: any) => item?.message || item).join(", ")
+                : null) ||
             error?.message ||
             fallback;
         setErrorMsg(msg);
@@ -472,6 +508,236 @@ export default function Classes() {
             handleError(error, "Failed to delete class.");
         }
     }
+
+    /* ---------------------------------------------------------
+       EDIT / DELETE ACADEMIC YEAR
+    --------------------------------------------------------- */
+
+    function openEditAcademicYear(year: AcademicYear) {
+        if (year.current) {
+            toast({
+                variant: "destructive",
+                title: "Action not allowed",
+                description: "The current academic year cannot be edited.",
+            });
+            return;
+        }
+
+        setEditYearForm({
+            id: year.id,
+            name: year.name ?? "",
+            startDate: year.startDate ?? "",
+            endDate: year.endDate ?? "",
+        });
+        setErrorMsg("");
+        setShowEditYearModal(true);
+    }
+
+    async function handleEditAcademicYear() {
+        if (!editYearForm.id || !editYearForm.name.trim()) {
+            toast({
+                variant: "destructive",
+                title: "Validation Error",
+                description: "Academic year name is required.",
+            });
+            return;
+        }
+
+        try {
+            setSaving(true);
+            setErrorMsg("");
+
+            const updated = await updateAcademicYear(editYearForm.id, {
+                name: editYearForm.name.trim(),
+                startDate: editYearForm.startDate,
+                endDate: editYearForm.endDate,
+            });
+
+            setAcademicYears((prev) =>
+                prev.map((year) =>
+                    year.id === editYearForm.id ? { ...year, ...updated } : year
+                )
+            );
+
+            setShowEditYearModal(false);
+            toast({
+                title: "Success",
+                description: "Academic year updated successfully.",
+            });
+        } catch (error) {
+            handleError(error, "Failed to update academic year.");
+        } finally {
+            setSaving(false);
+        }
+    }
+
+    async function handleDeleteAcademicYear(year: AcademicYear) {
+        if (year.current) {
+            toast({
+                variant: "destructive",
+                title: "Action not allowed",
+                description: "The current academic year cannot be deleted.",
+            });
+            return;
+        }
+
+        if (!window.confirm(
+            `Are you sure you want to delete academic year "${year.name}"? This action cannot be undone.`
+        )) return;
+
+        try {
+            setSaving(true);
+            setErrorMsg("");
+            await deleteAcademicYear(year.id);
+
+            const remainingYears = academicYears.filter(
+                (item) => item.id !== year.id
+            );
+            setAcademicYears(remainingYears);
+
+            if (selectedYear === year.id) {
+                const fallback =
+                    remainingYears.find((item) => item.current) ??
+                    remainingYears[0] ??
+                    null;
+                setSelectedYear(fallback?.id ?? null);
+            }
+
+            toast({
+                title: "Success",
+                description: "Academic year deleted successfully.",
+            });
+        } catch (error) {
+            handleError(error, "Failed to delete academic year.");
+        } finally {
+            setSaving(false);
+        }
+    }
+
+    /* ---------------------------------------------------------
+       EDIT CLASS
+    --------------------------------------------------------- */
+
+    function openEditClass(schoolClass: SchoolClass) {
+        setEditClassForm({
+            id: schoolClass.id,
+            name: schoolClass.name ?? "",
+            displayOrder: schoolClass.displayOrder ?? 1,
+        });
+        setErrorMsg("");
+        setShowEditClassModal(true);
+    }
+
+    async function handleEditClass() {
+        if (!editClassForm.id || !editClassForm.name.trim()) {
+            toast({
+                variant: "destructive",
+                title: "Validation Error",
+                description: "Class name is required.",
+            });
+            return;
+        }
+
+        if (!selectedYear) {
+            toast({
+                variant: "destructive",
+                title: "Validation Error",
+                description: "Please select an academic year.",
+            });
+            return;
+        }
+
+        try {
+            setSaving(true);
+            setErrorMsg("");
+
+            await updateClass(editClassForm.id, {
+                name: editClassForm.name.trim(),
+                displayOrder: editClassForm.displayOrder,
+            });
+
+            await loadClasses(selectedYear);
+            setShowEditClassModal(false);
+
+            toast({
+                title: "Success",
+                description: "Class updated successfully.",
+            });
+        } catch (error) {
+            handleError(error, "Failed to update class.");
+        } finally {
+            setSaving(false);
+        }
+    }
+
+    function handleViewClass(schoolClass: SchoolClass) {
+        navigate(`/admin/classes/${schoolClass.id}`);
+    }
+
+    /* ---------------------------------------------------------
+       EDIT SECTION
+    --------------------------------------------------------- */
+
+    function openEditSection(section: Section) {
+        setEditSectionForm({
+            id: section.id,
+            name: section.name ?? "",
+            roomNumber: section.roomNumber ?? "",
+            capacity: section.capacity ?? 40,
+        });
+        setErrorMsg("");
+        setShowEditSectionModal(true);
+    }
+
+    async function handleEditSection() {
+        if (!editSectionForm.id || !editSectionForm.name.trim()) {
+            toast({
+                variant: "destructive",
+                title: "Validation Error",
+                description: "Section name is required.",
+            });
+            return;
+        }
+
+        if (editSectionForm.capacity <= 0) {
+            toast({
+                variant: "destructive",
+                title: "Validation Error",
+                description: "Student capacity must be greater than zero.",
+            });
+            return;
+        }
+
+        try {
+            setSaving(true);
+            setErrorMsg("");
+
+            await updateSection(editSectionForm.id, {
+                name: editSectionForm.name.trim(),
+                roomNumber: editSectionForm.roomNumber.trim(),
+                capacity: editSectionForm.capacity,
+            });
+
+            if (selectedYear) {
+                await loadClasses(selectedYear);
+            }
+
+            setShowEditSectionModal(false);
+            toast({
+                title: "Success",
+                description: "Section updated successfully.",
+            });
+        } catch (error) {
+            handleError(error, "Failed to update section.");
+        } finally {
+            setSaving(false);
+        }
+    }
+
+    function handleViewSection(section: Section) {
+        navigate(`/admin/sections/${section.id}`);
+    }
+
     /* ---------------------------------------------------------
        COPY STRUCTURE TO NEW YEAR
     --------------------------------------------------------- */
@@ -785,11 +1051,11 @@ export default function Classes() {
                                     Switch to Current Session
                                 </button>
                             )}
-
-                            <button
-                                onClick={handleCopyPreviousStructure}
-                                disabled={saving}
-                                className="
+                            {selectedAcademicYear && !selectedAcademicYear.current && (
+                                <button
+                                    onClick={handleCopyPreviousStructure}
+                                    disabled={saving}
+                                    className="
                                 flex
                                 items-center
                                 justify-center
@@ -806,10 +1072,42 @@ export default function Classes() {
                                 dark:border-slate-700
                                 dark:hover:bg-slate-800
                                 "
-                            >
-                                <Copy size={16} />
-                                Copy Structure
-                            </button>
+                                >
+                                    <Copy size={16} />
+                                    Copy Structure
+                                </button>
+
+                            )}
+
+                            {selectedAcademicYear && !selectedAcademicYear.current && (
+                                <>
+                                    <button
+                                        type="button"
+                                        onClick={() =>
+                                            openEditAcademicYear(selectedAcademicYear)
+                                        }
+                                        disabled={saving}
+                                        title="Edit academic year"
+                                        className="flex items-center justify-center gap-2 rounded-xl border border-slate-200 px-3 py-2.5 text-sm font-medium hover:bg-slate-50 disabled:opacity-50 dark:border-slate-700 dark:hover:bg-slate-800"
+                                    >
+                                        <Pencil size={16} />
+                                        Edit Year
+                                    </button>
+
+                                    <button
+                                        type="button"
+                                        onClick={() =>
+                                            handleDeleteAcademicYear(selectedAcademicYear)
+                                        }
+                                        disabled={saving}
+                                        title="Delete academic year"
+                                        className="flex items-center justify-center gap-2 rounded-xl border border-red-200 px-3 py-2.5 text-sm font-medium text-red-600 hover:bg-red-50 disabled:opacity-50 dark:border-red-900 dark:hover:bg-red-950/30"
+                                    >
+                                        <Trash2 size={16} />
+                                        Delete Year
+                                    </button>
+                                </>
+                            )}
 
                         </div>
 
@@ -957,6 +1255,10 @@ export default function Classes() {
                                     onDeleteSection={(sectionId) =>
                                         handleDeleteSection(sectionId)
                                     }
+                                    onEdit={openEditClass}
+                                    onView={handleViewClass}
+                                    onEditSection={openEditSection}
+                                    onViewSection={handleViewSection}
                                 />
 
                             ))
@@ -1273,6 +1575,86 @@ export default function Classes() {
                 </Modal>
             )}
 
+            {showEditYearModal && (
+                <Modal title="Edit Academic Year" onClose={() => {
+                    setShowEditYearModal(false);
+                    setErrorMsg("");
+                }}>
+                    <div className="space-y-4">
+                        {errorMsg && (
+                            <div className="rounded-xl border border-red-200 bg-red-50 p-3.5 text-sm text-red-600 dark:border-red-900/50 dark:bg-red-950/30 dark:text-red-400">
+                                {errorMsg}
+                            </div>
+                        )}
+                        <Input label="Academic Year" placeholder="2026-27"
+                            value={editYearForm.name}
+                            onChange={(value) => setEditYearForm((p) => ({ ...p, name: value }))} />
+                        <div className="grid grid-cols-2 gap-3">
+                            <Input label="Start Date" type="date"
+                                value={editYearForm.startDate}
+                                onChange={(value) => setEditYearForm((p) => ({ ...p, startDate: value }))} />
+                            <Input label="End Date" type="date"
+                                value={editYearForm.endDate}
+                                onChange={(value) => setEditYearForm((p) => ({ ...p, endDate: value }))} />
+                        </div>
+                        <ModalButtons loading={saving}
+                            onCancel={() => { setShowEditYearModal(false); setErrorMsg(""); }}
+                            onSave={handleEditAcademicYear} text="Update Academic Year" />
+                    </div>
+                </Modal>
+            )}
+
+            {showEditClassModal && (
+                <Modal title="Edit Class" onClose={() => {
+                    setShowEditClassModal(false);
+                    setErrorMsg("");
+                }}>
+                    <div className="space-y-4">
+                        {errorMsg && (
+                            <div className="rounded-xl border border-red-200 bg-red-50 p-3.5 text-sm text-red-600 dark:border-red-900/50 dark:bg-red-950/30 dark:text-red-400">
+                                {errorMsg}
+                            </div>
+                        )}
+                        <Input label="Class Name" placeholder="Class 10"
+                            value={editClassForm.name}
+                            onChange={(value) => setEditClassForm((p) => ({ ...p, name: value }))} />
+                        <Input label="Display Order" type="number"
+                            value={String(editClassForm.displayOrder)}
+                            onChange={(value) => setEditClassForm((p) => ({ ...p, displayOrder: Number(value) }))} />
+                        <ModalButtons loading={saving}
+                            onCancel={() => { setShowEditClassModal(false); setErrorMsg(""); }}
+                            onSave={handleEditClass} text="Update Class" />
+                    </div>
+                </Modal>
+            )}
+
+            {showEditSectionModal && (
+                <Modal title="Edit Section" onClose={() => {
+                    setShowEditSectionModal(false);
+                    setErrorMsg("");
+                }}>
+                    <div className="space-y-4">
+                        {errorMsg && (
+                            <div className="rounded-xl border border-red-200 bg-red-50 p-3.5 text-sm text-red-600 dark:border-red-900/50 dark:bg-red-950/30 dark:text-red-400">
+                                {errorMsg}
+                            </div>
+                        )}
+                        <Input label="Section" placeholder="A"
+                            value={editSectionForm.name}
+                            onChange={(value) => setEditSectionForm((p) => ({ ...p, name: value }))} />
+                        <Input label="Room Number" placeholder="Room 204"
+                            value={editSectionForm.roomNumber}
+                            onChange={(value) => setEditSectionForm((p) => ({ ...p, roomNumber: value }))} />
+                        <Input label="Student Capacity" type="number"
+                            value={String(editSectionForm.capacity)}
+                            onChange={(value) => setEditSectionForm((p) => ({ ...p, capacity: Number(value) }))} />
+                        <ModalButtons loading={saving}
+                            onCancel={() => { setShowEditSectionModal(false); setErrorMsg(""); }}
+                            onSave={handleEditSection} text="Update Section" />
+                    </div>
+                </Modal>
+            )}
+
             {showTeacherModal && selectedSection && (
                 <Modal
                     title="Assign Class Teacher"
@@ -1382,12 +1764,20 @@ function ClassCard({
     onAssignTeacher,
     onDelete,
     onDeleteSection,
+    onEdit,
+    onView,
+    onEditSection,
+    onViewSection,
 }: {
     schoolClass: SchoolClass;
     onAddSection: () => void;
     onAssignTeacher: (section: Section) => void;
     onDelete: () => void;
     onDeleteSection: (sectionId: number) => void;
+    onEdit: (schoolClass: SchoolClass) => void;
+    onView: (schoolClass: SchoolClass) => void;
+    onEditSection: (section: Section) => void;
+    onViewSection: (section: Section) => void;
 }) {
     const totalStudents = schoolClass.sections.reduce(
         (sum, section) => sum + section.studentCount,
@@ -1481,6 +1871,22 @@ function ClassCard({
                     >
                         <Plus size={16} />
                         Section
+                    </button>
+
+                    <button
+                        onClick={() => onEdit(schoolClass)}
+                        title="Edit class"
+                        className="rounded-lg p-2 text-slate-400 hover:bg-slate-50 hover:text-primary dark:hover:bg-slate-800"
+                    >
+                        <Pencil size={17} />
+                    </button>
+
+                    <button
+                        onClick={() => onView(schoolClass)}
+                        title="View class"
+                        className="rounded-lg p-2 text-slate-400 hover:bg-slate-50 hover:text-primary dark:hover:bg-slate-800"
+                    >
+                        <Eye size={17} />
                     </button>
 
                     <button
@@ -1636,6 +2042,22 @@ function ClassCard({
                                         ? "Change"
                                         : "Assign"}
                                 </button>
+                                <button
+                                    onClick={() => onEditSection(section)}
+                                    title="Edit section"
+                                    className="rounded-lg border border-slate-200 p-2 text-slate-400 hover:bg-slate-50 hover:text-primary dark:border-slate-700 dark:hover:bg-slate-800"
+                                >
+                                    <Pencil size={16} />
+                                </button>
+
+                                <button
+                                    onClick={() => onViewSection(section)}
+                                    title="View section"
+                                    className="rounded-lg border border-slate-200 p-2 text-slate-400 hover:bg-slate-50 hover:text-primary dark:border-slate-700 dark:hover:bg-slate-800"
+                                >
+                                    <Eye size={16} />
+                                </button>
+
 
                                 <button
                                     onClick={() => onDeleteSection(section.id)}

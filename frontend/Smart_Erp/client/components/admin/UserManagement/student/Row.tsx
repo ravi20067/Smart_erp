@@ -3,10 +3,12 @@ import type { Student } from "@/types/admin/student";
 
 interface StudentRowProps {
     student: Student;
+    onDelete?: (id: number) => void;
 }
 
 export default function StudentRow({
     student,
+    onDelete,
 }: StudentRowProps) {
     return (
         <tr className="border-t hover:bg-slate-50 dark:hover:bg-slate-800/50 transition">
@@ -85,7 +87,10 @@ export default function StudentRow({
                         <Pencil size={18} />
                     </button>
 
-                    <button className="p-2 rounded-lg hover:bg-red-100 dark:hover:bg-red-900/30 text-red-600 transition">
+                    <button
+                        onClick={() => onDelete?.(student.id)}
+                        className="p-2 rounded-lg hover:bg-red-100 dark:hover:bg-red-900/30 text-red-600 transition"
+                    >
                         <Trash2 size={18} />
                     </button>
 

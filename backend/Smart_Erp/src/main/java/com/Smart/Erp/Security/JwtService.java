@@ -44,28 +44,24 @@ public class JwtService {
                 .signWith(getSigningKey(), SignatureAlgorithm.HS256)
                 .compact();
     }
-
     // ==============================
     // Extract Username
     // ==============================
     public String extractUsername(String token) {
         return extractClaim(token, Claims::getSubject);
     }
-
     // ==============================
     // Extract Expiration
     // ==============================
     public Date extractExpiration(String token) {
         return extractClaim(token, Claims::getExpiration);
     }
-
     // ==============================
     // Extract RoleRepo
     // ==============================
     public String extractRole(String token) {
         return extractAllClaims(token).get("role", String.class);
     }
-
     // ==============================
     // Generic Claim Extractor
     // ==============================
@@ -73,7 +69,6 @@ public class JwtService {
         final Claims claims = extractAllClaims(token);
         return resolver.apply(claims);
     }
-
     // ==============================
     // Parse All Claims
     // ==============================

@@ -16,6 +16,12 @@ import {
   createSection,
   assignTeacher,
   copyStructure,
+  loadDevicesHandler,
+  addDeviceHandler,
+  updateDeviceHandler,
+  deleteDeviceHandler,
+  deleteStudentHandler,
+  deleteTeacherHandler,
 } from "./routes/admin";
 
 export function createServer() {
@@ -39,6 +45,10 @@ export function createServer() {
   app.get("/api/admin/student/sections", loadSections);
   app.get("/api/admin/student/stats", getStats);
   app.get("/api/admin/student/students", loadStudents);
+  app.delete("/api/admin/student/delete/:id", deleteStudentHandler);
+
+  // Admin Teacher routes
+  app.delete("/api/admin/teacher/delete/:id", deleteTeacherHandler);
 
   // Admin Academic Management routes
   app.get("/api/admin/academic-years", getAcademicYears);
@@ -50,6 +60,12 @@ export function createServer() {
   app.post("/api/admin/academic-years/classes/:classId/sections", createSection);
   app.put("/api/admin/academic-years/sections/:sectionId/teacher", assignTeacher);
   app.post("/api/admin/academic-years/:academicYearId/copy-structure", copyStructure);
+
+  // Admin Device routes
+  app.get("/api/admin/device/get_devices", loadDevicesHandler);
+  app.post("/api/admin/device/add", addDeviceHandler);
+  app.put("/api/admin/device/:id", updateDeviceHandler);
+  app.delete("/api/admin/device/:id", deleteDeviceHandler);
 
   return app;
 }

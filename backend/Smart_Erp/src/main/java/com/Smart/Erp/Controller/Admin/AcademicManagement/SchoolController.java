@@ -1,0 +1,46 @@
+package com.Smart.Erp.Controller.Admin.AcademicManagement;
+
+import com.Smart.Erp.DTO.Admin.School.SchoolRequest;
+import com.Smart.Erp.DTO.Admin.School.SchoolResponse;
+import com.Smart.Erp.Service.SchoolService;
+import lombok.RequiredArgsConstructor;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.*;
+
+@RestController
+@RequestMapping("/admin/school")
+@RequiredArgsConstructor
+public class SchoolController {
+
+    private final SchoolService schoolService;
+
+    @GetMapping("/{schoolId}")
+    public ResponseEntity<SchoolResponse> getSchoolById(
+            @PathVariable Long schoolId
+    ){
+        return ResponseEntity.ok(schoolService.findBySchoolId(schoolId));
+    }
+    @PostMapping("/{academicYearId}")
+    public ResponseEntity<SchoolResponse> createSchool(
+            @PathVariable Long academicYearId,
+            @RequestParam String schoolName,
+            @RequestParam String schoolCode
+    ){
+        return ResponseEntity.ok(schoolService.createSchool(academicYearId,schoolName, schoolCode));
+    }
+
+    @PutMapping("/{schoolId}")
+    public ResponseEntity<SchoolResponse> updateSchool(
+            @PathVariable Long schoolId,
+            @RequestBody SchoolRequest schoolRequest
+            ){
+        return ResponseEntity.ok(schoolService.updateSchool(schoolId , schoolRequest));
+    }
+
+    @DeleteMapping("/{schoolId}")
+    public ResponseEntity<String> deleteSchool(
+            @PathVariable Long schoolId
+    ){
+        return ResponseEntity.ok(schoolService.deleteSchool(schoolId));
+    }
+}

@@ -1,10 +1,9 @@
 package com.Smart.Erp.Entity;
 
 import jakarta.persistence.*;
-import lombok.AllArgsConstructor;
-import lombok.Builder;
-import lombok.Data;
-import lombok.NoArgsConstructor;
+import lombok.*;
+
+import java.time.LocalDate;
 
 @Entity
 @Table(name = "study_materials")
@@ -24,11 +23,7 @@ public class StudyMaterial {
 
     private String fileType;
 
-    @OneToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "mini_chapter_id", nullable = false, unique = true)
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "mini_chapter_id")
     private MiniChapter miniChapter;
-
-    @OneToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "teacher_id", nullable = false, unique = true)
-    private Teacher assignedTeacher;
 }

@@ -11,10 +11,12 @@ import StudentPagination from "@/components/admin/UserManagement/student/Paginat
 
 interface StudentTableProps {
     students: Student[];
+    onDelete?: (id: number) => void;
 }
 
 export default function StudentTable({
     students,
+    onDelete,
 }: StudentTableProps) {
 
     return (
@@ -75,6 +77,7 @@ export default function StudentTable({
                             <StudentRow
                                 key={student.id}
                                 student={student}
+                                onDelete={onDelete}
                             />
 
                         ))}

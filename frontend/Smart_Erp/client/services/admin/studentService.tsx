@@ -18,6 +18,16 @@ export const getClasses = async () => {
     return [];
 };
 
+export const deleteStudent = async (
+    id: number
+) => {
+    const response = await api.delete(
+        `/admin/student/delete/${id}`
+    );
+
+    return response.data;
+};
+
 export const getSections = async (schoolClass: string) => {
     const response = await api.get(
         `/admin/student/sections?class=${schoolClass}`

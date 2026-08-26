@@ -3,10 +3,12 @@ import TeacherRow from "./Row";
 
 interface TeacherTableProps {
     teachers: Teacher[];
+    onDelete?: (id: number) => void;
 }
 
 export default function TeacherTable({
     teachers,
+    onDelete,
 }: TeacherTableProps) {
 
     return (
@@ -71,6 +73,7 @@ export default function TeacherTable({
                             <TeacherRow
                                 key={teacher.id}
                                 teacher={teacher}
+                                onDelete={onDelete}
                             />
 
                         ))}

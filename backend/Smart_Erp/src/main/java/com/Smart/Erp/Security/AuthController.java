@@ -2,6 +2,7 @@ package com.Smart.Erp.Security;
 
 import com.Smart.Erp.DTO.LoginRequest;
 import com.Smart.Erp.DTO.UserProfileDto;
+import com.Smart.Erp.Exception.ResourceNotFoundException;
 import com.Smart.Erp.Service.UserService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
@@ -25,22 +26,31 @@ public class AuthController {
 
     @Autowired
     private UserService userService;
+
     @PostMapping("/login")
     public ResponseEntity<?> login(@RequestBody LoginRequest request) {
-        Authentication authentication =
-                authenticationManager.authenticate(
-                        new UsernamePasswordAuthenticationToken(
-                                request.getUsername(),
-                                request.getPassword()
-                        )
-                );
-        UserDetails userDetails =
-                (UserDetails) authentication.getPrincipal();
-        assert userDetails != null;
-        String token = jwtService.generateToken(userDetails);
+        try {
 
-        return ResponseEntity.ok(Map.of("token", token));
+
+            Authentication authentication =
+                    authenticationManager.authenticate(
+                            new UsernamePasswordAuthenticationToken(
+                                    request.getUsername(),
+                                    request.getPassword()
+                            )
+                    );
+            UserDetails userDetails =
+                    (UserDetails) authentication.getPrincipal();
+            assert userDetails != null;
+            String token = jwtService.generateToken(userDetails);
+
+            return ResponseEntity.ok(Map.of("token", token));
+        } catch (Exception e) {
+            throw new ResourceNotFoundException("Invalid request");
+        }
+
     }
+
     @GetMapping("/profile")
     public ResponseEntity<UserProfileDto> getProfile(Authentication authentication) {
 

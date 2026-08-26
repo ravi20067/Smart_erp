@@ -3,11 +3,9 @@ package com.Smart.Erp.Entity;
 
 
 import jakarta.persistence.*;
-import lombok.AllArgsConstructor;
-import lombok.Builder;
-import lombok.Data;
-import lombok.NoArgsConstructor;
+import lombok.*;
 
+import java.util.ArrayList;
 import java.util.List;
 
 @Entity
@@ -27,9 +25,14 @@ public class Chapter {
     private Integer chapterNumber;
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "subject_id", nullable = false)
+    @JoinColumn(name = "subject_id")
     private Subject subject;
 
-    @OneToMany(mappedBy = "chapter")
-    private List<MiniChapter> miniChapters;
+
+    @OneToMany(
+            mappedBy = "chapter",
+            cascade = CascadeType.ALL,
+            orphanRemoval = true
+    )
+    private List<MiniChapter> miniChapters = new ArrayList<>();
 }

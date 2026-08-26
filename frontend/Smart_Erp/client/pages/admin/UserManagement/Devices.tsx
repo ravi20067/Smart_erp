@@ -16,6 +16,7 @@ export default function Devices() {
         filteredDevices,
         formData,
         receiptDevice,
+        editingDevice,
 
         // Loading
         loadingDevices,
@@ -31,6 +32,8 @@ export default function Devices() {
         // Actions
         handleFormChange,
         handleCloseAddDevice,
+        handleEditDevice,
+        handleDeleteDevice,
         handleAddDeviceSubmit,
         handleDownloadReceipt,
 
@@ -81,6 +84,8 @@ export default function Devices() {
 
                             <DevicesTable
                                 devices={filteredDevices}
+                                onEdit={handleEditDevice}
+                                onDelete={handleDeleteDevice}
                             />
                             <DevicePagination
                                 filteredDevices={filteredDevices.length}
@@ -123,6 +128,7 @@ export default function Devices() {
                 submitting={submitting}
                 errorMsg={errorMsg}
                 receiptDevice={receiptDevice}
+                editingDevice={editingDevice}
                 formData={formData}
                 onFormChange={handleFormChange}
                 onSubmit={handleAddDeviceSubmit}

@@ -60,6 +60,8 @@ export default function Student() {
 
         handleAddStudentSubmit,
 
+        handleDeleteStudent,
+
         handleDownloadReceipt,
 
         handleExport
@@ -139,6 +141,7 @@ export default function Student() {
 
                             <StudentTable
                                 students={filteredStudents}
+                                onDelete={handleDeleteStudent}
                             />
 
                             <StudentPagination

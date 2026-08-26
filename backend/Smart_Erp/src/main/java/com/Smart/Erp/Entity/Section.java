@@ -1,10 +1,10 @@
 package com.Smart.Erp.Entity;
 
 import jakarta.persistence.*;
-import lombok.AllArgsConstructor;
-import lombok.Builder;
-import lombok.Data;
-import lombok.NoArgsConstructor;
+import lombok.*;
+
+import java.util.ArrayList;
+import java.util.List;
 
 @Entity
 @Table(name = "sections")
@@ -20,21 +20,22 @@ public class Section {
 
     private String name;
 
-    private String roomNumber;
-
     private Integer capacity;
 
     private Integer studentCount;
 
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "class_id", nullable = false)
-    private ClassEntity classEntity;
-
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "class_teacher_id")
-    private Teacher classTeacher;
+    @OneToMany(
+            mappedBy = "section",
+            cascade = CascadeType.ALL,
+            orphanRemoval = true
+    )
+    private List<SectionGroup> sectionGroups = new ArrayList<>();
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "course_id")
     private Course course;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "mentor_id")
+    private Teacher mentor;
 }

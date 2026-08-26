@@ -2,11 +2,9 @@ package com.Smart.Erp.Entity;
 
 
 import jakarta.persistence.*;
-import lombok.AllArgsConstructor;
-import lombok.Builder;
-import lombok.Data;
-import lombok.NoArgsConstructor;
+import lombok.*;
 
+import java.util.ArrayList;
 import java.util.List;
 
 @Entity
@@ -29,12 +27,22 @@ public class MiniChapter {
     private String description;
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "chapter_id", nullable = false)
+    @JoinColumn(name = "chapter_id")
     private Chapter chapter;
 
-    @OneToOne(mappedBy = "miniChapter", cascade = CascadeType.ALL)
-    private StudyMaterial studyMaterial;
 
-    @OneToMany(mappedBy = "miniChapter")
-    private List<Question> questions;
+    @OneToMany(
+            mappedBy = "miniChapter",
+            cascade = CascadeType.ALL,
+            orphanRemoval = true
+    )
+    private List<Question> questions = new ArrayList<>();
+
+
+    @OneToMany(
+            mappedBy = "miniChapter",
+            cascade = CascadeType.ALL,
+            orphanRemoval = true
+    )
+    private List<StudyMaterial> studyMaterials = new ArrayList<>();
 }

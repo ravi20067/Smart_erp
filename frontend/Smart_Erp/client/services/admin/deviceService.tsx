@@ -9,6 +9,21 @@ export const addDevice = async (formData: DeviceFormData) => {
     return response.data;
 };
 
+export const updateDevice = async (id: string | number, formData: DeviceFormData) => {
+    const response = await api.put(
+        `/admin/device/${id}`,
+        formData
+    );
+    return response.data;
+};
+
+export const deleteDevice = async (id: string | number) => {
+    const response = await api.delete(
+        `/admin/device/${id}`
+    );
+    return response.data;
+};
+
 export const getDevices = async (
 ) => {
     const response = await api.get(

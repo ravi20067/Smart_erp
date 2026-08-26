@@ -2,10 +2,7 @@ package com.Smart.Erp.Entity;
 
 import com.Smart.Erp.Enum.Status;
 import jakarta.persistence.*;
-import lombok.AllArgsConstructor;
-import lombok.Builder;
-import lombok.Data;
-import lombok.NoArgsConstructor;
+import lombok.*;
 
 @Entity
 @Table(name = "devices")
@@ -19,12 +16,14 @@ public class Devices {
     private Long id;
 
     private String deviceEPid;
-    private String Location;
 
-    private Status status;
+    private String location;
 
     private String password;
 
+    private Status status;
+
+    @ToString.Exclude
     @OneToOne
     @JoinColumn(name = "user_id")
     private User user;

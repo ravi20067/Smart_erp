@@ -1,7 +1,7 @@
 import { X } from "lucide-react";
 import DeviceForm from "./Form";
 import DeviceRecipt from "./Receipt";
-import { DeviceFormData } from "@/types/admin/device";
+import { Device, DeviceFormData } from "@/types/admin/device";
 
 interface AddDeviceDrawerProps {
     open: boolean;
@@ -13,6 +13,8 @@ interface AddDeviceDrawerProps {
     errorMsg: string;
 
     receiptDevice: any;
+
+    editingDevice?: Device | null;
 
     formData: DeviceFormData;
 
@@ -37,6 +39,7 @@ export default function AddDeviceDrawer({
     submitting,
     errorMsg,
     receiptDevice,
+    editingDevice,
     formData,
     onFormChange,
     onSubmit,
@@ -94,7 +97,9 @@ export default function AddDeviceDrawer({
 
                         <h2 className="font-bold text-xl">
 
-                            {receiptDevice
+                            {editingDevice
+                                ? "Edit Device"
+                                : receiptDevice
                                 ? "Device Receipt"
                                 : "Add New Device"}
 
@@ -102,8 +107,10 @@ export default function AddDeviceDrawer({
 
                         <p className="text-xs text-slate-500 mt-1">
 
-                            {receiptDevice
-                                ? "Device added successfully"
+                            {editingDevice
+                                ? "Update the details for this device"
+                                : receiptDevice
+                                ? "Device processed successfully"
                                 : "Fill in the details to register a new device"}
 
                         </p>
@@ -135,7 +142,7 @@ export default function AddDeviceDrawer({
 
                     )}
 
-                    {receiptDevice ? (
+                    {receiptDevice && !editingDevice ? (
 
                         <DeviceRecipt
                             device={receiptDevice}

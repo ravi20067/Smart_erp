@@ -3,12 +3,10 @@ package com.Smart.Erp.Entity;
 
 import com.Smart.Erp.Enum.Status;
 import jakarta.persistence.*;
-import lombok.AllArgsConstructor;
-import lombok.Builder;
-import lombok.Data;
-import lombok.NoArgsConstructor;
+import lombok.*;
 
-import java.time.LocalDate;
+import java.util.ArrayList;
+import java.util.List;
 
 @Entity
 @Table(name = "students")
@@ -22,36 +20,52 @@ public class Student {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
+
     private String admissionNo;
-    private String firstName;
-    private String lastName;
 
-    private String gender;
-    private LocalDate dateOfBirth;
-
-    private String email;
-    private String phone;
-
-    private String address;
 
     private Integer rollNumber;
+
 
     @Enumerated(EnumType.STRING)
     private Status status;
 
-    private LocalDate admissionDate;
 
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "class_id")
-    private ClassEntity classEntity;
-
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "section_id")
-    private Section section;
-
-
-    @OneToOne
-    @JoinColumn(name = "user_id")
+    @ToString.Exclude
+    @OneToOne(fetch = FetchType.LAZY)
+    @JoinColumn(
+            name = "user_id",
+            nullable = false,
+            unique = true
+    )
     private User user;
 
+
+    @ToString.Exclude
+    @ManyToMany
+    @JoinTable(
+            name = "student_section_group",
+            joinColumns = @JoinColumn(name = "student_id"),
+            inverseJoinColumns = @JoinColumn(name = "section_group_id")
+    )
+    private List<SectionGroup> sectionGroups = new ArrayList<>();
+
+
+
+    @OneToMany(
+            mappedBy = "student",
+            cascade = CascadeType.ALL,
+            orphanRemoval = true
+    )
+    private List<ExamResult> examResults = new ArrayList<>();
+
+
+    @ToString.Exclude
+    @ManyToMany
+    @JoinTable(
+            name = "student_scholarship",
+            joinColumns = @JoinColumn(name = "student_id"),
+            inverseJoinColumns = @JoinColumn(name = "scholarship_id")
+    )
+    private List<Scholarship> scholarships = new ArrayList<>();
 }

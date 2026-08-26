@@ -19,7 +19,7 @@ import org.jspecify.annotations.Nullable;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
-import org.springframework.stereotype.Component;
+import org.springframework.stereotype.Service;
 import tools.jackson.databind.ObjectMapper;
 
 import java.time.Duration;
@@ -31,7 +31,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 
-@Component
+@Service
 @RequiredArgsConstructor
 @Transactional
 public class TeacherAttendanceService {
@@ -46,6 +46,8 @@ public class TeacherAttendanceService {
     private final ObjectMapper objectMapper;
 
     private final AttendancePublisher attendancePublisher;
+
+    private final MappingService mappingService;
 
 
     private Teacher getLoggedInTeacher() {
@@ -506,7 +508,7 @@ public class TeacherAttendanceService {
                     .message("Check In recorded successfully.")
                     .type("CHECK_IN")
                     .deviceName(scannerLocation)
-                    .teacherName(teacher.getFirstName()+" "+teacher.getLastName())
+                    .teacherName(mappingService.getNameUser(teacher.getUser()))
                     .employeeId(teacher.getEmployeeId())
                     .department(teacher.getUser().getRoleUser().toString())
                     .attendanceTime(LocalDateTime.now().format(DateTimeFormatter.ofPattern("dd MMM yyyy hh:mm:ss a")).toString())
@@ -540,7 +542,7 @@ public class TeacherAttendanceService {
                 .message("Check Out recorded successfully.")
                 .type("CHECK_OUT")
                 .deviceName(scannerLocation)
-                .teacherName(teacher.getFirstName()+" "+teacher.getLastName())
+                .teacherName(mappingService.getNameUser(teacher.getUser()))
                 .employeeId(teacher.getEmployeeId())
                 .department(teacher.getUser().getRoleUser().toString())
                 .attendanceTime(LocalDateTime.now().format(DateTimeFormatter.ofPattern("dd MMM yyyy hh:mm:ss a")).toString())

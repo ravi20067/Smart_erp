@@ -4,6 +4,7 @@ import {
     getTeacherStats,
     getTeachers,
     addTeacher,
+    deleteTeacher,
 } from "@/services/admin/teacherService";
 
 import type {
@@ -299,6 +300,18 @@ Teacher registered successfully.
         exportTeachersToCSV(filteredTeachers);
 
     };
+    const handleDeleteTeacher = async (id: number) => {
+        if (!window.confirm("Are you sure you want to delete this teacher?")) {
+            return;
+        }
+        try {
+            await deleteTeacher(id);
+            setTeacherList((prev) => prev.filter((t) => t.id !== id));
+        } catch (err: any) {
+            console.error("Error deleting teacher:", err);
+            alert(err.response?.data?.message || "Failed to delete teacher. Please try again.");
+        }
+    };
     return {
 
         search,
@@ -336,6 +349,8 @@ Teacher registered successfully.
         handleCloseAddTeacher,
 
         handleAddTeacherSubmit,
+
+        handleDeleteTeacher,
 
         handleDownloadReceipt,
 
