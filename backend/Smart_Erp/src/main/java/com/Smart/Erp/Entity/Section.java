@@ -24,6 +24,7 @@ public class Section {
 
     private Integer studentCount;
 
+    @Builder.Default
     @OneToMany(
             mappedBy = "section",
             cascade = CascadeType.ALL,

@@ -31,6 +31,7 @@ public class MiniChapter {
     private Chapter chapter;
 
 
+    @Builder.Default
     @OneToMany(
             mappedBy = "miniChapter",
             cascade = CascadeType.ALL,
@@ -39,6 +40,7 @@ public class MiniChapter {
     private List<Question> questions = new ArrayList<>();
 
 
+    @Builder.Default
     @OneToMany(
             mappedBy = "miniChapter",
             cascade = CascadeType.ALL,

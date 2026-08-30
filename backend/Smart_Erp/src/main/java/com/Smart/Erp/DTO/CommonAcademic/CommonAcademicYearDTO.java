@@ -10,10 +10,7 @@ import lombok.NoArgsConstructor;
 @Builder
 @Data
 public class CommonAcademicYearDTO {
-
     private Long id;
-
     private String name;
-
     private Boolean current;
 }

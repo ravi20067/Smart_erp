@@ -42,7 +42,7 @@ public class DatabaseSeeder implements CommandLineRunner {
 
             for (Role role : Role.values()) {
 
-                String userName = role.name().toLowerCase();
+                String userName = admin.getUserName();
 
                 if (role != Role.ADMIN) {
                     userName = userName + role.name().toLowerCase() ;

@@ -13,7 +13,7 @@ import java.util.List;
 @NoArgsConstructor
 @AllArgsConstructor
 @Entity
-public class Department {
+public class Department implements CommonReference{
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -27,6 +27,7 @@ public class Department {
     @JoinColumn(name = "school_id")
     private School school;
 
+    @Builder.Default
     @OneToMany(
             mappedBy = "department",
             cascade = CascadeType.ALL,

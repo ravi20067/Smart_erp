@@ -1,7 +1,6 @@
 package com.Smart.Erp.Entity;
 
 
-import io.jsonwebtoken.lang.Classes;
 import jakarta.persistence.*;
 import lombok.*;
 
@@ -14,29 +13,32 @@ import java.util.List;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-public class Course {
+public class Course implements CommonReference {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    private String courseName;
+    private String name;
 
-    private String courseCode;
+    private String code;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "department_id")
     private Department department;
 
-    // Course → CourseSubject
+    // Course → Subject
+    @Builder.Default
     @OneToMany(
             mappedBy = "course",
             cascade = CascadeType.ALL,
             orphanRemoval = true
     )
-    private List<CourseSubject> courseSubjects = new ArrayList<>();
+    private List<Subject> subjects = new ArrayList<>();
 
     // Course → CourseSection
+
+    @Builder.Default
     @OneToMany(
             mappedBy = "course",
             cascade = CascadeType.ALL,
@@ -48,4 +50,11 @@ public class Course {
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "program_coordinator_id")
     private Teacher programCoordinator;
+
+    @OneToMany(
+            mappedBy = "course",
+            cascade = CascadeType.ALL,
+            orphanRemoval = true
+    )
+    private List<Specialization> specializations = new ArrayList<>();
 }

@@ -1,7 +1,5 @@
 package com.Smart.Erp.Service;
 
-import com.Smart.Erp.DTO.Admin.Teacher.AdminTeacherStatsDTO;
-import com.Smart.Erp.DTO.Admin.Teacher.TeacherDto;
 import com.Smart.Erp.Repository.TeacherRepo;
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;

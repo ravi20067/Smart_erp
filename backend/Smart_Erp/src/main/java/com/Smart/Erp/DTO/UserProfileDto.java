@@ -23,6 +23,6 @@ public class UserProfileDto {
 
     private String phone;
 
-    private String profileImage;
+    private String photoUrl;
 
 }

@@ -8,178 +8,299 @@ import StatsCards from "@/components/admin/StatsCards";
 import RecentNotifications from "@/components/admin/RecentNotifications";
 
 export default function Dashboard() {
+    const [sidebarOpen, setSidebarOpen] = useState(false);
     const [chatOpen, setChatOpen] = useState(false);
+
     return (
         <div className="h-screen overflow-hidden bg-slate-50 dark:bg-slate-950">
 
-            {/* Header */}
-            <Header />
+            {/* =====================================================
+                HEADER
+            ====================================================== */}
+            <Header
+                sidebarOpen={sidebarOpen}
+                setSidebarOpen={setSidebarOpen}
+            />
 
-            {/* Main Layout */}
-            <div className="flex h-[calc(100vh-80px)]">
 
-                {/* Sidebar */}
-                <aside
-                    className="
-                    hidden lg:block
-                    w-72
-                    shrink-0
-                    overflow-y-auto
-                    border-r
-                    border-slate-200
-                    dark:border-slate-800
-                    bg-white
-                    dark:bg-slate-900
-                "
-                >
-                    <Sidebar />
-                </aside>
+            {/* =====================================================
+                MAIN AREA
+            ====================================================== */}
+            <div className="h-[calc(100vh-64px)]">
 
-                {/* Main Content */}
+                {/* Sidebar
+                    Sidebar is fixed/overlay.
+                    It does NOT occupy layout space.
+                */}
+                <Sidebar
+                    isOpen={sidebarOpen}
+                    onClose={() => setSidebarOpen(false)}
+                />
+
+
+                {/* =================================================
+                    MAIN CONTENT
+                ================================================== */}
                 <main
                     className="
-                    flex-1
-                    overflow-y-auto
-                    p-4 md:p-6
-                "
+                        w-full
+                        min-w-0
+                        h-full
+                        overflow-y-auto
+                        p-4
+                        md:p-6
+                    "
                 >
-                    <div className="space-y-6">
+                    <div
+                        className="
+                            w-full
+                            max-w-[1600px]
+                            mx-auto
+                            space-y-6
+                        "
+                    >
 
-                        {/* Welcome */}
-                        <div>
-                            <h1 className="text-3xl font-bold text-slate-900 dark:text-white">
-                                Administator Dashboard
+                        {/* =========================================
+                            WELCOME
+                        ========================================== */}
+                        <section>
+                            <h1
+                                className="
+                                    text-2xl
+                                    md:text-3xl
+                                    font-bold
+                                    text-slate-900
+                                    dark:text-white
+                                "
+                            >
+                                Administrator Dashboard
                             </h1>
 
                             <p className="text-slate-500 mt-2">
                                 Welcome back, Ravi 👋
                             </p>
-                        </div>
+                        </section>
 
-                        {/* Stats */}
+
+                        {/* =========================================
+                            STATISTICS
+                        ========================================== */}
                         <StatsCards />
 
-                        {/* Content */}
-                        <div className="grid xl:grid-cols-2 gap-6">
+
+                        {/* =========================================
+                            DASHBOARD CONTENT
+                        ========================================== */}
+                        <section
+                            className="
+                                grid
+                                grid-cols-1
+                                xl:grid-cols-2
+                                gap-6
+                            "
+                        >
                             <RecentNotifications />
-                        </div>
+                        </section>
 
                     </div>
                 </main>
+
             </div>
 
-            {/* Floating Chat Button */}
-            <button
-                onClick={() => setChatOpen(true)}
-                className="
-                fixed
-                bottom-6
-                right-6
-                z-50
-                w-16
-                h-16
-                rounded-full
-                bg-gradient-to-r
-                from-primary
-                to-secondary
-                text-white
-                shadow-xl
-                hover:scale-105
-                transition
-                flex
-                items-center
-                justify-center
-            "
-            >
-                <MessageCircle size={28} />
-            </button>
 
-            {/* Chat Drawer Overlay */}
+            {/* =====================================================
+                FLOATING CHAT BUTTON
+            ====================================================== */}
+            {!chatOpen && (
+                <button
+                    type="button"
+                    onClick={() => setChatOpen(true)}
+                    aria-label="Open AI Administrator Copilot"
+                    className="
+                        fixed
+                        bottom-5
+                        right-5
+                        md:bottom-6
+                        md:right-6
+                        z-40
+
+                        w-14
+                        h-14
+                        md:w-16
+                        md:h-16
+
+                        rounded-full
+
+                        bg-gradient-to-r
+                        from-primary
+                        to-secondary
+
+                        text-white
+                        shadow-xl
+
+                        hover:scale-105
+                        active:scale-95
+
+                        transition-transform
+                        duration-200
+
+                        flex
+                        items-center
+                        justify-center
+                    "
+                >
+                    <MessageCircle
+                        size={26}
+                        className="md:w-7 md:h-7"
+                    />
+                </button>
+            )}
+
+
+            {/* =====================================================
+                CHAT DRAWER
+            ====================================================== */}
             {chatOpen && (
                 <>
+                    {/* Overlay */}
                     <div
                         className="
-                        fixed
-                        inset-0
-                        bg-black/40
-                        z-40
-                    "
+                            fixed
+                            inset-0
+                            z-40
+                            bg-black/40
+                            backdrop-blur-[1px]
+                        "
                         onClick={() => setChatOpen(false)}
                     />
 
+
+                    {/* Chat Window */}
                     <div
                         className="
-                        fixed
-                        bottom-24
-                        right-6
-                        z-50
+                            fixed
+                            z-50
 
-                        w-[95vw]
-                        sm:w-[420px]
+                            bottom-4
+                            right-4
+                            left-4
 
-                        h-[75vh]
-                        max-h-[700px]
+                            sm:left-auto
 
-                        rounded-3xl
-                        overflow-hidden
+                            sm:right-6
+                            sm:bottom-6
 
-                        bg-white
-                        dark:bg-slate-900
+                            w-auto
+                            sm:w-[420px]
 
-                        border
-                        border-slate-200
-                        dark:border-slate-700
+                            h-[75vh]
+                            max-h-[700px]
 
-                        shadow-2xl
+                            rounded-2xl
+                            md:rounded-3xl
 
-                        animate-in
-                        slide-in-from-bottom-4
-                    "
-                    >
-                        {/* Chat Header */}
-                        <div
-                            className="
-                            flex
-                            items-center
-                            justify-between
-                            px-5
-                            py-4
-                            border-b
+                            overflow-hidden
+
+                            bg-white
+                            dark:bg-slate-900
+
+                            border
                             border-slate-200
                             dark:border-slate-700
+
+                            shadow-2xl
+
+                            animate-in
+                            slide-in-from-bottom-4
+                            duration-200
                         "
+                    >
+
+                        {/* =========================================
+                            CHAT HEADER
+                        ========================================== */}
+                        <div
+                            className="
+                                h-[72px]
+
+                                flex
+                                items-center
+                                justify-between
+
+                                px-4
+                                md:px-5
+
+                                border-b
+                                border-slate-200
+                                dark:border-slate-700
+                            "
                         >
-                            <div>
-                                <h2 className="font-bold text-lg">
-                                    AI admisnistrator Copilot
+                            <div className="min-w-0">
+
+                                <h2
+                                    className="
+                                        font-bold
+                                        text-base
+                                        md:text-lg
+                                        text-slate-900
+                                        dark:text-white
+                                        truncate
+                                    "
+                                >
+                                    AI Administrator Copilot
                                 </h2>
 
-                                <p className="text-xs text-slate-500">
+                                <p
+                                    className="
+                                        text-xs
+                                        text-slate-500
+                                        mt-0.5
+                                    "
+                                >
                                     Ask anything.
                                 </p>
+
                             </div>
 
+
+                            {/* Close Chat */}
                             <button
+                                type="button"
                                 onClick={() => setChatOpen(false)}
+                                aria-label="Close AI Copilot"
                                 className="
-                                p-2
-                                rounded-lg
-                                hover:bg-slate-100
-                                dark:hover:bg-slate-800
-                            "
+                                    flex
+                                    items-center
+                                    justify-center
+
+                                    w-9
+                                    h-9
+
+                                    rounded-lg
+
+                                    hover:bg-slate-100
+                                    dark:hover:bg-slate-800
+
+                                    transition
+                                "
                             >
                                 <X size={20} />
                             </button>
+
                         </div>
 
-                        {/* Chat Content */}
+
+                        {/* =========================================
+                            CHAT CONTENT
+                        ========================================== */}
                         <div className="h-[calc(100%-72px)]">
                             <Copilot />
                         </div>
+
                     </div>
                 </>
             )}
+
         </div>
     );
-
 }

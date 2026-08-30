@@ -3,18 +3,21 @@ package com.Smart.Erp.Enum;
 public enum Role {
     STUDENT("STU"),
     TEACHER("TEA"),
+
     ADMIN("ADMIN"),
+
+    ADMISSION("ADM"),
+    ERP_CELL("ERP"),
+    DEAN("DEA"),
+    SCHOOL_DEAN("SDE"),
+    HOD("HOD"),
+    PC("PCS"),
+    MENTOR("MEN"),
+
     LIBRARY("LIB"),
     FINANCE("FIN"),
-    ADMISSION("ADM"),
     EXAMINATION("EXM"),
-    DEVICES("DEV"),
-    DEAN("TEA"),
-    SCHOOL_DEAN("TEA"),
-    HOD("TEA"),
-    PC("TEA"),
-    MENTOR("TEA");
-
+    DEVICES("DEV");
 
     private final String code;
 

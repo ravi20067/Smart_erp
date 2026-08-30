@@ -6,7 +6,6 @@ import com.Smart.Erp.Service.AcademicYearService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
-
 import java.util.List;
 
 @RestController
@@ -24,9 +23,10 @@ public class AcademicYearController {
 
     @GetMapping
     public ResponseEntity<AcademicYearResponse> getAcademicYear(
+            @RequestParam Long universityId,
             @RequestParam Long academicYearId
     ){
-        return ResponseEntity.ok(academicYearService.getAcademicYearById(academicYearId));
+        return ResponseEntity.ok(academicYearService.getAcademicYearById(universityId,academicYearId));
     }
 
     @PostMapping
@@ -39,17 +39,19 @@ public class AcademicYearController {
 
     @PutMapping
     public ResponseEntity<AcademicYearResponse> updateAcademicYear(
+            @RequestParam Long universityId,
             @RequestParam Long academicYearId,
             @RequestBody AcademicYearRequest academicYearRequest
     ){
-        return ResponseEntity.ok(academicYearService.updateAcademicYear(academicYearId,academicYearRequest));
+        return ResponseEntity.ok(academicYearService.updateAcademicYear(universityId,academicYearId,academicYearRequest));
     }
 
     @DeleteMapping
     public ResponseEntity<String> deleteAcademicYear(
+            @RequestParam Long universityId,
             @RequestParam Long academicYearId
     ){
-        return ResponseEntity.ok(academicYearService.deleteAcademicYear(academicYearId));
+        return ResponseEntity.ok(academicYearService.deleteAcademicYear(universityId,academicYearId));
     }
     @PostMapping("/switch")
     public ResponseEntity<String> switchToCurrentYear(

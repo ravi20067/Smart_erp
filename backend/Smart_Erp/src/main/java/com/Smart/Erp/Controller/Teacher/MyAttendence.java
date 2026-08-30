@@ -16,7 +16,6 @@ import java.util.List;
 public class MyAttendence {
 
     private final TeacherAttendanceService teacherAttendanceService;
-
     /**
      * Generate QR Code
      */
@@ -27,7 +26,6 @@ public class MyAttendence {
                 teacherAttendanceService.generateQr()
         );
     }
-
     /**
      * Refresh QR Code
      */
@@ -38,7 +36,6 @@ public class MyAttendence {
                 teacherAttendanceService.refreshQr()
         );
     }
-
     /**
      * Today's
      */

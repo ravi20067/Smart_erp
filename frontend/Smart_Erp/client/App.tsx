@@ -21,18 +21,13 @@ import AdmissionDashboard from "./pages/admission/Dashboard";
 import ExaminationDeptDashboard from "./pages/examination_department/Dashboard";
 import FinanceDashboard from "./pages/finance/Dashboard";
 import AdminDashboard from "./pages/admin/Dashboard";
-import AdminStudents from "./pages/admin/UserManagement/Students";
 import AdminLayout from "./pages/admin/AdminLayout";
-import AdminTeachers from "./pages/admin/UserManagement/Teacher";
-import AdminClass from "./pages/admin/AcademicManagement/Classes";
-import AdminSubjects from "./pages/admin/AcademicManagement/Subject";
-import AdminCources from "./pages/admin/AcademicManagement/Cources";
-import AdminStudyMaterial from "./pages/admin/AcademicManagement/StudyMaterial";
-import AdminTimeTable from "./pages/admin/AcademicManagement/Timetable";
 import TeacherLayout from "./pages/teacher/TeacherLayout";
 import AttendenceAuthenticator from "./pages/teacher/AttendenceAuthenticator";
-import AdminDevices from "./pages/admin/UserManagement/Devices";
 import DeviceDashboard from "./pages/Devices/dashboard";
+import University from './pages/admin/University';
+import School from './pages/admin/School';
+import Department from "./pages/admin/Department";
 
 import { AuthProvider } from "@/services/authContext";
 import ProtectedRoute from "@/services/protectedRoute";
@@ -58,6 +53,7 @@ const App = () => (
             <Route path="/gallery" element={<Gallery />} />
             <Route path="/contact" element={<Contact />} />
             <Route path="/login" element={<Login />} />
+            <Route path="/test" element={<Department />} />
 
             {/* Protected Routes */}
 
@@ -70,14 +66,9 @@ const App = () => (
               }
             >
               <Route index element={<AdminDashboard />} />
-              <Route path="students" element={<AdminStudents />} />
-              <Route path="teachers" element={<AdminTeachers />} />
-              <Route path="devices" element={<AdminDevices />} />
-              <Route path="classes" element={<AdminClass />} />
-              <Route path="subjects" element={<AdminSubjects />} />
-              <Route path="cources" element={<AdminCources />} />
-              <Route path="study-material" element={<AdminStudyMaterial />} />
-              <Route path="timetable" element={<AdminTimeTable />} />
+              <Route path="universities" element={<University />} />
+              <Route path="schools" element={<School />} />
+              <Route path="departments" element={<Department />} />
             </Route>
 
             <Route

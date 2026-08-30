@@ -43,6 +43,7 @@ public class AcademicYear {
     @JoinColumn(name = "university_id")
     private University university;
 
+    @Builder.Default
     @OneToMany(
             mappedBy = "academicYear",
             cascade = CascadeType.ALL,

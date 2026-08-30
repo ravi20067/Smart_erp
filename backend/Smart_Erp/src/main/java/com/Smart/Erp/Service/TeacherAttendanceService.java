@@ -509,7 +509,7 @@ public class TeacherAttendanceService {
                     .type("CHECK_IN")
                     .deviceName(scannerLocation)
                     .teacherName(mappingService.getNameUser(teacher.getUser()))
-                    .employeeId(teacher.getEmployeeId())
+                    .employeeId(teacher.getUser().getUsername())
                     .department(teacher.getUser().getRoleUser().toString())
                     .attendanceTime(LocalDateTime.now().format(DateTimeFormatter.ofPattern("dd MMM yyyy hh:mm:ss a")).toString())
                     .build();
@@ -543,7 +543,7 @@ public class TeacherAttendanceService {
                 .type("CHECK_OUT")
                 .deviceName(scannerLocation)
                 .teacherName(mappingService.getNameUser(teacher.getUser()))
-                .employeeId(teacher.getEmployeeId())
+                .employeeId(teacher.getUser().getUsername())
                 .department(teacher.getUser().getRoleUser().toString())
                 .attendanceTime(LocalDateTime.now().format(DateTimeFormatter.ofPattern("dd MMM yyyy hh:mm:ss a")).toString())
                 .build();

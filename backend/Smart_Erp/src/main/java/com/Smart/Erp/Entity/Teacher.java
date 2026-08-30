@@ -20,8 +20,6 @@ public class Teacher {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    private String employeeId;
-
     @Enumerated(EnumType.STRING)
     private Status status;
 
@@ -30,10 +28,12 @@ public class Teacher {
     @JoinColumn(name = "user_id")
     private User user;
 
+    @Builder.Default
     @OneToMany(mappedBy = "mentor")
     private List<Section> classesAsMentor = new ArrayList<>();
 
     // Teacher → Subjects
-    @ManyToMany(mappedBy = "teachers")
+    @Builder.Default
+    @ManyToMany(mappedBy = "subjectTeachers")
     private List<Subject> subjects = new ArrayList<>();
 }

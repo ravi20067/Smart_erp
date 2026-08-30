@@ -1,6 +1,6 @@
 package com.Smart.Erp.DTO.Admin.School;
 
-import com.Smart.Erp.DTO.CommonAcademic.CommonTeacherDTO;
+import com.Smart.Erp.DTO.CommonDTO;
 import lombok.Builder;
 import lombok.Data;
 
@@ -10,5 +10,5 @@ public class SchoolResponse {
     private Long id;
     private String name;
     private String code;
-    private CommonTeacherDTO dean;
+    private CommonDTO dean;
 }

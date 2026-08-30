@@ -12,16 +12,45 @@ import java.util.List;
 @NoArgsConstructor
 @Builder
 @AllArgsConstructor
-public class Subject {
+public class Subject implements CommonReference{
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    private String subjectName;
+    private String name;
 
-    private String subjectCode;
+    private String code;
 
+    private Integer lecturesPerWeek;
+
+    private Integer lectureDurationMinutes;
+
+    private Boolean isPracticalSubject;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "course_id")
+    private Course course;
+
+    @ManyToMany
+    @JoinTable(
+            name = "subject_specializations",
+            joinColumns = @JoinColumn(name = "subject_id"),
+            inverseJoinColumns = @JoinColumn(name = "specialization_id"),
+            uniqueConstraints = {
+                    @UniqueConstraint(
+                            name = "uk_subject_specialization",
+                            columnNames = {
+                                    "subject_id",
+                                    "specialization_id"
+                            }
+                    )
+            }
+    )
+    @Builder.Default
+    private List<Specialization> specializations = new ArrayList<>();
+
+    @Builder.Default
     @OneToMany(
             mappedBy = "subject",
             cascade = CascadeType.ALL,
@@ -31,6 +60,7 @@ public class Subject {
 
 
     // Subject → Chapters
+    @Builder.Default
     @OneToMany(
             mappedBy = "subject",
             cascade = CascadeType.ALL,
@@ -46,7 +76,7 @@ public class Subject {
             joinColumns = @JoinColumn(name = "subject_id"),
             inverseJoinColumns = @JoinColumn(name = "teacher_id")
     )
-    private List<Teacher> teachers = new ArrayList<>();
+    private List<Teacher> subjectTeachers = new ArrayList<>();
 
 
     // Teacher assigned for question bank

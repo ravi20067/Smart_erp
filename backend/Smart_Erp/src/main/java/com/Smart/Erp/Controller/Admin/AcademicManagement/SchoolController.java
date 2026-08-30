@@ -16,9 +16,10 @@ public class SchoolController {
 
     @GetMapping("/{schoolId}")
     public ResponseEntity<SchoolResponse> getSchoolById(
+            @PathVariable Long academicYearId,
             @PathVariable Long schoolId
     ){
-        return ResponseEntity.ok(schoolService.findBySchoolId(schoolId));
+        return ResponseEntity.ok(schoolService.findBySchoolId(schoolId,academicYearId));
     }
     @PostMapping("/{academicYearId}")
     public ResponseEntity<SchoolResponse> createSchool(
@@ -32,15 +33,22 @@ public class SchoolController {
     @PutMapping("/{schoolId}")
     public ResponseEntity<SchoolResponse> updateSchool(
             @PathVariable Long schoolId,
+            @RequestParam Long academicYearId,
             @RequestBody SchoolRequest schoolRequest
             ){
-        return ResponseEntity.ok(schoolService.updateSchool(schoolId , schoolRequest));
+        return ResponseEntity.ok(schoolService.updateSchool(schoolId , schoolRequest,academicYearId));
     }
 
     @DeleteMapping("/{schoolId}")
     public ResponseEntity<String> deleteSchool(
-            @PathVariable Long schoolId
-    ){
-        return ResponseEntity.ok(schoolService.deleteSchool(schoolId));
+            @PathVariable Long schoolId,
+            @RequestParam Long academicYearId
+    ) {
+        return ResponseEntity.ok(
+                schoolService.deleteSchool(
+                        schoolId,
+                        academicYearId
+                )
+        );
     }
 }

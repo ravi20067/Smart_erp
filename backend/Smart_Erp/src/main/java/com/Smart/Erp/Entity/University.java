@@ -18,6 +18,8 @@ public class University {
     private Long id;
     private String name;
     // University → Users
+
+    @Builder.Default
     @OneToMany(
             mappedBy = "university",
             cascade = CascadeType.ALL,
@@ -25,6 +27,7 @@ public class University {
     )
     private List<User> users = new ArrayList<>();
     // University → Academic Years
+    @Builder.Default
     @OneToMany(
             mappedBy = "university",
             cascade = CascadeType.ALL,

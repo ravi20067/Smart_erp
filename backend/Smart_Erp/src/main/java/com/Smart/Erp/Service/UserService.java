@@ -17,13 +17,14 @@ import org.springframework.stereotype.Service;
 public class UserService {
 
     private final UserRepo userRepo;
-
+    private final MappingService mappingService;
 
     public User getUser(String username) {
         return userRepo.findByUsername(username).orElseThrow();
     }
 
     public @Nullable UserProfileDto getProfile(String username) {
-        return null;
+        User user = getUser(username);
+        return mappingService.mapToResponseProfile(user);
     }
 }

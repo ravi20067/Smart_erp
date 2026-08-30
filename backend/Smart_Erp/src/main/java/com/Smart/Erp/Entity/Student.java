@@ -20,16 +20,10 @@ public class Student {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-
-    private String admissionNo;
-
-
     private Integer rollNumber;
-
 
     @Enumerated(EnumType.STRING)
     private Status status;
-
 
     @ToString.Exclude
     @OneToOne(fetch = FetchType.LAZY)
@@ -40,9 +34,9 @@ public class Student {
     )
     private User user;
 
-
     @ToString.Exclude
     @ManyToMany
+    @Builder.Default
     @JoinTable(
             name = "student_section_group",
             joinColumns = @JoinColumn(name = "student_id"),

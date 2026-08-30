@@ -29,6 +29,7 @@ public class Chapter {
     private Subject subject;
 
 
+    @Builder.Default
     @OneToMany(
             mappedBy = "chapter",
             cascade = CascadeType.ALL,

@@ -29,7 +29,7 @@ public class User {
 
     private Role roleUser;
 
-
+    @ToString.Exclude
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "university_id")
     private University university;

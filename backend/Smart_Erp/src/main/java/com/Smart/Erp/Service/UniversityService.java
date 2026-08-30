@@ -43,14 +43,15 @@ public class UniversityService {
         University university = commonService.getUniversity(universityId);
         university.setName(request.getName());
         university.setDean(commonService.updateTeacherRole(university.getDean(), request.getDeanId(), Role.DEAN));
-        return mappingService.mapToResponse(university);
+        return mappingService.mapToResponse(universityRepo.save(university));
     }
 
     public void deleteUniversity(Long universityId) {
-        if (!commonService.getUniversity(universityId).getAcademicYears().isEmpty()){
+        University university = commonService.getUniversity(universityId);
+        if (!university.getAcademicYears().isEmpty()){
             throw new OperationNotAllowedException("Remove its academic year ");
         }
-        if (!commonService.getUniversity(universityId).getUsers().isEmpty()){
+        if (!university.getUsers().isEmpty()){
             throw new OperationNotAllowedException("Remove its users ");
         }
         universityRepo.deleteById(universityId);

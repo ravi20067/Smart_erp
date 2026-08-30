@@ -1,79 +1,123 @@
 import {
-    Users,
+    Building2,
+    School,
     GraduationCap,
-    BookOpen,
-    IndianRupee,
+    Users,
 } from "lucide-react";
 
 const cards = [
     {
+        title: "Total Universities",
+        value: "12",
+        icon: Building2,
+    },
+    {
+        title: "Total Schools",
+        value: "86",
+        icon: School,
+    },
+    {
         title: "Total Students",
-        value: "2,548",
+        value: "24,548",
         icon: GraduationCap,
     },
     {
-        title: "Total Staff",
-        value: "186",
+        title: "Total Teachers",
+        value: "1,286",
         icon: Users,
-    },
-    {
-        title: "Active Classes",
-        value: "48",
-        icon: BookOpen,
-    },
-    {
-        title: "Fee Collection",
-        value: "₹24.6L",
-        icon: IndianRupee,
     },
 ];
 
 export default function StatsCards() {
-    return (<div className="grid md:grid-cols-2 xl:grid-cols-4 gap-6">
-        {cards.map((card) => (<div
-            key={card.title}
+    return (
+        <div
             className="
-                     bg-white
-                     dark:bg-slate-900
-                     rounded-2xl
-                     p-6
-                     shadow-sm
-                     border
-                     border-slate-200
-                     dark:border-slate-800
-                 "
-        > <div className="flex justify-between items-center">
+                grid
+                grid-cols-1
+                sm:grid-cols-2
+                xl:grid-cols-4
+                gap-4
+                md:gap-6
+            "
+        >
+            {cards.map((card) => {
+                const Icon = card.icon;
 
-                ```
-                <div>
-                    <p className="text-sm text-slate-500">
-                        {card.title}
-                    </p>
+                return (
+                    <div
+                        key={card.title}
+                        className="
+                            bg-white
+                            dark:bg-slate-900
 
-                    <h3 className="text-3xl font-bold mt-2">
-                        {card.value}
-                    </h3>
-                </div>
+                            rounded-2xl
+                            p-5
+                            md:p-6
 
-                <div
-                    className="
-                            p-3
-                            rounded-xl
-                            bg-blue-50
-                            dark:bg-slate-800
+                            shadow-sm
+
+                            border
+                            border-slate-200
+                            dark:border-slate-800
+
+                            hover:shadow-md
+                            transition-shadow
                         "
-                >
-                    <card.icon
-                        size={28}
-                        className="text-primary"
-                    />
-                </div>
+                    >
+                        <div className="flex items-center justify-between">
 
-            </div>
+                            {/* Information */}
+                            <div className="min-w-0">
+
+                                <p
+                                    className="
+                                        text-sm
+                                        text-slate-500
+                                        dark:text-slate-400
+                                    "
+                                >
+                                    {card.title}
+                                </p>
+
+                                <h3
+                                    className="
+                                        text-2xl
+                                        md:text-3xl
+                                        font-bold
+                                        mt-2
+                                        text-slate-900
+                                        dark:text-white
+                                    "
+                                >
+                                    {card.value}
+                                </h3>
+
+                            </div>
+
+
+                            {/* Icon */}
+                            <div
+                                className="
+                                    shrink-0
+
+                                    p-3
+
+                                    rounded-xl
+
+                                    bg-blue-50
+                                    dark:bg-slate-800
+                                "
+                            >
+                                <Icon
+                                    size={26}
+                                    className="text-primary"
+                                />
+                            </div>
+
+                        </div>
+                    </div>
+                );
+            })}
         </div>
-        ))}
-    </div>
     );
-
-
 }
