@@ -33,9 +33,7 @@ public class CommonService {
     private final DepartmentRepo departmentRepo;
     private final CourseRepo courseRepo;
     private final SpecializationRepo specializationRepo;
-
     private final SubjectRepo subjectRepo;
-
     private final SectionRepo sectionRepo;
     private final SectionGroupRepo sectionGroupRepo;
 
@@ -100,6 +98,9 @@ public class CommonService {
                 () ->
                         new ResourceNotFoundException("Teacher not found with this id : " + id)
         );
+    }
+    public List<Teacher> getTeacher(List<Long> teacherIds){
+        return teacherRepo.findByIdIn(teacherIds);
     }
 
     public Teacher updateTeacherRole(Teacher oldTeacher, Long newTeacherId, Role newTeacherRole) {
@@ -283,7 +284,9 @@ public class CommonService {
                         new ResourceNotFoundException("Specialization not found with this id " + specializationId)
         );
     }
-
+    public List<Specialization> getSpecialization(List<Long> specializationId){
+        return specializationRepo.findByIdIn(specializationId);
+    }
     public @Nullable List<CommonDTO> getCommonSpecializationDTO(Long courseId, Long sectionId, Long subjectId) {
         Course course = getCourse(courseId);
          if (subjectId != null){
@@ -309,7 +312,7 @@ public class CommonService {
                     .findFirst()
                     .orElseThrow(
                             () ->
-                                    new ResourceNotFoundException("Section not found : " + sectionId)
+                                    new ResourceNotFoundException("Sections not found : " + sectionId)
                     )
                     .getSectionGroups().stream()
                     .map(SectionGroup::getSpecialization)

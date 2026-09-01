@@ -1,8 +1,12 @@
 package com.Smart.Erp.Service;
 
 import com.Smart.Erp.DTO.Admin.AcademicYear.AcademicYearResponse;
+import com.Smart.Erp.DTO.Admin.Courses.CourseResponse;
 import com.Smart.Erp.DTO.Admin.Department.DepartmentResponse;
 import com.Smart.Erp.DTO.Admin.School.SchoolResponse;
+import com.Smart.Erp.DTO.Admin.Sections.SectionResponse;
+import com.Smart.Erp.DTO.Admin.Specialization.SpecializationResponse;
+import com.Smart.Erp.DTO.Admin.Subject.SubjectResponse;
 import com.Smart.Erp.DTO.Admin.University.UniversityResponse;
 import com.Smart.Erp.DTO.CommonAcademic.*;
 import com.Smart.Erp.DTO.CommonDTO;
@@ -142,7 +146,7 @@ public class MappingService {
         }
         return CommonAcademicYearDTO.builder()
                 .id(academicYear.getId())
-                .name(academicYear.getName() +  (Boolean.TRUE.equals(academicYear.getCurrent()) ? " (Current)" : ""))
+                .name(academicYear.getName() + (Boolean.TRUE.equals(academicYear.getCurrent()) ? " (Current)" : ""))
                 .current(academicYear.getCurrent())
                 .build();
     }
@@ -189,7 +193,6 @@ public class MappingService {
                 .build();
     }
 
-
     //
     //
     //
@@ -197,12 +200,100 @@ public class MappingService {
     //
     //
     //
+    public CourseResponse mapToResponse(Course course) {
+        if (course == null) {
+            return null;
+        }
+        return CourseResponse.builder()
+                .id(course.getId())
+                .name(course.getName())
+                .code(course.getCode().substring(2))
+                .programCoordinator(mapToCommon(course.getProgramCoordinator()))
+                .specializations(course.getSpecializations().stream()
+                        .map(CommonReference::toCommonDTO)
+                        .toList()
+                )
+                .sections(course.getSections().stream()
+                        .map(CommonReference::toCommonDTO)
+                        .toList()
+                )
+                .subjects(course.getSubjects().stream()
+                        .map(CommonReference::toCommonDTO)
+                        .toList()
+                )
+                .build();
+    }
 
     //
     //
     //
+    //Specialization
     //
     //
     //
-    //
+    public SpecializationResponse mapToResponse(Specialization specialization) {
+
+        if (specialization == null) {
+            return null;
+        }
+        return SpecializationResponse.builder()
+                .id(specialization.getId())
+                .name(specialization.getName())
+                .code(specialization.getCode().replace(specialization.getCourse().getCode(), ""))
+                .subjects(specialization.getSubjects().stream()
+                        .map(CommonReference::toCommonDTO)
+                        .toList()
+                )
+                .sectionGroups(specialization.getSectionGroups().stream()
+                        .map(CommonReference::toCommonDTO)
+                        .toList()
+                )
+                .build();
+    }
+
+    public SubjectResponse mapToResponse(Subject subject) {
+        return SubjectResponse.builder()
+                .id(subject.getId())
+                .name(subject.getName())
+                .code(subject.getCode().replace(subject.getCourse().getCode(), ""))
+                .lecturesPerWeek(subject.getLecturesPerWeek())
+                .isPracticalSubject(subject.getIsPracticalSubject())
+                .specializations(subject.getSpecializations().stream()
+                        .map(CommonReference::toCommonDTO)
+                        .toList()
+                )
+                .questionBankTeacher(mapToCommon(subject.getQuestionBankTeacher()))
+                .studyMaterialTeacher(mapToCommon(subject.getStudyMaterialTeacher()))
+                .subjectTeachers(subject.getSubjectTeachers().stream()
+                        .map(this::mapToCommon)
+                        .toList()
+                )
+                .lastDateQuestionBankSummit(subject.getLastDateQuestionBankSummit())
+                .lastDateStudyMaterialSummit(subject.getLastDateStudyMaterialSummit())
+                .build();
+    }
+
+    public SectionResponse mapToResponse(Section section) {
+        if (section == null) {
+            return null;
+        }
+        return SectionResponse.builder()
+                .id(section.getName())
+                .code(section.getCode().replace(section.getCourse().getCode(), ""))
+                .name(section.getName())
+                .capacity(section.getCapacity())
+                .studentCount(section.getStudentCount())
+                .sectionGroups(section.getSectionGroups().stream()
+                        .map(CommonReference::toCommonDTO)
+                        .toList()
+                )
+                .specializations(section.getSectionGroups().stream()
+                        .map(sectionGroup ->
+                                        sectionGroup.getSpecialization().toCommonDTO()
+                                )
+                        .toList()
+                )
+                .mentor(mapToCommon(section.getMentor()))
+                .build();
+    }
 }

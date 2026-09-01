@@ -15,6 +15,6 @@ public class CourseResponse {
     private String code;
     private List<CommonDTO> subjects;
     private List<CommonDTO> sections;
+    private List<CommonDTO> specializations;
     private CommonDTO programCoordinator;
-    private List<SpecializationResponse> specializations;
 }

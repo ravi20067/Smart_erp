@@ -44,8 +44,6 @@ public class Student {
     )
     private List<SectionGroup> sectionGroups = new ArrayList<>();
 
-
-
     @OneToMany(
             mappedBy = "student",
             cascade = CascadeType.ALL,

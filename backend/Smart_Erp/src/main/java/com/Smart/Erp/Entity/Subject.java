@@ -24,8 +24,6 @@ public class Subject implements CommonReference{
 
     private Integer lecturesPerWeek;
 
-    private Integer lectureDurationMinutes;
-
     private Boolean isPracticalSubject;
 
     @ManyToOne(fetch = FetchType.LAZY)
