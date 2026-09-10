@@ -11,14 +11,19 @@ import lombok.*;
 @NoArgsConstructor
 @AllArgsConstructor
 public class BasicDetail {
+
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
+
     @OneToOne
     @JoinColumn(name = "user_id")
     private User user;
-    @Column(name = "profile_photo_url")
-    private String profilePhotoUrl;
+
+    @OneToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "photo_id", unique = true)
+    private FileMetadata photo;
+
     private String firstName;
     private String lastName;
     private String phone;

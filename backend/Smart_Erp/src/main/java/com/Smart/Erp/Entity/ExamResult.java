@@ -20,8 +20,8 @@ public class ExamResult {
     private Subject subject;
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "student_id")
-    private Student student;
+    @JoinColumn(name = "student_enrollment_id")
+    private StudentEnrollment studentEnrollment;
 
     @ToString.Exclude
     @ManyToOne

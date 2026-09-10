@@ -1,6 +1,5 @@
 package com.Smart.Erp.Entity;
 
-import com.Smart.Erp.Enum.Status;
 import jakarta.persistence.*;
 import lombok.*;
 
@@ -21,7 +20,7 @@ public class Devices {
 
     private String password;
 
-    private Status status;
+    private Boolean status;
 
     @ToString.Exclude
     @OneToOne

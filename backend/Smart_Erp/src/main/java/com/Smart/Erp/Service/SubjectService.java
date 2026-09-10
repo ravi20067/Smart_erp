@@ -7,6 +7,7 @@ import com.Smart.Erp.DTO.CommonRequest;
 import com.Smart.Erp.Entity.Course;
 import com.Smart.Erp.Entity.Specialization;
 import com.Smart.Erp.Entity.Subject;
+import com.Smart.Erp.Entity.Teacher;
 import com.Smart.Erp.Exception.OperationNotAllowedException;
 import com.Smart.Erp.Repository.SubjectRepo;
 import jakarta.transaction.Transactional;
@@ -42,7 +43,7 @@ public class SubjectService {
                 subjectRepo.save(
                         Subject.builder()
                                 .name(request.getName())
-                                .code(course.getCode()+request.getCode())
+                                .code(request.getCode())
                                 .course(course)
                                 .build()
                 )
@@ -74,14 +75,12 @@ public class SubjectService {
 
     private Subject handleUpdate(Subject subject, SubjectRequest subjectRequest){
         subject.setName(subjectRequest.getName());
-        subject.setCode(subject.getCourse().getCode()+subjectRequest.getCode());
+        subject.setCode(subjectRequest.getCode());
 
         subject.setIsPracticalSubject(subjectRequest.getIsPracticalSubject());
         subject.setLecturesPerWeek(subjectRequest.getLecturesPerWeek());
 
         subject.setSpecializations(commonService.getSpecialization(subjectRequest.getSpecializationsId()));
-
-        subject.setSubjectTeachers(commonService.getTeacher(subjectRequest.getSubjectTeachersId()));
 
         if (subject.getQuestionBankTeacher() == null || !subject.getQuestionBankTeacher().getId().equals(subjectRequest.getQuestionBankTeacherId())){
             subject.setQuestionBankTeacher(commonService.getTeacher(subjectRequest.getQuestionBankTeacherId()));

@@ -35,4 +35,8 @@ public class Specialization implements CommonReference{
     @ToString.Exclude
     @OneToMany(mappedBy = "specialization")
     private List<SectionGroup> sectionGroups = new ArrayList<>();
+
+    public String getPrefix(){
+        return this.getCourse().getPrefix() + this.getCourse().getPrefix();
+    }
 }

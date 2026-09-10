@@ -58,6 +58,20 @@ public class CommonController {
         return ResponseEntity.ok(commonService.getCommonCourseDTO(departmentId));
     }
 
+    @GetMapping("admin/common/section")
+    public ResponseEntity<List<CommonDTO>> getSection(
+            @RequestParam Long courseId
+    ){
+        return ResponseEntity.ok(commonService.getCommonSectionDTO(courseId));
+    }
+
+    @GetMapping("admin/common/subject")
+    public ResponseEntity<List<CommonDTO>> getSubject(
+            @RequestParam Long courseId
+    ){
+        return ResponseEntity.ok(commonService.getCommonSubjectDTO(courseId));
+    }
+
     @GetMapping("admin/common/specialization")
     public ResponseEntity<List<CommonDTO>> getSpecialization(
             @RequestParam Long courseId,

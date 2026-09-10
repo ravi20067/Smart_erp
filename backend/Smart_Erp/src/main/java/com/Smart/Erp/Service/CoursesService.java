@@ -38,7 +38,7 @@ public class CoursesService {
         return mappingService.mapToResponse(courseRepo.save(
                 Course.builder()
                         .name(request.getName())
-                        .code(department.getCode().substring(0,2) + request.getCode())
+                        .code(request.getCode())
                         .department(department)
                         .build()
         ));
@@ -48,7 +48,7 @@ public class CoursesService {
         Course course = validateCourse(commonService.getCourse(request.getId()), departmentId);
 
         course.setName(request.getName());
-        course.setCode(course.getCode().substring(0,2) + request.getCode());
+        course.setCode(request.getCode());
 
         course.setProgramCoordinator(commonService.updateTeacherRole(course.getProgramCoordinator(), request.getProgramCoordinatorId(), Role.PC));
 

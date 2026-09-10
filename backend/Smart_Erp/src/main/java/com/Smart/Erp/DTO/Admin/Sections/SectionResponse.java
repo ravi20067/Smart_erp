@@ -15,8 +15,6 @@ public class SectionResponse {
     private Integer capacity;
     private Integer studentCount;
 
-    private List<CommonDTO> sectionGroups;
-
     private List<CommonDTO> specializations;
 
     private CommonDTO mentor;

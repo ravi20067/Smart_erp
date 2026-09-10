@@ -41,7 +41,7 @@ public class DepartmentService {
         return mappingService.mapToResponse(departmentRepo.save(
                 Department.builder()
                         .name(name)
-                        .code(school.getCode().substring(0,2)+code)
+                        .code(code)
                         .school(school)
                         .build()
         ));
@@ -53,7 +53,7 @@ public class DepartmentService {
                 schoolId
         );
         department.setName(departmentRequest.getName());
-        department.setCode(department.getCode().substring(0,2)+departmentRequest.getCode());
+        department.setCode(departmentRequest.getCode());
         department.setHod(commonService.updateTeacherRole(department.getHod(), departmentRequest.getHodId(), Role.HOD));
 
         return mappingService.mapToResponse(department);

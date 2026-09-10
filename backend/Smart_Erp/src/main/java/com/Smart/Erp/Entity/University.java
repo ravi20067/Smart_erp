@@ -34,6 +34,15 @@ public class University {
             orphanRemoval = true
     )
     private List<AcademicYear> academicYears = new ArrayList<>();
+
+    @Builder.Default
+    @OneToMany(
+            mappedBy = "university",
+            cascade = CascadeType.ALL,
+            orphanRemoval = true
+    )
+    private List<Scholarship> scholarships = new ArrayList<>();
+
     @OneToOne
     @JoinColumn(name = "dean_id")
     private Teacher dean;

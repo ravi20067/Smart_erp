@@ -2,13 +2,13 @@ package com.Smart.Erp.Service;
 
 import com.Smart.Erp.DTO.UserProfileDto;
 import com.Smart.Erp.Entity.*;
-import com.Smart.Erp.Enum.Role;
 import com.Smart.Erp.Repository.*;
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
 import org.jspecify.annotations.Nullable;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
+
+import java.util.UUID;
 
 
 @Service
@@ -18,13 +18,14 @@ public class UserService {
 
     private final UserRepo userRepo;
     private final MappingService mappingService;
-
-    public User getUser(String username) {
-        return userRepo.findByUsername(username).orElseThrow();
-    }
+    private final CommonService commonService;
 
     public @Nullable UserProfileDto getProfile(String username) {
-        User user = getUser(username);
-        return mappingService.mapToResponseProfile(user);
+        User user = commonService.getUser(username);
+        return mappingService.mapToResponse(user.getBasicDetail());
+    }
+
+    public UUID getPhoto(Long userId, String username) {
+        return null;
     }
 }

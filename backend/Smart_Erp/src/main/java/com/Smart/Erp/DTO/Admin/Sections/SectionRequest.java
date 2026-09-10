@@ -13,7 +13,7 @@ public class SectionRequest {
     private String name;
     private String code;
     private Integer capacity;
-    private Integer studentCount;
+
     private List<Long> specializationId;
     private Long mentorId;
 }

@@ -4,7 +4,6 @@ import com.Smart.Erp.DTO.CommonAcademic.*;
 import com.Smart.Erp.DTO.CommonDTO;
 import com.Smart.Erp.Entity.*;
 import com.Smart.Erp.Enum.Role;
-import com.Smart.Erp.Exception.OperationNotAllowedException;
 import com.Smart.Erp.Exception.ResourceNotFoundException;
 import com.Smart.Erp.Repository.*;
 import lombok.AllArgsConstructor;
@@ -13,18 +12,13 @@ import org.springframework.stereotype.Service;
 
 import java.util.List;
 import java.util.Objects;
-import java.util.stream.Collectors;
 
 @Service
 @AllArgsConstructor
 public class CommonService {
-    //Common_Controller
-    //Common_User
-    //Common_Teacher
-    //Common_University
-    //Common_AcademicYear
-    //Common_School
 
+
+    private final StudentRepo studentRepo;
     private final TeacherRepo teacherRepo;
     private final UserRepo userRepo;
     private final UniversityRepo universityRepo;
@@ -36,20 +30,44 @@ public class CommonService {
     private final SubjectRepo subjectRepo;
     private final SectionRepo sectionRepo;
     private final SectionGroupRepo sectionGroupRepo;
-
     private final MappingService mappingService;
 
-    //
-    //
-    //
-    // Common_Controller
-    //
-    //
-    //
 
-    public @Nullable List<CommonDTO> getCommonTeachersDto(
-            Long universityId, Long schoolId, Long departmentId, Long coursesId
-    ) {
+
+    public User getUser(Long userId) {
+        return userRepo.findById(userId).orElseThrow(
+                () ->
+                        new ResourceNotFoundException("User not found with this id : " + userId)
+        );
+    }
+
+    public User getUser(String username) {
+        return userRepo.findByUsername(username).orElseThrow();
+    }
+
+    public void updateRole(User user, Role role) {
+        user.setRoleUser(role);
+        user.setUsername(user.getUsername().replace(user.getRoleUser().getCode(), role.getCode()));
+        userRepo.save(user);
+    }
+
+
+    public Student getStudent(Long studentId){
+        return studentRepo.findById(studentId).orElseThrow(
+                () ->
+                        new ResourceNotFoundException("Student not found with id : " + studentId)
+        );
+    }
+
+
+    public Teacher getTeacher(Long id) {
+        return teacherRepo.findById(id).orElseThrow(
+                () ->
+                        new ResourceNotFoundException("Teacher not found with this id : " + id)
+        );
+    }
+
+    public @Nullable List<CommonDTO> getCommonTeachersDto(Long universityId, Long schoolId, Long departmentId, Long coursesId) {
         University university = getUniversity(universityId);
         if (coursesId != null) {
             return getCoursesAllTeacher(getCourse(coursesId));
@@ -62,43 +80,6 @@ public class CommonService {
         }
     }
 
-    //
-    //
-    //
-    // Common_User
-    //
-    //
-    //
-    public User getUser(Long userId) {
-        return userRepo.findById(userId).orElseThrow(
-                () ->
-                        new ResourceNotFoundException("User not found with this id : " + userId)
-        );
-    }
-
-    public User getUserByUserName(String username) {
-        return userRepo.findByUsername(username).orElseThrow();
-    }
-
-    public void updateRole(User user, Role role) {
-        user.setRoleUser(role);
-        user.setUsername(user.getUsername().replace(user.getRoleUser().getCode(), role.getCode()));
-        userRepo.save(user);
-    }
-
-    //
-    //
-    //
-    //Common_Teacher
-    //
-    //
-    //
-    public Teacher getTeacher(Long id) {
-        return teacherRepo.findById(id).orElseThrow(
-                () ->
-                        new ResourceNotFoundException("Teacher not found with this id : " + id)
-        );
-    }
     public List<Teacher> getTeacher(List<Long> teacherIds){
         return teacherRepo.findByIdIn(teacherIds);
     }
@@ -128,13 +109,6 @@ public class CommonService {
         return newTeacher;
     }
 
-    //
-    //
-    //
-    // Common_University
-    //
-    //
-    //
     public University getUniversity(Long universityId) {
         return universityRepo.findById(universityId).orElseThrow(
                 () ->
@@ -143,7 +117,7 @@ public class CommonService {
     }
 
     public List<CommonUniversityDTO> getUniversityCommonDTO(String username) {
-        User user = getUserByUserName(username);
+        User user = getUser(username);
 
         if (user.getRoleUser() == Role.ADMIN) {
             return universityRepo.findAll()
@@ -165,13 +139,7 @@ public class CommonService {
                 .map(mappingService::mapToCommon)
                 .toList();
     }
-    //
-    //
-    //
-    //Common_AcademicYear
-    //
-    //
-    //
+
     public AcademicYear getAcademicYear(Long academicYearId) {
         return academicYearRepository.findById(academicYearId).orElseThrow(
                 () ->
@@ -185,13 +153,7 @@ public class CommonService {
                 .toList();
     }
 
-    //
-    //
-    //
-    // Common_School
-    //
-    //
-    //
+
     public School getSchool(Long schoolId) {
         return schoolRepo.findById(schoolId).orElseThrow(
                 () ->
@@ -214,13 +176,7 @@ public class CommonService {
                 .toList();
     }
 
-    //
-    //
-    //
-    //Common_Department
-    //
-    //
-    //
+
     public Department getDepartment(Long departmentId) {
         return departmentRepo.findById(departmentId).orElseThrow(
                 () ->
@@ -244,13 +200,7 @@ public class CommonService {
                 .toList();
     }
 
-    //
-    //
-    //
-    //Common_Course
-    //
-    //
-    //
+
     public Course getCourse(Long courseId) {
         return courseRepo.findById(courseId).orElseThrow(
                 () -> new ResourceNotFoundException("Course not found with id : " + courseId)
@@ -267,26 +217,24 @@ public class CommonService {
         return course.getSubjects().stream()
                 .flatMap(subject -> subject.getSubjectTeachers().stream())
                 .distinct()
-                .map(mappingService::mapToCommon)
+                .map(
+                        teacherEnrollment -> mappingService.mapToCommon(teacherEnrollment.getTeacher())
+                )
                 .toList();
     }
 
-    //
-    //
-    //
-    //Specialization
-    //
-    //
-    //
+
     public Specialization getSpecialization(Long specializationId) {
         return specializationRepo.findById(specializationId).orElseThrow(
                 () ->
                         new ResourceNotFoundException("Specialization not found with this id " + specializationId)
         );
     }
+
     public List<Specialization> getSpecialization(List<Long> specializationId){
         return specializationRepo.findByIdIn(specializationId);
     }
+
     public @Nullable List<CommonDTO> getCommonSpecializationDTO(Long courseId, Long sectionId, Long subjectId) {
         Course course = getCourse(courseId);
          if (subjectId != null){
@@ -315,8 +263,7 @@ public class CommonService {
                                     new ResourceNotFoundException("Sections not found : " + sectionId)
                     )
                     .getSectionGroups().stream()
-                    .map(SectionGroup::getSpecialization)
-                    .map(Specialization::toCommonDTO)
+                    .map(sectionGroup -> sectionGroup.getSpecialization().toCommonDTO())
                     .toList();
          }
 
@@ -325,13 +272,7 @@ public class CommonService {
                  .map(Specialization::toCommonDTO)
                  .toList();
     }
-    //
-    //
-    //
-    //
-    //
-    //
-    //
+
 
     public Subject getSubject(Long subjectId) {
         return subjectRepo.findById(subjectId).orElseThrow(
@@ -340,6 +281,13 @@ public class CommonService {
         );
     }
 
+    public @Nullable List<CommonDTO> getCommonSubjectDTO(Long courseId) {
+        return getCourse(courseId).getSubjects().stream()
+                .map(CommonReference::toCommonDTO)
+                .toList();
+    }
+
+
     public Section getSection(Long sectionId) {
         return sectionRepo.findById(sectionId).orElseThrow(
                 () ->
@@ -347,10 +295,10 @@ public class CommonService {
         );
     }
 
-    public SectionGroup getSectionGroup(Long sectionGroupId) {
-        return sectionGroupRepo.findById(sectionGroupId).orElseThrow(
-                () ->
-                        new ResourceNotFoundException("Section Group not found with id : " + sectionGroupId)
-        );
+    public @Nullable List<CommonDTO> getCommonSectionDTO(Long courseId) {
+        return getCourse(courseId).getSections().stream()
+                .map(CommonReference::toCommonDTO)
+                .toList();
     }
+
 }

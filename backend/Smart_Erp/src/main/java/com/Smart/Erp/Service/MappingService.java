@@ -6,6 +6,7 @@ import com.Smart.Erp.DTO.Admin.Department.DepartmentResponse;
 import com.Smart.Erp.DTO.Admin.School.SchoolResponse;
 import com.Smart.Erp.DTO.Admin.Sections.SectionResponse;
 import com.Smart.Erp.DTO.Admin.Specialization.SpecializationResponse;
+import com.Smart.Erp.DTO.Admin.Student.StudentResponse;
 import com.Smart.Erp.DTO.Admin.Subject.SubjectResponse;
 import com.Smart.Erp.DTO.Admin.University.UniversityResponse;
 import com.Smart.Erp.DTO.CommonAcademic.*;
@@ -36,18 +37,21 @@ public class MappingService {
         return user.getBasicDetail().getFirstName() + " " + user.getBasicDetail().getLastName();
     }
 
-    public @Nullable UserProfileDto mapToResponseProfile(User user) {
-        BasicDetail basicDetail = user.getBasicDetail();
-
+    public @Nullable UserProfileDto mapToResponse(BasicDetail basicDetail) {
+        if (basicDetail == null){
+            return new UserProfileDto();
+        }
         return UserProfileDto.builder()
-                .id(user.getId())
-                .username(user.getUsername())
-                .email(basicDetail.getEmail())
-                .phone(basicDetail.getPhone())
+                .id(basicDetail.getUser().getId())
+                .username(basicDetail.getUser().getUsername())
                 .firstName(basicDetail.getFirstName())
                 .lastName(basicDetail.getLastName())
-                ///  It wants work to handle the image thing
-                .photoUrl(basicDetail.getProfilePhotoUrl())
+                .phone(basicDetail.getPhone())
+                .email(basicDetail.getEmail())
+                .fatherName(basicDetail.getFatherName())
+                .motherName(basicDetail.getMotherName())
+                .address(basicDetail.getAddress())
+                .guardianMobileNumber(basicDetail.getGuardianMobileNumber())
                 .build();
     }
 
@@ -58,6 +62,17 @@ public class MappingService {
     //
     //
     //
+    public StudentResponse mapToResponse(Student student){
+        if (student == null){
+            return new StudentResponse();
+        }
+        return StudentResponse.builder()
+                .id(student.getId())
+                .basicDetailRequest(mapToResponse(student.getUser().getBasicDetail()))
+
+                .build();
+    }
+
     public CommonDTO mapToCommon(Teacher teacher) {
         if (teacher == null) {
             return CommonDTO.builder().build();
@@ -80,8 +95,8 @@ public class MappingService {
         if (university == null) {
             return UniversityResponse.builder().build();
         }
-        long totalUser = 0l;
-        long totalStudent = 0l;
+        long totalUser = 0L;
+        long totalStudent = 0L;
         if (university.getUsers() != null &&
                 !university.getUsers().isEmpty()) {
             totalUser = university.getUsers().size();
@@ -165,7 +180,7 @@ public class MappingService {
         return SchoolResponse.builder()
                 .id(school.getId())
                 .name(school.getName())
-                .code(school.getCode().substring(2))
+                .code(school.getCode())
                 .dean(mapToCommon(school.getSchoolDean()))
                 .build();
     }
@@ -184,7 +199,7 @@ public class MappingService {
         return DepartmentResponse.builder()
                 .id(department.getId())
                 .name(department.getName())
-                .code(department.getCode().substring(2))
+                .code(department.getCode())
                 .hod(mapToCommon(department.getHod()))
                 .courses(department.getCourses().stream()
                         .map(CommonReference::toCommonDTO)
@@ -207,7 +222,7 @@ public class MappingService {
         return CourseResponse.builder()
                 .id(course.getId())
                 .name(course.getName())
-                .code(course.getCode().substring(2))
+                .code(course.getCode())
                 .programCoordinator(mapToCommon(course.getProgramCoordinator()))
                 .specializations(course.getSpecializations().stream()
                         .map(CommonReference::toCommonDTO)
@@ -239,7 +254,7 @@ public class MappingService {
         return SpecializationResponse.builder()
                 .id(specialization.getId())
                 .name(specialization.getName())
-                .code(specialization.getCode().replace(specialization.getCourse().getCode(), ""))
+                .code(specialization.getCode())
                 .subjects(specialization.getSubjects().stream()
                         .map(CommonReference::toCommonDTO)
                         .toList()
@@ -255,7 +270,7 @@ public class MappingService {
         return SubjectResponse.builder()
                 .id(subject.getId())
                 .name(subject.getName())
-                .code(subject.getCode().replace(subject.getCourse().getCode(), ""))
+                .code(subject.getCode())
                 .lecturesPerWeek(subject.getLecturesPerWeek())
                 .isPracticalSubject(subject.getIsPracticalSubject())
                 .specializations(subject.getSpecializations().stream()
@@ -265,7 +280,7 @@ public class MappingService {
                 .questionBankTeacher(mapToCommon(subject.getQuestionBankTeacher()))
                 .studyMaterialTeacher(mapToCommon(subject.getStudyMaterialTeacher()))
                 .subjectTeachers(subject.getSubjectTeachers().stream()
-                        .map(this::mapToCommon)
+                        .map(teacherEnrollment -> mapToCommon(teacherEnrollment.getTeacher()))
                         .toList()
                 )
                 .lastDateQuestionBankSummit(subject.getLastDateQuestionBankSummit())
@@ -283,10 +298,6 @@ public class MappingService {
                 .name(section.getName())
                 .capacity(section.getCapacity())
                 .studentCount(section.getStudentCount())
-                .sectionGroups(section.getSectionGroups().stream()
-                        .map(CommonReference::toCommonDTO)
-                        .toList()
-                )
                 .specializations(section.getSectionGroups().stream()
                         .map(sectionGroup ->
                                         sectionGroup.getSpecialization().toCommonDTO()

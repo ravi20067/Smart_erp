@@ -35,9 +35,12 @@ public class School implements CommonReference {
     )
     private List<Department> departments = new ArrayList<>();
 
-
     // Assignment only
     @ManyToOne
     @JoinColumn(name = "school_dean_id")
     private Teacher schoolDean;
+
+    public String getPrefix(){
+        return this.academicYear.getCode();
+    }
 }

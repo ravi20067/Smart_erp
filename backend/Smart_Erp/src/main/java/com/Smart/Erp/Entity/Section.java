@@ -41,4 +41,8 @@ public class Section implements CommonReference{
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "mentor_id")
     private Teacher mentor;
+
+    public String getPrefix(){
+        return this.getCourse().getPrefix();
+    }
 }

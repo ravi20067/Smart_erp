@@ -17,16 +17,11 @@ public class User {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
-
     private Long registrationNo;
-
     @Column(unique = true)
     private String username;
-
     private String password;
-
     private Boolean enabled;
-
     private Role roleUser;
 
     @ToString.Exclude

@@ -10,19 +10,14 @@ import lombok.NoArgsConstructor;
 @NoArgsConstructor
 @AllArgsConstructor
 public class UserProfileDto {
-
     private Long id;
-
     private String username;
-
     private String firstName;
-
     private String lastName;
-
     private String email;
-
     private String phone;
-
-    private String photoUrl;
-
+    private String fatherName;
+    private String motherName;
+    private String guardianMobileNumber;
+    private String address;
 }

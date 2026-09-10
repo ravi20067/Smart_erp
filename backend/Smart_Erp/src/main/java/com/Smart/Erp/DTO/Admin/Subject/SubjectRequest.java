@@ -20,8 +20,6 @@ public class SubjectRequest {
 
     private List<Long> specializationsId;
 
-    private List<Long> subjectTeachersId;
-
     private Long questionBankTeacherId;
     private LocalDate lastDateQuestionBankSummit;
 

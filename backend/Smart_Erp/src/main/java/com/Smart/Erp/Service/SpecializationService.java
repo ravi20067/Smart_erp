@@ -40,7 +40,7 @@ public class SpecializationService {
                 specializationRepo.save(
                         Specialization.builder()
                                 .name(request.getName())
-                                .code(course.getCode() + request.getCode())
+                                .code(request.getCode())
                                 .course(course)
                                 .build()
                 )
@@ -50,7 +50,7 @@ public class SpecializationService {
         Specialization specialization = commonService.getSpecialization(request.getId());
 
         specialization.setName(request.getName());
-        specialization.setCode(specialization.getCourse().getCode()+ request.getCode());
+        specialization.setCode(request.getCode());
 
         return mappingService.mapToResponse(specializationRepo.save(specialization));
     }

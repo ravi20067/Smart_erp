@@ -39,4 +39,8 @@ public class Department implements CommonReference{
     @ManyToOne
     @JoinColumn(name = "hod_id")
     private Teacher hod;
+
+    public String getPrefix(){
+        return this.school.getPrefix();
+    }
 }

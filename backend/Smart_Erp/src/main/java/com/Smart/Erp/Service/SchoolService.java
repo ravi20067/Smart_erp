@@ -33,7 +33,7 @@ public class SchoolService {
         return mappingService.mapToResponse(schoolRepo.save(
                         School.builder()
                                 .name(name)
-                                .code(academicYear.getCode().substring(0, 2) + code)
+                                .code(code)
                                 .academicYear(academicYear)
                                 .build()
                 )
@@ -43,7 +43,7 @@ public class SchoolService {
     public @Nullable SchoolResponse updateSchool(Long schoolId, SchoolRequest schoolRequest, Long academicYearId) {
         School school = validateSchool(commonService.getSchool(schoolId), academicYearId);
         school.setName(schoolRequest.getName());
-        school.setCode(school.getAcademicYear().getCode().substring(0, 2) + schoolRequest.getCode());
+        school.setCode(schoolRequest.getCode());
 
         school.setSchoolDean(commonService.updateTeacherRole(school.getSchoolDean(), schoolRequest.getDeanId(), Role.SCHOOL_DEAN));
 

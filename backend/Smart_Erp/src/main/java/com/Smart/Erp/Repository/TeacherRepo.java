@@ -2,7 +2,6 @@ package com.Smart.Erp.Repository;
 
 import com.Smart.Erp.Entity.Teacher;
 import com.Smart.Erp.Entity.User;
-import com.Smart.Erp.Enum.Status;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;

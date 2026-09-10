@@ -1,6 +1,5 @@
 package com.Smart.Erp.DTO.Admin;
 
-import com.Smart.Erp.Enum.Status;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -20,5 +19,5 @@ public class DeviceDto {
 
     private String password;
 
-    private Status status;
+    private Boolean status;
 }

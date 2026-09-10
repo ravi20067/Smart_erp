@@ -1,17 +1,9 @@
 package com.Smart.Erp.Config;
 
+import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.web.servlet.config.annotation.ResourceHandlerRegistry;
-import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
 
 @Configuration
-public class FileStorageConfig implements WebMvcConfigurer {
-
-    @Override
-    public void addResourceHandlers(ResourceHandlerRegistry registry) {
-        registry.addResourceHandler("/uploads/**")
-                .addResourceLocations(
-                        "file:uploads/"
-                );
-    }
+@EnableConfigurationProperties(FileStorageProperties.class)
+public class FileStorageConfig {
 }

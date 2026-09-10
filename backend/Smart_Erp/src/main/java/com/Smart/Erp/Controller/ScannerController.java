@@ -3,6 +3,7 @@ package com.Smart.Erp.Controller;
 import com.Smart.Erp.DTO.Teacher.MyAttendence.AttendanceScanRequest;
 import com.Smart.Erp.DTO.Teacher.MyAttendence.AttendanceScanResponseDto;
 import com.Smart.Erp.Entity.User;
+import com.Smart.Erp.Service.CommonService;
 import com.Smart.Erp.Service.TeacherAttendanceService;
 import com.Smart.Erp.Service.UserService;
 import lombok.RequiredArgsConstructor;
@@ -19,7 +20,7 @@ import org.springframework.web.bind.annotation.RestController;
 public class ScannerController {
 
     private final TeacherAttendanceService teacherAttendanceService;
-    private final UserService userService;
+    private final CommonService commonService;
 
     @PostMapping("/mark")
     public ResponseEntity<AttendanceScanResponseDto> verifyQr(
@@ -29,7 +30,7 @@ public class ScannerController {
 
     ) {
         String username = authentication.getName();
-        User user = userService.getUser(username);
+        User user = commonService.getUser(username);
         return ResponseEntity.ok(
 
                 teacherAttendanceService.verifyQr(

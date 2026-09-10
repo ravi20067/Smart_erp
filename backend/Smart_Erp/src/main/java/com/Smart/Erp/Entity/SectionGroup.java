@@ -17,6 +17,8 @@ public class SectionGroup implements CommonReference{
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
     private String name;
+
+    @Transient
     private String code;
 
     @ManyToOne
@@ -27,8 +29,12 @@ public class SectionGroup implements CommonReference{
     @JoinColumn(name = "specialization_id")
     private Specialization specialization;
 
-    @Builder.Default
     @ToString.Exclude
-    @ManyToMany(mappedBy = "sectionGroups")
-    private List<Student> students = new ArrayList<>();
+    @OneToMany(mappedBy = "sectionGroup")
+    @Builder.Default
+    private List<StudentEnrollment> studentEnrollments = new ArrayList<>();
+
+    public String getPrefix(){
+        return this.getSection().getPrefix() + this.getSpecialization().getCode();
+    }
 }

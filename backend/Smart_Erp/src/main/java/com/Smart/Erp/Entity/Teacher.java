@@ -1,10 +1,8 @@
 package com.Smart.Erp.Entity;
 
-import com.Smart.Erp.Enum.Status;
 import jakarta.persistence.*;
 import lombok.*;
 
-import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -20,20 +18,26 @@ public class Teacher {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Enumerated(EnumType.STRING)
-    private Status status;
-
     @ToString.Exclude
     @OneToOne
     @JoinColumn(name = "user_id")
     private User user;
 
-    @Builder.Default
-    @OneToMany(mappedBy = "mentor")
-    private List<Section> classesAsMentor = new ArrayList<>();
+    @ToString.Exclude
+    @OneToMany(
+            mappedBy = "teacher",
+            cascade = CascadeType.ALL,
+            orphanRemoval = true
+    )
+    private List<TeacherEnrollment> enrollments = new ArrayList<>();
 
-    // Teacher → Subjects
-    @Builder.Default
-    @ManyToMany(mappedBy = "subjectTeachers")
-    private List<Subject> subjects = new ArrayList<>();
+    public void addEnrollment(TeacherEnrollment enrollment) {
+        enrollments.add(enrollment);
+        enrollment.setTeacher(this);
+    }
+
+    public void removeEnrollment(TeacherEnrollment enrollment) {
+        enrollments.remove(enrollment);
+        enrollment.setTeacher(null);
+    }
 }

@@ -57,4 +57,8 @@ public class Course implements CommonReference {
             orphanRemoval = true
     )
     private List<Specialization> specializations = new ArrayList<>();
+
+    public String getPrefix(){
+        return this.getDepartment().getPrefix();
+    }
 }

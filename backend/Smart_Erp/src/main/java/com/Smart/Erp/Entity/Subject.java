@@ -4,7 +4,9 @@ import lombok.*;
 
 import java.time.LocalDate;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 
 @Entity
 @Table(name = "subjects")
@@ -67,14 +69,15 @@ public class Subject implements CommonReference{
     private List<Chapter> chapters = new ArrayList<>();
 
 
-    // Subject ↔ Teachers
+    @Builder.Default
     @ManyToMany
     @JoinTable(
-            name = "subject_teachers",
+            name = "subject_teacher_enrollments",
             joinColumns = @JoinColumn(name = "subject_id"),
-            inverseJoinColumns = @JoinColumn(name = "teacher_id")
+            inverseJoinColumns = @JoinColumn(name = "teacher_enrollment_id")
     )
-    private List<Teacher> subjectTeachers = new ArrayList<>();
+    @ToString.Exclude
+    private Set<TeacherEnrollment> subjectTeachers = new HashSet<>();
 
 
     // Teacher assigned for question bank
@@ -91,4 +94,8 @@ public class Subject implements CommonReference{
     private Teacher studyMaterialTeacher;
 
     private LocalDate lastDateStudyMaterialSummit;
+
+    public String getPrefix(){
+        return this.getCourse().getPrefix() + this.getCourse().getCode();
+    }
 }

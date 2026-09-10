@@ -51,4 +51,13 @@ public class AcademicYear {
     )
     private List<School> schools = new ArrayList<>();
 
+    @ToString.Exclude
+    @OneToMany(mappedBy = "academicYear")
+    @Builder.Default
+    private List<StudentEnrollment> studentEnrollments = new ArrayList<>();
+
+    @ToString.Exclude
+    @OneToMany(mappedBy = "academicYear")
+    @Builder.Default
+    private List<TeacherEnrollment> teacherEnrollments = new ArrayList<>();
 }
