@@ -1,6 +1,6 @@
 package com.Smart.Erp.Security;
-import com.Smart.Erp.Entity.User;
-import com.Smart.Erp.Repository.UserRepo;
+import com.Smart.Erp.Modules.User.Entity.User;
+import com.Smart.Erp.Modules.User.Repo.UserRepo;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.core.userdetails.UserDetailsService;
@@ -28,7 +28,7 @@ public class CustomUserDetailService implements UserDetailsService {
             return org.springframework.security.core.userdetails.User.builder()
                     .username(user.get().getUsername())
                     .password(password)
-                    .roles(String.valueOf(user.get().getRoleUser()))
+                    .roles(String.valueOf(user.get().getUserRoleUser()))
                     .build();
         }
         throw new UsernameNotFoundException("User not found username : "+ username);

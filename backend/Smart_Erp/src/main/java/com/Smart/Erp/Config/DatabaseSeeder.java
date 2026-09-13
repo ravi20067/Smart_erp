@@ -1,11 +1,11 @@
 package com.Smart.Erp.Config;
 
-import com.Smart.Erp.Entity.BasicDetail;
-import com.Smart.Erp.Entity.University;
-import com.Smart.Erp.Entity.User;
-import com.Smart.Erp.Enum.Role;
-import com.Smart.Erp.Repository.UniversityRepo;
-import com.Smart.Erp.Repository.UserRepo;
+import com.Smart.Erp.Modules.User.Entity.BasicDetail;
+import com.Smart.Erp.Modules.Academic.Entity.University;
+import com.Smart.Erp.Modules.User.Entity.User;
+import com.Smart.Erp.Modules.User.Enum.UserRole;
+import com.Smart.Erp.Modules.Academic.Repo.UniversityRepo;
+import com.Smart.Erp.Modules.User.Repo.UserRepo;
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
 import org.springframework.boot.CommandLineRunner;
@@ -40,12 +40,12 @@ public class DatabaseSeeder implements CommandLineRunner {
 
             List<User> admins = new ArrayList<>();
 
-            for (Role role : Role.values()) {
+            for (UserRole userRole : UserRole.values()) {
 
                 String userName = admin.getUserName();
 
-                if (role != Role.ADMIN) {
-                    userName = userName + role.name().toLowerCase() ;
+                if (userRole != UserRole.ADMIN) {
+                    userName = userName + userRole.name().toLowerCase() ;
                 }
 
                 User user = User.builder()
@@ -53,7 +53,7 @@ public class DatabaseSeeder implements CommandLineRunner {
                         .username(userName)
                         .password(password)
                         .enabled(true)
-                        .roleUser(role)
+                        .roleUser(userRole)
                         .university(university)
                         .build();
 
