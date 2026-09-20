@@ -1,6 +1,7 @@
 package com.Smart.Erp.Modules.Subject.DTO.Subject;
 
 import com.Smart.Erp.Core.Common.CommonDTO;
+import com.Smart.Erp.Modules.Academic.Enum.ActiveStatus;
 import lombok.Builder;
 import lombok.Data;
 
@@ -20,10 +21,20 @@ public class SubjectResponse {
 
     private List<CommonDTO> specializations;
 
+    private ActiveStatus activeStatus;
+
     private CommonDTO questionBankTeacher;
     private CommonDTO studyMaterialTeacher;
     private List<CommonDTO> subjectTeachers;
 
     private LocalDate lastDateQuestionBankSummit;
     private LocalDate lastDateStudyMaterialSummit;
+
+    private CommonDTO course;
+
+    private CommonDTO department;
+
+    private CommonDTO school;
+
+    private CommonDTO academicYear;
 }

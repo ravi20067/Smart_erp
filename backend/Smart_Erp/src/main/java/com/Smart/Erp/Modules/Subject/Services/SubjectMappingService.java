@@ -17,6 +17,7 @@ public class SubjectMappingService {
                 .id(subject.getId())
                 .name(subject.getName())
                 .code(subject.getCode())
+                .activeStatus(subject.getActiveStatus())
                 .lecturesPerWeek(subject.getLecturesPerWeek())
                 .isPracticalSubject(subject.getIsPracticalSubject())
                 .specializations(subject.getSpecializations().stream()

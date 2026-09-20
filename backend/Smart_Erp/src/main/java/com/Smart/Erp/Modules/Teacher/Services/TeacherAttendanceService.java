@@ -11,8 +11,6 @@ import com.Smart.Erp.Core.Redis.AttendanceQR;
 import com.Smart.Erp.Modules.Teacher.Repo.TeacherAttendanceRepository;
 import com.Smart.Erp.Modules.Teacher.Repo.TeacherRepo;
 import com.Smart.Erp.Modules.User.Repo.UserRepo;
-import com.Smart.Erp.Modules.Academic.Services.AcademicMappingService;
-import com.Smart.Erp.Modules.User.Services.UserMappingService;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
@@ -47,10 +45,6 @@ public class TeacherAttendanceService {
     private final ObjectMapper objectMapper;
 
     private final AttendancePublisher attendancePublisher;
-
-    private final AcademicMappingService mappingService;
-
-    private final UserMappingService userMappingService;
 
 
     private Teacher getLoggedInTeacher() {
@@ -507,9 +501,9 @@ public class TeacherAttendanceService {
                     .message("Check In recorded successfully.")
                     .type("CHECK_IN")
                     .deviceName(scannerLocation)
-                    .teacherName(userMappingService.getNameUser(teacher.getUser()))
+                    .teacherName(teacher.getUser().getName())
                     .employeeId(teacher.getUser().getUsername())
-                    .department(teacher.getUser().getUserRoleUser().toString())
+                    .department(teacher.getUser().getUserRole().toString())
                     .attendanceTime(LocalDateTime.now().format(DateTimeFormatter.ofPattern("dd MMM yyyy hh:mm:ss a")).toString())
                     .build();
 
@@ -541,9 +535,9 @@ public class TeacherAttendanceService {
                 .message("Check Out recorded successfully.")
                 .type("CHECK_OUT")
                 .deviceName(scannerLocation)
-                .teacherName(userMappingService.getNameUser(teacher.getUser()))
+                .teacherName(teacher.getUser().getName())
                 .employeeId(teacher.getUser().getUsername())
-                .department(teacher.getUser().getUserRoleUser().toString())
+                .department(teacher.getUser().getUserRole().toString())
                 .attendanceTime(LocalDateTime.now().format(DateTimeFormatter.ofPattern("dd MMM yyyy hh:mm:ss a")).toString())
                 .build();
 

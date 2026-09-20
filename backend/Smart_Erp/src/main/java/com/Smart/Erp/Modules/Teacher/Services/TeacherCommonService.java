@@ -4,9 +4,8 @@ import com.Smart.Erp.Core.Common.CommonDTO;
 import com.Smart.Erp.Core.Exception.ResourceNotFoundException;
 import com.Smart.Erp.Modules.Teacher.Entity.Teacher;
 import com.Smart.Erp.Modules.Teacher.Repo.TeacherRepo;
-import com.Smart.Erp.Modules.User.Enum.UserRole;
+import com.Smart.Erp.Modules.User.Enum.UserRoles;
 import com.Smart.Erp.Modules.User.Services.UserCommonService;
-import com.Smart.Erp.Modules.User.Services.UserMappingService;
 import lombok.AllArgsConstructor;
 import org.springframework.stereotype.Service;
 
@@ -34,7 +33,7 @@ public class TeacherCommonService {
         }
         return CommonDTO.builder()
                 .id(teacher.getId())
-                .name(userMappingService.getNameUser(teacher.getUser()))
+                .name(teacher.getUser().getName())
                 .code(teacher.getUser().getUsername())
                 .build();
     }
@@ -43,7 +42,7 @@ public class TeacherCommonService {
         return teacherRepo.findByIdIn(teacherIds);
     }
 
-    public Teacher updateTeacherRole(Teacher oldTeacher, Long newTeacherId, UserRole newTeacherUserRole) {
+    public Teacher updateTeacherRole(Teacher oldTeacher, Long newTeacherId, UserRoles newTeacherUserRole) {
         if (newTeacherId == null) {
             return null;
         }
@@ -57,7 +56,7 @@ public class TeacherCommonService {
         if (oldTeacher != null) {
             userService.updateRole(
                     oldTeacher.getUser(),
-                    UserRole.TEACHER
+                    UserRoles.TEACHER
             );
         }
         // Assign new role

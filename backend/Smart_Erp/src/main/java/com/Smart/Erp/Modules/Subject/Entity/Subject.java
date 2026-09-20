@@ -1,6 +1,7 @@
 package com.Smart.Erp.Modules.Subject.Entity;
 import com.Smart.Erp.Config.BaseAuditableEntity;
 import com.Smart.Erp.Config.CommonReference;
+import com.Smart.Erp.Modules.Academic.Enum.ActiveStatus;
 import com.Smart.Erp.Modules.Exam.Entity.ExamResult;
 import com.Smart.Erp.Modules.Teacher.Entity.Teacher;
 import com.Smart.Erp.Modules.Teacher.Entity.TeacherEnrollment;
@@ -30,6 +31,8 @@ public class Subject  extends BaseAuditableEntity implements CommonReference {
     private String name;
 
     private String code;
+
+    private ActiveStatus activeStatus = ActiveStatus.DISABLE;
 
     private Integer lecturesPerWeek;
 

@@ -4,7 +4,7 @@ import com.Smart.Erp.Modules.Academic.DTO.Sections.SectionRequest;
 import com.Smart.Erp.Modules.Academic.DTO.Sections.SectionResponse;
 import com.Smart.Erp.Modules.Teacher.Entity.Teacher;
 import com.Smart.Erp.Modules.Teacher.Services.TeacherCommonService;
-import com.Smart.Erp.Modules.User.Enum.UserRole;
+import com.Smart.Erp.Modules.User.Enum.UserRoles;
 import com.Smart.Erp.Core.Exception.OperationNotAllowedException;
 import com.Smart.Erp.Modules.Academic.Entity.Course;
 import com.Smart.Erp.Modules.Academic.Entity.Section;
@@ -24,17 +24,36 @@ import java.util.stream.Collectors;
 public class SectionService {
     private final SectionRepo sectionRepo;
     private final AcademicCommonService academicCommonService;
-    private final AcademicMappingService mappingService;
     private final TeacherCommonService teacherCommonService;
 
-    public @Nullable List<SectionResponse> getAll(Long courseId) {
-        return academicCommonService.getCourse(courseId).getSections().stream()
-                .map(mappingService::mapToResponse)
-                .toList();
+    public @Nullable List<SectionResponse> getAll(Long academicYearId, Long schoolId, Long departmentId, Long courseId) {
+        if (courseId != null) {
+            return academicCommonService.getCourse(courseId).getSections().stream()
+                    .map(Section::mapToResponse)
+                    .toList();
+        } else if (departmentId != null) {
+            return academicCommonService.getDepartment(departmentId).getCourses().stream()
+                    .flatMap(course -> course.getSections().stream())
+                    .map(Section::mapToResponse)
+                    .toList();
+        } else if (schoolId != null) {
+            return academicCommonService.getSchool(schoolId).getDepartments().stream()
+                    .flatMap(department -> department.getCourses().stream())
+                    .flatMap(course -> course.getSections().stream())
+                    .map(Section::mapToResponse)
+                    .toList();
+        } else {
+            return academicCommonService.getAcademicYear(academicYearId).getSchools().stream()
+                    .flatMap(school -> school.getDepartments().stream())
+                    .flatMap(department -> department.getCourses().stream())
+                    .flatMap(course -> course.getSections().stream())
+                    .map(Section::mapToResponse)
+                    .toList();
+        }
     }
 
     public @Nullable SectionResponse getById(Long courseId, Long sectionId) {
-        return mappingService.mapToResponse(validate(courseId, academicCommonService.getSection(sectionId)));
+        return validate(courseId, academicCommonService.getSection(sectionId)).mapToResponse();
     }
 
     @Transactional
@@ -45,7 +64,7 @@ public class SectionService {
         Teacher mentor = teacherCommonService.updateTeacherRole(
                 new Teacher(),
                 request.getMentorId(),
-                UserRole.MENTOR
+                UserRoles.MENTOR
         );
 
         List<Specialization> specializations =
@@ -59,6 +78,7 @@ public class SectionService {
                 .course(course)
                 .build();
 
+
         List<SectionGroup> groups = specializations.stream()
                 .map(specialization -> SectionGroup.builder()
                         .name(request.getName() + "-" + specialization.getName())
@@ -69,9 +89,7 @@ public class SectionService {
 
         section.setSectionGroups(groups);
 
-        sectionRepo.save(section);
-
-        return mappingService.mapToResponse(section);
+        return sectionRepo.save(section).mapToResponse();
     }
     @Transactional
     public @Nullable SectionResponse update(
@@ -101,11 +119,11 @@ public class SectionService {
                 teacherCommonService.updateTeacherRole(
                         section.getMentor(),
                         request.getMentorId(),
-                        UserRole.MENTOR
+                        UserRoles.MENTOR
                 )
         );
 
-        return mappingService.mapToResponse(sectionRepo.save(section));
+        return sectionRepo.save(section).mapToResponse();
     }
 
     private void handleUpdateSpecialization(
@@ -113,10 +131,13 @@ public class SectionService {
             SectionRequest request,
             boolean nameChanged
     ) {
+        if (section.getActiveStatus() != request.getActiveStatus()){
+            section = academicCommonService.handleActiveStatusUpdate(section, request.getActiveStatus());
+        }
+
         List<SectionGroup> sectionGroups = section.getSectionGroups();
 
-        Set<Long> requestedIds =
-                new HashSet<>(request.getSpecializationId());
+        Set<Long> requestedIds = new HashSet<>(request.getSpecializationId());
 
         Set<Long> existingIds = sectionGroups.stream()
                 .map(group -> group.getSpecialization().getId())
@@ -125,10 +146,12 @@ public class SectionService {
         if (!nameChanged && existingIds.equals(requestedIds)) {
             return;
         }
-        for (SectionGroup group : sectionGroups) {
+        // CHANGED: Using Iterator to allow safe removal during traversal
+        Iterator<SectionGroup> iterator = sectionGroups.iterator();
 
-            Long specializationId =
-                    group.getSpecialization().getId();
+        while (iterator.hasNext()) {
+            SectionGroup group = iterator.next();
+            Long specializationId = group.getSpecialization().getId();
 
             if (requestedIds.contains(specializationId)) {
 
@@ -148,6 +171,8 @@ public class SectionService {
                                     + "It carry student specialization"
                     );
                 }
+                // CHANGED: Actually remove the group from the sectionGroups list
+                iterator.remove();
             }
         }
 
@@ -157,6 +182,7 @@ public class SectionService {
             return;
         }
 
+        Section finalSection = section;
         List<SectionGroup> newGroups =
                 academicCommonService.getSpecialization(new ArrayList<>(requestedIds))
                         .stream()
@@ -168,7 +194,7 @@ public class SectionService {
                                                         + specialization.getName()
                                         )
                                         .specialization(specialization)
-                                        .section(section)
+                                        .section(finalSection)
                                         .build()
                         )
                         .toList();

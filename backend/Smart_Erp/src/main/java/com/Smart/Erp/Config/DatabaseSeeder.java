@@ -3,7 +3,7 @@ package com.Smart.Erp.Config;
 import com.Smart.Erp.Modules.User.Entity.BasicDetail;
 import com.Smart.Erp.Modules.Academic.Entity.University;
 import com.Smart.Erp.Modules.User.Entity.User;
-import com.Smart.Erp.Modules.User.Enum.UserRole;
+import com.Smart.Erp.Modules.User.Enum.UserRoles;
 import com.Smart.Erp.Modules.Academic.Repo.UniversityRepo;
 import com.Smart.Erp.Modules.User.Repo.UserRepo;
 import jakarta.transaction.Transactional;
@@ -40,20 +40,19 @@ public class DatabaseSeeder implements CommandLineRunner {
 
             List<User> admins = new ArrayList<>();
 
-            for (UserRole userRole : UserRole.values()) {
+            for (UserRoles userRole : UserRoles.values()) {
 
                 String userName = admin.getUserName();
 
-                if (userRole != UserRole.ADMIN) {
+                if (userRole != UserRoles.ADMIN) {
                     userName = userName + userRole.name().toLowerCase() ;
                 }
 
                 User user = User.builder()
-                        .registrationNo(123456L)
                         .username(userName)
                         .password(password)
                         .enabled(true)
-                        .roleUser(userRole)
+                        .userRole(userRole)
                         .university(university)
                         .build();
 

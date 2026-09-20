@@ -2,6 +2,8 @@ package com.Smart.Erp.Modules.Academic.Entity;
 
 import com.Smart.Erp.Config.BaseAuditableEntity;
 import com.Smart.Erp.Config.CommonReference;
+import com.Smart.Erp.Modules.Academic.DTO.Specialization.SpecializationResponse;
+import com.Smart.Erp.Modules.Academic.Enum.ActiveStatus;
 import com.Smart.Erp.Modules.Finance.Entity.FeeStructure;
 import com.Smart.Erp.Modules.Subject.Entity.Subject;
 import jakarta.persistence.*;
@@ -25,6 +27,8 @@ public class Specialization  extends BaseAuditableEntity implements CommonRefere
     private String name;
 
     private String code = "";
+
+    private ActiveStatus activeStatus = ActiveStatus.DISABLE;
 
     @ToString.Exclude
     @ManyToOne(fetch = FetchType.LAZY)
@@ -56,13 +60,34 @@ public class Specialization  extends BaseAuditableEntity implements CommonRefere
     }
 
     public String getPostfix(){
-        int studentCount = sectionGroups.stream()
-                .mapToInt(sectionGroup -> sectionGroup.getStudentEnrollments().size())
-                .sum();
 
         return this.getCourse().getCode()
-                + this.getCode()
-                + String.format("%04d", studentCount + 1);
+                + this.getCode();
 
+    }
+
+    public SpecializationResponse mapToResponse() {
+        Department department = course.getDepartment();
+        School school = department.getSchool();
+        AcademicYear academicYear = school.getAcademicYear();
+
+        return SpecializationResponse.builder()
+                .id(this.getId())
+                .name(this.getName())
+                .code(this.getCode())
+                .activeStatus(this.getActiveStatus())
+                .subjects(this.getSubjects().stream()
+                        .map(CommonReference::toCommonDTO)
+                        .toList()
+                )
+                .sectionGroups(this.getSectionGroups().stream()
+                        .map(CommonReference::toCommonDTO)
+                        .toList()
+                )
+                .course(course.toCommonDTO())
+                .department(department.toCommonDTO())
+                .school(school.toCommonDTO())
+                .academicYear(academicYear.toCommonDTO())
+                .build();
     }
 }

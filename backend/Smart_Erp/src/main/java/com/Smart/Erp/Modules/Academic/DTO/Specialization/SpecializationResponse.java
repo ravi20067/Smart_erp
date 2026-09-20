@@ -1,6 +1,7 @@
 package com.Smart.Erp.Modules.Academic.DTO.Specialization;
 
 import com.Smart.Erp.Core.Common.CommonDTO;
+import com.Smart.Erp.Modules.Academic.Enum.ActiveStatus;
 import lombok.Builder;
 import lombok.Data;
 
@@ -18,4 +19,14 @@ public class SpecializationResponse {
     private List<CommonDTO> subjects;
 
     private List<CommonDTO> sectionGroups;
+
+    private CommonDTO course;
+
+    private CommonDTO department;
+
+    private CommonDTO school;
+
+    private CommonDTO academicYear;
+
+    private ActiveStatus activeStatus ;
 }

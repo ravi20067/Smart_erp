@@ -21,37 +21,56 @@ import java.util.List;
 public class SpecializationService {
     private final SpecializationRepo specializationRepo;
     private final AcademicCommonService academicCommonService;
-    private final AcademicMappingService mappingService;
 
-    public @Nullable List<SpecializationResponse> getAll(Long courseId) {
-        return academicCommonService.getCourse(courseId).getSpecializations().stream()
-                .map(mappingService::mapToResponse)
+    public @Nullable List<SpecializationResponse> getAll(Long academicYearId, Long schoolId, Long departmentId, Long courseId) {
+        if (courseId != null) {
+            return academicCommonService.getCourse(courseId).getSpecializations().stream()
+                    .map(Specialization::mapToResponse)
+                    .toList();
+        } else if (departmentId != null) {
+            return academicCommonService.getDepartment(departmentId).getCourses().stream()
+                    .flatMap(course -> course.getSpecializations().stream())
+                    .map(Specialization::mapToResponse)
+                    .toList();
+        } else if (schoolId != null) {
+            return academicCommonService.getSchool(schoolId).getDepartments().stream()
+                    .flatMap(department -> department.getCourses().stream())
+                    .flatMap(course -> course.getSpecializations().stream())
+                    .map(Specialization::mapToResponse)
+                    .toList();
+        }
+        return academicCommonService.getAcademicYear(academicYearId).getSchools().stream()
+                .flatMap(school -> school.getDepartments().stream())
+                .flatMap(department -> department.getCourses().stream())
+                .flatMap(course -> course.getSpecializations().stream())
+                .map(Specialization::mapToResponse)
                 .toList();
     }
 
     public @Nullable SpecializationResponse getById(Long courseId, Long specializationId) {
-        return mappingService.mapToResponse(validate(academicCommonService.getSpecialization(specializationId),courseId));
+        return validate(academicCommonService.getSpecialization(specializationId),courseId).mapToResponse();
     }
 
     public @Nullable SpecializationResponse create(Long courseId, CommonRequest request) {
         Course course = academicCommonService.getCourse(courseId);
-        return mappingService.mapToResponse(
-                specializationRepo.save(
-                        Specialization.builder()
-                                .name(request.getName())
-                                .code(request.getCode())
-                                .course(course)
-                                .build()
-                )
-        );
+        return specializationRepo.save(
+                Specialization.builder()
+                        .name(request.getName())
+                        .code(request.getCode())
+                        .course(course)
+                        .build()
+        ).mapToResponse();
     }
     public @Nullable SpecializationResponse update(Long courseId, SpecializationRequest request) {
         Specialization specialization = academicCommonService.getSpecialization(request.getId());
 
         specialization.setName(request.getName());
         specialization.setCode(request.getCode());
+        if (specialization.getActiveStatus() != request.getActiveStatus()){
+            specialization = academicCommonService.handleActiveStatusUpdate(specialization,request.getActiveStatus());
+        }
 
-        return mappingService.mapToResponse(specializationRepo.save(specialization));
+        return specializationRepo.save(specialization).mapToResponse();
     }
     public @Nullable String delete(Long specializationId, Long courseId) {
         Specialization specialization = academicCommonService.getSpecialization(specializationId);
@@ -59,7 +78,7 @@ public class SpecializationService {
             specializationRepo.delete(specialization);
             return "Deleted Successfully";
         }
-        return null;
+        throw new OperationNotAllowedException("Remove its subjects and section");
     }
     public Specialization validate(Specialization specialization ,Long courseId){
         if (specialization.getCourse().getId().equals(courseId)){

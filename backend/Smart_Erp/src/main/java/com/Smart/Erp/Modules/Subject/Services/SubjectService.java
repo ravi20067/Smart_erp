@@ -8,7 +8,6 @@ import com.Smart.Erp.Modules.Subject.Entity.Subject;
 import com.Smart.Erp.Core.Exception.OperationNotAllowedException;
 import com.Smart.Erp.Modules.Subject.Repo.SubjectRepo;
 import com.Smart.Erp.Modules.Academic.Services.AcademicCommonService;
-import com.Smart.Erp.Modules.Academic.Services.AcademicMappingService;
 import com.Smart.Erp.Modules.Teacher.Services.TeacherCommonService;
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
@@ -26,17 +25,33 @@ public class SubjectService {
     private final SubjectMappingService mappingService;
     private final SubjectRepo subjectRepo;
     private final TeacherCommonService teacherCommonService;
-    private final SubjectMappingService subjectMappingService;
     private final SubjectCommonService subjectCommonService;
 
-    public @Nullable List<SubjectResponse> getAll(Long courseId) {
-        return academicCommonService.getCourse(courseId).getSubjects().stream()
-                .map(mappingService::mapToResponse)
-                .toList();
-    }
-
-    public @Nullable SubjectResponse getById(Long courseId, Long subjectId) {
-        return mappingService.mapToResponse(validate(subjectCommonService.getSubject(subjectId),courseId));
+    public @Nullable List<SubjectResponse> getAll(Long academicYearId, Long schoolId, Long departmentId, Long courseId) {
+        if (courseId != null) {
+            return
+                    academicCommonService.getCourse(courseId).getSubjects().stream()
+                            .map(mappingService::mapToResponse)
+                            .toList();
+        } else if (departmentId != null) {
+            return academicCommonService.getDepartment(departmentId).getCourses().stream()
+                    .flatMap(course -> course.getSubjects().stream())
+                    .map(mappingService::mapToResponse)
+                    .toList();
+        } else if (schoolId != null) {
+            return academicCommonService.getSchool(schoolId).getDepartments().stream()
+                    .flatMap(department -> department.getCourses().stream())
+                    .flatMap(course -> course.getSubjects().stream())
+                    .map(mappingService::mapToResponse)
+                    .toList();
+        } else {
+            return academicCommonService.getAcademicYear(academicYearId).getSchools().stream()
+                    .flatMap(school -> school.getDepartments().stream())
+                    .flatMap(department -> department.getCourses().stream())
+                    .flatMap(course -> course.getSubjects().stream())
+                    .map(mappingService::mapToResponse)
+                    .toList();
+        }
     }
 
     public @Nullable SubjectResponse create(Long courseId, CommonRequest request) {
@@ -78,9 +93,12 @@ public class SubjectService {
     private Subject handleUpdate(Subject subject, SubjectRequest subjectRequest){
         subject.setName(subjectRequest.getName());
         subject.setCode(subjectRequest.getCode());
-
+        if (subjectRequest.getActiveStatus() != subject.getActiveStatus()){
+            subject = academicCommonService.handleActiveStatusUpdate(subject,subjectRequest.getActiveStatus());
+        }
         subject.setIsPracticalSubject(subjectRequest.getIsPracticalSubject());
         subject.setLecturesPerWeek(subjectRequest.getLecturesPerWeek());
+
 
         subject.setSpecializations(academicCommonService.getSpecialization(subjectRequest.getSpecializationsId()));
 

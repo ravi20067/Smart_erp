@@ -2,8 +2,10 @@ package com.Smart.Erp.Modules.User.Entity;
 
 import com.Smart.Erp.Config.BaseAuditableEntity;
 import com.Smart.Erp.Modules.File.Entity.FileMetadata;
+import com.Smart.Erp.Modules.User.DTO.BasicDetail.UserProfileResponse;
 import jakarta.persistence.*;
 import lombok.*;
+import org.jspecify.annotations.Nullable;
 
 import java.time.LocalDate;
 
@@ -37,4 +39,21 @@ public class BasicDetail extends BaseAuditableEntity {
     private String motherName;
     private String guardianMobileNumber;
     private String address;
+
+    public @Nullable UserProfileResponse mapToResponse() {
+        return UserProfileResponse.builder()
+                .userId(this.getUser().getId())
+                .username(this.getUser().getUsername())
+                .firstName(this.getFirstName())
+                .lastName(this.getLastName())
+                .enabled(this.getUser().getEnabled())
+                .dob(this.getDob())
+                .email(this.getEmail())
+                .phone(this.getPhone())
+                .fatherName(this.getFatherName())
+                .motherName(this.getMotherName())
+                .address(this.getAddress())
+                .guardianMobileNumber(this.getGuardianMobileNumber())
+                .build();
+    }
 }

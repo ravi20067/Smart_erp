@@ -2,12 +2,15 @@ package com.Smart.Erp.Modules.Student.Entity;
 
 
 import com.Smart.Erp.Config.BaseAuditableEntity;
+import com.Smart.Erp.Modules.Student.DTO.Enrollment.StudentEnrollmentResponse;
+import com.Smart.Erp.Modules.Student.DTO.Student.StudentResponse;
 import com.Smart.Erp.Modules.User.Entity.User;
 import jakarta.persistence.*;
 import lombok.*;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.stream.Collectors;
 
 @Entity
 @Table(name = "students")
@@ -54,5 +57,17 @@ public class Student  extends BaseAuditableEntity {
     public void removeEnrollment(StudentEnrollment enrollment) {
         enrollments.remove(enrollment);
         enrollment.setStudent(null);
+    }
+
+    public StudentResponse mapToResponse() {
+        return StudentResponse.builder()
+                .id(this.getId())
+                .registrationNumber(this.getRegistrationNumber())
+                .basicDetailRequest(this.getUser().getBasicDetail().mapToResponse())
+                .enrollment(this.getEnrollments().stream()
+                        .map(StudentEnrollment::mapToResponse)
+                        .collect(Collectors.toList())
+                )
+                .build();
     }
 }

@@ -1,7 +1,7 @@
 package com.Smart.Erp.Modules.User.Controller;
 
 import com.Smart.Erp.Modules.User.DTO.LoginRequest;
-import com.Smart.Erp.Modules.User.DTO.UserProfileDto;
+import com.Smart.Erp.Modules.User.DTO.BasicDetail.UserProfileResponse;
 import com.Smart.Erp.Core.Exception.ResourceNotFoundException;
 import com.Smart.Erp.Security.JwtService;
 import com.Smart.Erp.Modules.User.Services.UserService;
@@ -31,8 +31,6 @@ public class AuthController {
     @PostMapping("/login")
     public ResponseEntity<?> login(@RequestBody LoginRequest request) {
         try {
-
-
             Authentication authentication =
                     authenticationManager.authenticate(
                             new UsernamePasswordAuthenticationToken(
@@ -47,13 +45,13 @@ public class AuthController {
 
             return ResponseEntity.ok(Map.of("token", token));
         } catch (Exception e) {
-            throw new ResourceNotFoundException("Invalid request");
+            throw new ResourceNotFoundException(e.getMessage());
         }
 
     }
 
     @GetMapping("/profile")
-    public ResponseEntity<UserProfileDto> getProfile(Authentication authentication) {
+    public ResponseEntity<UserProfileResponse> getProfile(Authentication authentication) {
 
         String username = authentication.getName();
 

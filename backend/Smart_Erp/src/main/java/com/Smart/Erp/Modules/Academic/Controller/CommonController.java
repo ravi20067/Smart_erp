@@ -1,8 +1,6 @@
 package com.Smart.Erp.Modules.Academic.Controller;
 
 import com.Smart.Erp.Core.Common.CommonDTO;
-import com.Smart.Erp.Modules.Academic.DTO.CommonAcademic.CommonAcademicYearDTO;
-import com.Smart.Erp.Modules.Academic.DTO.CommonAcademic.CommonUniversityDTO;
 import com.Smart.Erp.Modules.Academic.Services.AcademicCommonService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.core.Authentication;
@@ -15,7 +13,9 @@ import java.util.List;
 @RequestMapping
 @RequiredArgsConstructor
 public class CommonController {
+
     private final AcademicCommonService academicCommonService;
+
     @GetMapping("admin/common/teacher")
     public ResponseEntity<List<CommonDTO>> getTeacherDTO(
             @RequestParam Long universityId,
@@ -25,45 +25,51 @@ public class CommonController {
             ){
         return ResponseEntity.ok(academicCommonService.getCommonTeachersDto(universityId,schoolId,departmentId,coursesId));
     }
+
     @GetMapping("admin/common/university")
-    public ResponseEntity<List<CommonUniversityDTO>> getDto(Authentication authentication){
+    public ResponseEntity<List<CommonDTO>> getDto(Authentication authentication){
         String userName = authentication.getName();
         return ResponseEntity.ok(academicCommonService.getUniversityCommonDTO(userName));
     }
 
     @GetMapping("admin/common/academic-year")
-    public ResponseEntity<List<CommonAcademicYearDTO>> getAcademicYear(
-            @RequestParam Long universityId
+    public ResponseEntity<List<CommonDTO>> getAcademicYear(
+            @RequestParam(required = false) Long universityId,
+            Authentication authentication
     ){
-        return ResponseEntity.ok(academicCommonService.getAcademicCommonDTO(universityId));
+        return ResponseEntity.ok(academicCommonService.getAcademicCommonDTO(universityId, authentication ));
     }
 
     @GetMapping("admin/common/school")
     public ResponseEntity<List<CommonDTO>> getSchoolDTO(
-            @RequestParam Long academicYearId
+            @RequestParam(required = false) Long academicYearId,
+            Authentication authentication
     ){
-        return ResponseEntity.ok(academicCommonService.getCommonSchoolDTO(academicYearId));
+        return ResponseEntity.ok(academicCommonService.getCommonSchoolDTO(academicYearId,authentication));
     }
 
     @GetMapping("admin/common/department")
     public ResponseEntity<List<CommonDTO>> getDepartmentDTO(
-            @RequestParam Long schoolId
+            @RequestParam(required = false) Long schoolId,
+            Authentication authentication
     ){
-        return ResponseEntity.ok(academicCommonService.getCommonDepartmentDTO(schoolId));
+        return ResponseEntity.ok(academicCommonService.getCommonDepartmentDTO(schoolId, authentication));
     }
 
     @GetMapping("admin/common/courses")
     public ResponseEntity<List<CommonDTO>> getCourseDTO(
-            @RequestParam Long departmentId
+            @RequestParam(required = false) Long departmentId,
+            Authentication authentication
     ){
-        return ResponseEntity.ok(academicCommonService.getCommonCourseDTO(departmentId));
+        return ResponseEntity.ok(academicCommonService.getCommonCourseDTO(departmentId, authentication));
     }
 
     @GetMapping("admin/common/section")
     public ResponseEntity<List<CommonDTO>> getSection(
-            @RequestParam Long courseId
+            @RequestParam(required = false) Long courseId,
+            Authentication authentication
     ){
-        return ResponseEntity.ok(academicCommonService.getCommonSectionDTO(courseId));
+        return ResponseEntity.ok(academicCommonService.getCommonSectionDTO(courseId, authentication ));
     }
 
     @GetMapping("admin/common/subject")

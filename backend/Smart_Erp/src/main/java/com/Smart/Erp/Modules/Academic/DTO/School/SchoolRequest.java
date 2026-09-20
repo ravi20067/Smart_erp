@@ -1,5 +1,6 @@
 package com.Smart.Erp.Modules.Academic.DTO.School;
 
+import com.Smart.Erp.Modules.Academic.Enum.ActiveStatus;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -10,6 +11,7 @@ import lombok.NoArgsConstructor;
 @NoArgsConstructor
 @AllArgsConstructor
 public class SchoolRequest {
+    private ActiveStatus activeStatus;
     private String name;
     private String code;
     private Long deanId;

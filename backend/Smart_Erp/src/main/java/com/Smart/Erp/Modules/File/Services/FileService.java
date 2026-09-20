@@ -144,14 +144,7 @@ public class FileService {
         }
     }
 
-    public FileResponse getFile(UUID fileId) {
-        FileMetadata metadata = fileMetadataRepository
-                .findById(fileId)
-                .orElseThrow(() ->
-                        new FileNotFoundException(
-                                "File not found"
-                        )
-                );
+    public FileResponse getFile(FileMetadata metadata) {
 
         Path root = getStorageRoot();
 
@@ -196,14 +189,7 @@ public class FileService {
         }
     }
 
-    public void deleteFile(UUID fileId) {
-        FileMetadata metadata = fileMetadataRepository
-                .findById(fileId)
-                .orElseThrow(() ->
-                        new FileNotFoundException(
-                                "File not found"
-                        )
-                );
+    public void deleteFile(FileMetadata metadata) {
 
         Path root = getStorageRoot();
 

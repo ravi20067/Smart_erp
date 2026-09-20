@@ -1,8 +1,9 @@
 package com.Smart.Erp.Modules.Finance.Entity;
 
 import com.Smart.Erp.Config.BaseAuditableEntity;
+import com.Smart.Erp.Modules.Academic.Entity.*;
+import com.Smart.Erp.Modules.Finance.DTO.Fee.FeeStructureResponse;
 import com.Smart.Erp.Modules.Finance.Enum.FeeFrequency;
-import com.Smart.Erp.Modules.Academic.Entity.Specialization;
 import jakarta.persistence.*;
 import lombok.*;
 import org.hibernate.annotations.BatchSize;
@@ -34,9 +35,10 @@ public class FeeStructure extends BaseAuditableEntity {
     @Column(name = "frequency", nullable = false, length = 20)
     private FeeFrequency frequency;
 
-    @Column(name = "is_active", nullable = false)
+    // Added field for total number of installments
+    @Column(name = "total_installments", nullable = false)
     @Builder.Default
-    private Boolean isActive = true;
+    private Integer totalNoOfInstallments = 1;
 
     @OneToMany(
             mappedBy = "feeStructure",
@@ -47,18 +49,18 @@ public class FeeStructure extends BaseAuditableEntity {
     @BatchSize(size = 25)
     @Builder.Default
     private List<FeeComponent> components = new ArrayList<>();
-
     @OneToMany(mappedBy = "feeStructure", cascade = CascadeType.ALL, orphanRemoval = true)
+    @Builder.Default
     private List<Specialization> specializations = new ArrayList<>();
 
     public void addSpecialization(Specialization specialization) {
         specializations.add(specialization);
-        specialization.setFeeStructure(this); // Updates the foreign key side
+        specialization.setFeeStructure(this);
     }
 
     public void removeSpecialization(Specialization specialization) {
         specializations.remove(specialization);
-        specialization.setFeeStructure(null); // Removes the foreign key reference
+        specialization.setFeeStructure(null);
     }
 
     public void addComponent(FeeComponent component) {
@@ -90,5 +92,36 @@ public class FeeStructure extends BaseAuditableEntity {
     @Override
     public int hashCode() {
         return getClass().hashCode();
+    }
+
+    public FeeStructureResponse mapToResponse() {
+
+        Specialization specialization = this.getSpecializations().getFirst();
+        Course course = specialization.getCourse();
+        Department department = course.getDepartment();
+        School school = department.getSchool();
+        AcademicYear academicYear = school.getAcademicYear();
+
+
+        return FeeStructureResponse.builder()
+                .id(this.getId())
+                .name(this.getName())
+                .frequency(this.getFrequency())
+                .totalNoOfInstallments(this.getTotalNoOfInstallments())
+                .feeComponent(
+                        this.getComponents().stream()
+                                .map(FeeComponent::mapToResponse)
+                                .toList()
+                )
+                .specialization(
+                        this.getSpecializations().stream()
+                                .map(Specialization::toCommonDTO)
+                                .toList()
+                )
+                .courses(course.toCommonDTO())
+                .department(department.toCommonDTO())
+                .school(school.toCommonDTO())
+                .academicYear(academicYear.toCommonDTO())
+                .build();
     }
 }

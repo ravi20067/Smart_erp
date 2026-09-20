@@ -1,32 +1,34 @@
 package com.Smart.Erp.Modules.Student.Services;
 
+import com.Smart.Erp.Core.Exception.OperationNotAllowedException;
+import com.Smart.Erp.Modules.Academic.Entity.Specialization;
 import com.Smart.Erp.Modules.Finance.Services.AccountCommonService;
+import com.Smart.Erp.Modules.Student.DTO.Enrollment.StudentEnrollmentResponse;
 import com.Smart.Erp.Modules.Student.DTO.Student.StudentRequest;
 import com.Smart.Erp.Modules.Student.DTO.Student.StudentResponse;
 import com.Smart.Erp.Modules.Student.Entity.Student;
 import com.Smart.Erp.Modules.Student.Entity.StudentEnrollment;
-import com.Smart.Erp.Modules.User.Enum.UserRole;
+import com.Smart.Erp.Modules.Student.Repo.StudentEnrollmentRepo;
+import com.Smart.Erp.Modules.User.Enum.EnrollmentStatus;
+import com.Smart.Erp.Modules.User.Enum.UserRoles;
 import com.Smart.Erp.Modules.Academic.Entity.AcademicYear;
 import com.Smart.Erp.Modules.Academic.Entity.Section;
 import com.Smart.Erp.Modules.Academic.Entity.SectionGroup;
 import com.Smart.Erp.Modules.Finance.Entity.FeeStructure;
 import com.Smart.Erp.Modules.Finance.Entity.Scholarship;
-import com.Smart.Erp.Modules.Finance.Entity.StudentFeeAccount;
 import com.Smart.Erp.Modules.User.Entity.User;
 import com.Smart.Erp.Modules.Student.Repo.StudentRepo;
 import com.Smart.Erp.Modules.Academic.Services.AcademicCommonService;
-import com.Smart.Erp.Modules.Academic.Services.AcademicMappingService;
 import com.Smart.Erp.Modules.User.Services.UserCommonService;
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
-import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
 import java.util.Collections;
-import java.util.Objects;
+import java.util.List;
 import java.util.Set;
 
 @Service
@@ -35,99 +37,178 @@ import java.util.Set;
 public class StudentService {
 
     private final StudentRepo studentRepo;
-    private final AcademicMappingService mappingService;
-    private final AcademicCommonService academicCommonService;
-    private final UserCommonService userCommonService;
+    private final StudentEnrollmentRepo studentEnrollmentRepo;
+    private final StudentCommonService commonService;
 
+    private final AcademicCommonService academicCommonService;
     private final AccountCommonService accountCommonService;
+    private final UserCommonService userService;
+
+    public List<StudentResponse> get(Long universityId, Long academicYearId, Long schoolId, Long departmentId, Long courseId, Long sectionId) {
+        if (sectionId != null) {
+            return getAllSectionStudents(academicCommonService.getSection(sectionId));
+        } else if (courseId != null) {
+            return academicCommonService.getCourse(courseId)
+                    .getSections().stream()
+                    .flatMap(section -> getAllSectionStudents(section).stream())
+                    .toList();
+        } else if (departmentId != null) {
+            return academicCommonService.getDepartment(departmentId)
+                    .getCourses().stream()
+                    .flatMap(course -> course.getSections().stream())
+                    .flatMap(section -> getAllSectionStudents(section).stream())
+                    .toList();
+        } else if (schoolId != null) {
+            return academicCommonService.getSchool(schoolId)
+                    .getDepartments().stream()
+                    .flatMap(department -> department.getCourses().stream())
+                    .flatMap(course -> course.getSections().stream())
+                    .flatMap(section -> getAllSectionStudents(section).stream())
+                    .toList();
+        } else if (academicYearId != null) {
+            return academicCommonService.getAcademicYear(academicYearId)
+                    .getSchools().stream()
+                    .flatMap(school -> school.getDepartments().stream())
+                    .flatMap(department -> department.getCourses().stream())
+                    .flatMap(course -> course.getSections().stream())
+                    .flatMap(section -> getAllSectionStudents(section).stream())
+                    .toList();
+        } else {
+            return academicCommonService.getUniversity(universityId)
+                    .getUsers()
+                    .stream()
+                    .filter(user -> user.getUserRole() == UserRoles.STUDENT)
+                    .map(user -> user.getStudent().mapToResponse())
+                    .toList();
+        }
+    }
 
     @Transactional
-    public StudentResponse create(Long academicYearId, StudentRequest studentRequest, MultipartFile file) {
-
-        AcademicYear academicYear = academicCommonService.getAcademicYear(academicYearId);
+    public StudentResponse create(StudentRequest studentRequest, MultipartFile file) {
         SectionGroup sectionGroup = academicCommonService.getSectionGroup(studentRequest.getSectionGroupId());
+        AcademicYear academicYear = sectionGroup.getSpecialization().getCourse().getDepartment().getSchool().getAcademicYear();
+
+        if (sectionGroup.getSection().getCapacity() <= sectionGroup.getSection().getSectionGroups().size()) {
+            throw new OperationNotAllowedException("Section is full");
+        }
 
         Set<Scholarship> scholarships = studentRequest.getScholarshipId() != null
                 ? accountCommonService.getScholarship(studentRequest.getScholarshipId())
                 : Collections.emptySet();
 
-        Section section = sectionGroup.getSection();
-        int nextSequence = section.getStudentCount() + 1;
+        int studentCount = sectionGroup.getSpecialization().getSectionGroups().stream()
+                .mapToInt(group -> group.getStudentEnrollments().size())
+                .sum();
 
-        String uniqueSuffix = String.format("%04d", nextSequence);
-        String userName = academicYear.getCode() + sectionGroup.getSpecialization().getPostfix();
+        String userName = academicYear.getUniversity().getCode() + academicYear.getCode() + sectionGroup.getSpecialization().getPostfix() + String.format("%04d", studentCount + 1);
         String registrationNo = academicYear.getStudentPostfix();
-        String rollNo = academicYear.getCode() + uniqueSuffix;
 
         LocalDate dob = studentRequest.getBasicDetailRequest().getDob();
         String formattedDob = dob != null ? dob.format(DateTimeFormatter.ISO_LOCAL_DATE) : "";
 
-        User user = userCommonService.createUser(
+        User user = userService.createUser(
                 studentRequest.getBasicDetailRequest(),
                 userName,
                 file,
-                UserRole.STUDENT,
+                UserRoles.STUDENT,
                 formattedDob
         );
-
         Student student = Student.builder()
                 .user(user)
                 .registrationNumber(registrationNo)
                 .build();
 
-        StudentEnrollment studentEnrollment = StudentEnrollment.builder()
-                .student(student)
-                .rollNumber(rollNo)
-                .academicYear(academicYear)
-                .sectionGroup(sectionGroup)
-                .scholarships(scholarships)
-                .build();
-
-        FeeStructure feeStructure = sectionGroup.getSpecialization().getFeeStructure();
-        if (feeStructure != null) {
-            LocalDate dueDate = academicYear.getStartDate() != null
-                    ? academicYear.getStartDate().plusDays(10)
-                    : LocalDate.now().plusDays(30);
-
-            studentEnrollment.addFeeAccount(
-                    initializeStudentFeeAccount(studentEnrollment, feeStructure, scholarships, dueDate)
-            );
-        }
+        StudentEnrollment studentEnrollment = StudentEnrollment.enrollNewStudent(student,scholarships,sectionGroup,academicYear,studentRequest.getDueDate());
 
         student.addEnrollment(studentEnrollment);
+        student = studentRepo.save(student);
+        academicCommonService.handleStudentChange(sectionGroup);
+        student = commonService.getStudent(student.getId());
 
-        return mappingService.mapToResponse(studentRepo.save(student),academicYearId);
+        return student.mapToResponse();
     }
 
-    private StudentFeeAccount initializeStudentFeeAccount(StudentEnrollment enrollment,
-                                                          FeeStructure feeStructure,
-                                                          Set<Scholarship> scholarships,
-                                                          LocalDate dueDate) {
-        BigDecimal baseAmount = feeStructure.getTotalAmount() != null
-                ? feeStructure.getTotalAmount()
-                : BigDecimal.ZERO;
-
-        BigDecimal totalScholarship = scholarships.stream()
-                .map(Scholarship::getAmount)
-                .filter(Objects::nonNull)
-                .reduce(BigDecimal.ZERO, BigDecimal::add);
-
-        BigDecimal netPayable = baseAmount.subtract(totalScholarship).max(BigDecimal.ZERO);
-
-        return StudentFeeAccount.builder()
-                .studentEnrollment(enrollment)
-                .feeStructure(feeStructure)
-                .baseAmount(baseAmount)
-                .scholarshipAmount(totalScholarship)
-                .fineAmount(BigDecimal.ZERO)
-                .netPayableAmount(netPayable)
-                .paidAmount(BigDecimal.ZERO)
-                .dueBalance(netPayable)
-                .dueDate(dueDate)
-                .build();
+    private List<StudentResponse> getAllSectionStudents(Section section) {
+        return section.getSectionGroups().stream()
+                .flatMap(sectionGroup -> sectionGroup.getStudentEnrollments().stream())
+                .map(studentEnrollment -> studentEnrollment.getStudent().mapToResponse())
+                .toList();
     }
 
-    public StudentResponse get(Long academicYearId, Long sectionId, Long specializationId, Long sectionGroupId, Long studentId) {
-        return null;
+    public StudentEnrollmentResponse updateScholarship(Long enrollmentId, List<Long> scholarshipId) {
+
+        StudentEnrollment studentEnrollment = commonService.getStudentEnrollment(enrollmentId);
+        Set<Scholarship> scholarships = accountCommonService.getScholarship(scholarshipId);
+
+        studentEnrollment.getCurrentFeeAccount().setScholarships(scholarships);
+        studentEnrollment.getCurrentFeeAccount().recalculateTotals();
+
+        return studentEnrollmentRepo.save(studentEnrollment).mapToResponse();
+    }
+
+    public StudentEnrollmentResponse changeSection(Long enrollmentId, Long sectionId) {
+        StudentEnrollment studentEnrollment = commonService.getStudentEnrollment(enrollmentId);
+        Specialization specialization = studentEnrollment.getSectionGroup().getSpecialization();
+        SectionGroup oldSectionGroup = studentEnrollment.getSectionGroup();
+        SectionGroup newSectionGroup = academicCommonService.getSection(sectionId).getSectionGroups().stream()
+                .filter(
+                        sectionGroup -> sectionGroup.getSpecialization() == specialization
+                )
+                .findFirst()
+                .orElseThrow(
+                        () ->
+                                new OperationNotAllowedException("Student's specialization is not section supported")
+                );
+
+        if (newSectionGroup == oldSectionGroup) {
+            throw new OperationNotAllowedException("Student is already enrolled in this section");
+        }
+        Section section = newSectionGroup.getSection();
+        if (section.getCapacity() <= section.getSectionGroups().size()) {
+            throw new OperationNotAllowedException("Section is full");
+        }
+
+        studentEnrollment.setSectionGroup(newSectionGroup);
+        studentEnrollment = studentEnrollmentRepo.save(studentEnrollment);
+        academicCommonService.handleStudentChange(oldSectionGroup);
+        academicCommonService.handleStudentChange(newSectionGroup);
+        return commonService.getStudentEnrollment(studentEnrollment.getId()).mapToResponse();
+    }
+
+    public StudentResponse changeCourse(Long enrollmentId, Long sectionGroupId) {
+
+        StudentEnrollment studentEnrollment = commonService.getStudentEnrollment(enrollmentId);
+        Specialization oldSpecialization = studentEnrollment.getSectionGroup().getSpecialization();
+        SectionGroup oldSectionGroup = studentEnrollment.getSectionGroup();
+        SectionGroup newSectionGroup = academicCommonService.getSectionGroup(sectionGroupId);
+
+        if (newSectionGroup.getSpecialization() == oldSpecialization) {
+            throw new OperationNotAllowedException("Student is already enrolled in this specialization");
+        }
+        if (newSectionGroup.getSection().getCapacity() <= newSectionGroup.getSection().getSectionGroups().size()) {
+            throw new OperationNotAllowedException("Section is full");
+        }
+
+        studentEnrollment.setSectionGroup(newSectionGroup);
+
+        FeeStructure feeStructure = newSectionGroup.getSpecialization().getFeeStructure();
+
+        studentEnrollment.getFirstFeeAccount().adjustFeeStructureChange(feeStructure);
+
+        studentEnrollment = studentEnrollmentRepo.save(studentEnrollment);
+
+        academicCommonService.handleStudentChange(oldSpecialization, studentEnrollment.getAcademicYear());
+
+        academicCommonService.handleStudentChange(oldSectionGroup);
+        academicCommonService.handleStudentChange(newSectionGroup);
+
+        return commonService.getStudent(studentEnrollment.getStudent().getId()).mapToResponse();
+    }
+
+    public StudentEnrollmentResponse changeEnrollmentStatus(Long enrollmentId, EnrollmentStatus enrollmentStatus) {
+        StudentEnrollment studentEnrollment = commonService.getStudentEnrollment(enrollmentId);
+
+        studentEnrollment.setStatus(enrollmentStatus);
+        return studentEnrollmentRepo.save(studentEnrollment).mapToResponse();
     }
 }

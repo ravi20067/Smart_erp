@@ -1,5 +1,6 @@
 package com.Smart.Erp.Modules.Academic.DTO.AcademicYear;
 
+import com.Smart.Erp.Modules.Academic.Enum.ActiveStatus;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -14,7 +15,7 @@ import java.time.LocalDate;
 public class AcademicYearRequest {
     private String name;
     private String code;
-    private Boolean active;
+    private ActiveStatus activeStatus;
     private LocalDate startDate;
     private LocalDate endDate;
 }

@@ -1,10 +1,13 @@
 package com.Smart.Erp.Modules.Student.DTO.Student;
 
-import com.Smart.Erp.Modules.User.DTO.UserProfileDto;
+import com.Smart.Erp.Modules.Student.DTO.Enrollment.StudentEnrollmentResponse;
+import com.Smart.Erp.Modules.User.DTO.BasicDetail.UserProfileResponse;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
+
+import java.util.List;
 
 @Data
 @Builder
@@ -13,6 +16,6 @@ import lombok.NoArgsConstructor;
 public class StudentResponse {
     private Long id;
     private String registrationNumber;
-    private UserProfileDto basicDetailRequest;
-    private StudentEnrollmentResponse enrollment;
+    private UserProfileResponse basicDetailRequest;
+    private List<StudentEnrollmentResponse> enrollment;
 }

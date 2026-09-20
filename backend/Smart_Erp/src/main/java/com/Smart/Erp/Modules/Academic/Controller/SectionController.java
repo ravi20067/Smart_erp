@@ -15,18 +15,14 @@ import java.util.List;
 public class SectionController {
 
     private final SectionService sectionService;
-    @GetMapping("/all")
-    public ResponseEntity<List<SectionResponse>> getAll(
-            @RequestParam Long courseId
-    ){
-        return ResponseEntity.ok(sectionService.getAll(courseId));
-    }
     @GetMapping
-    public ResponseEntity<SectionResponse> getById(
-            @RequestParam Long courseId,
-            @RequestParam Long sectionId
+    public ResponseEntity<List<SectionResponse>> getAll(
+            @RequestParam Long academicYearId,
+            @RequestParam (required = false) Long schoolId,
+            @RequestParam (required = false) Long departmentId,
+            @RequestParam (required = false) Long courseId
     ){
-        return ResponseEntity.ok(sectionService.getById(courseId,sectionId));
+        return ResponseEntity.ok(sectionService.getAll(academicYearId,schoolId,departmentId,courseId));
     }
     @PostMapping
     public ResponseEntity<SectionResponse> create(

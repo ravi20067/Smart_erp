@@ -16,20 +16,16 @@ import java.util.List;
 @RequiredArgsConstructor
 public class SpecializationController {
 
-    private SpecializationService specializationService;
+    private final SpecializationService specializationService;
 
-    @GetMapping("/all")
-    public ResponseEntity<List<SpecializationResponse>> getAll(
-            @RequestParam Long courseId
-    ){
-        return ResponseEntity.ok(specializationService.getAll(courseId));
-    }
     @GetMapping
-    public ResponseEntity<SpecializationResponse> getById(
-            @RequestParam Long courseId,
-            @RequestParam Long specializationId
+    public ResponseEntity<List<SpecializationResponse>> getAll(
+            @RequestParam Long academicYearId,
+            @RequestParam (required = false) Long schoolId,
+            @RequestParam (required = false) Long departmentId,
+            @RequestParam (required = false) Long courseId
     ){
-        return ResponseEntity.ok(specializationService.getById(courseId,specializationId));
+        return ResponseEntity.ok(specializationService.getAll(academicYearId,schoolId,departmentId,courseId));
     }
     @PostMapping
     public ResponseEntity<SpecializationResponse> create(

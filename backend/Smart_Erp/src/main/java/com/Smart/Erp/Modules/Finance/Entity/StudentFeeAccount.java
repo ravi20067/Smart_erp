@@ -1,6 +1,9 @@
 package com.Smart.Erp.Modules.Finance.Entity;
 
 import com.Smart.Erp.Config.BaseAuditableEntity;
+import com.Smart.Erp.Modules.Academic.Entity.SectionGroup;
+import com.Smart.Erp.Modules.Finance.DTO.Student.FeeResponse;
+import com.Smart.Erp.Modules.Finance.Enum.ScholarshipType;
 import com.Smart.Erp.Modules.Student.Entity.StudentEnrollment;
 import com.Smart.Erp.Modules.Finance.Enum.AdjustmentType;
 import com.Smart.Erp.Modules.Finance.Enum.FeeAccountStatus;
@@ -11,8 +14,8 @@ import org.hibernate.annotations.BatchSize;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
-import java.util.ArrayList;
-import java.util.List;
+import java.util.*;
+import java.util.stream.Collectors;
 
 @Entity
 @Table(
@@ -20,7 +23,7 @@ import java.util.List;
         uniqueConstraints = {
                 @UniqueConstraint(
                         name = "uk_student_enrollment_fee_structure",
-                        columnNames = {"student_enrollment_id", "fee_structure_id"}
+                        columnNames = {"student_enrollment_id", "fee_structure_id", "installment_no"}
                 )
         },
         indexes = {
@@ -48,64 +51,76 @@ public class StudentFeeAccount extends BaseAuditableEntity {
     @ToString.Exclude
     private FeeStructure feeStructure;
 
-    // Snapshot of base fee at generation time
-    @Column(name = "base_amount", precision = 12, scale = 2, nullable = false)
-    private BigDecimal baseAmount;
-
-    // Total calculated deduction from applied scholarships
-    @Column(name = "scholarship_amount", precision = 12, scale = 2, nullable = false)
+    // Added field to track the current installment number
+    @Column(name = "installment_no", nullable = false)
     @Builder.Default
-    private BigDecimal scholarshipAmount = BigDecimal.ZERO;
+    private Integer installmentNo = 1;
 
-    // Sum of all student-specific fines and penalties
+    // --- LINKED LIST POINTERS FOR CARRY-FORWARD DUES ---
+
+    @OneToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "previous_account_id", foreignKey = @ForeignKey(name = "fk_fee_acc_previous"))
+    @ToString.Exclude
+    private StudentFeeAccount previousAccount;
+
+    @OneToOne(mappedBy = "previousAccount", fetch = FetchType.LAZY)
+    @ToString.Exclude
+    private StudentFeeAccount nextAccount;
+
+    // ---------------------------------------------------
+
+    @Builder.Default
+    @Column(name = "base_amount", precision = 12, scale = 2, nullable = false)
+    private BigDecimal baseAmount = BigDecimal.ZERO;
+
+    @ToString.Exclude
+    @ManyToMany
+    @JoinTable(
+            name = "student_fee_account_scholarship",
+            joinColumns = @JoinColumn(name = "student_fee_account_id"),
+            inverseJoinColumns = @JoinColumn(name = "scholarship_id")
+    )
+    @Builder.Default
+    private Set<Scholarship> scholarships = new HashSet<>();
+
     @Column(name = "fine_amount", precision = 12, scale = 2, nullable = false)
     @Builder.Default
     private BigDecimal fineAmount = BigDecimal.ZERO;
 
-    // Total net payable: (baseAmount + fineAmount - scholarshipAmount - waiverAmount)
     @Column(name = "net_payable_amount", precision = 12, scale = 2, nullable = false)
-    private BigDecimal netPayableAmount;
+    @Builder.Default
+    private BigDecimal netPayableAmount = BigDecimal.ZERO;
 
-    // Total amount collected so far
     @Column(name = "paid_amount", precision = 12, scale = 2, nullable = false)
     @Builder.Default
     private BigDecimal paidAmount = BigDecimal.ZERO;
 
-    // Remaining dues
     @Column(name = "due_balance", precision = 12, scale = 2, nullable = false)
-    private BigDecimal dueBalance;
+    @Builder.Default
+    private BigDecimal dueBalance = BigDecimal.ZERO;
 
     @Column(name = "due_date")
-    private LocalDate dueDate;
+    @Builder.Default
+    private LocalDate dueDate = LocalDate.now();
 
     @Enumerated(EnumType.STRING)
     @Column(name = "status", nullable = false, length = 30)
     @Builder.Default
     private FeeAccountStatus status = FeeAccountStatus.PENDING;
 
-    // Student-specific adjustments (fines, fee waivers, penalties)
-    @OneToMany(
-            mappedBy = "feeAccount",
-            cascade = CascadeType.ALL,
-            orphanRemoval = true,
-            fetch = FetchType.LAZY
-    )
+    @OneToMany(mappedBy = "feeAccount", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.LAZY)
     @BatchSize(size = 25)
     @Builder.Default
     private List<StudentFeeAdjustment> adjustments = new ArrayList<>();
 
-    // Payment transactions history
-    @OneToMany(
-            mappedBy = "feeAccount",
-            cascade = CascadeType.ALL,
-            orphanRemoval = true,
-            fetch = FetchType.LAZY
-    )
+    @OneToMany(mappedBy = "feeAccount", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.LAZY)
     @BatchSize(size = 25)
     @Builder.Default
     private List<FeePayment> payments = new ArrayList<>();
 
-    // Sync helper methods
+
+    // ==================== Sync Helper Methods ====================
+
     public void addAdjustment(StudentFeeAdjustment adjustment) {
         adjustments.add(adjustment);
         adjustment.setFeeAccount(this);
@@ -118,10 +133,29 @@ public class StudentFeeAccount extends BaseAuditableEntity {
         recalculateTotals();
     }
 
-    /**
-     * Business calculation for auto-balancing ledger
-     */
+    public void linkPreviousAccount(StudentFeeAccount previous) {
+        this.previousAccount = previous;
+        if (previous != null) {
+            previous.setNextAccount(this);
+        }
+    }
+
+    // ==================== Business Calculations ====================
+
     public void recalculateTotals() {
+
+        this.baseAmount = (this.feeStructure != null && this.feeStructure.getTotalAmount() != null)
+                ? this.feeStructure.getTotalAmount()
+                : BigDecimal.ZERO;
+
+        BigDecimal scholarshipAmount =
+                this.scholarships.stream()
+                        .map(
+                                scholarship ->
+                                        scholarship.getFinalAmount(feeStructure)
+                        )
+                        .reduce(BigDecimal.ZERO, BigDecimal::add);
+
         this.fineAmount = adjustments.stream()
                 .filter(a -> a.getType() == AdjustmentType.FINE || a.getType() == AdjustmentType.PENALTY)
                 .map(StudentFeeAdjustment::getAmount)
@@ -134,7 +168,7 @@ public class StudentFeeAccount extends BaseAuditableEntity {
 
         this.netPayableAmount = this.baseAmount
                 .add(this.fineAmount)
-                .subtract(this.scholarshipAmount)
+                .subtract(scholarshipAmount)
                 .subtract(waivers)
                 .max(BigDecimal.ZERO);
 
@@ -145,13 +179,58 @@ public class StudentFeeAccount extends BaseAuditableEntity {
 
         this.dueBalance = this.netPayableAmount.subtract(this.paidAmount);
 
-        if (this.dueBalance.compareTo(BigDecimal.ZERO) <= 0) {
+        if (this.dueBalance.compareTo(BigDecimal.ZERO) == 0) {
             this.status = FeeAccountStatus.PAID;
             this.dueBalance = BigDecimal.ZERO;
         } else if (this.paidAmount.compareTo(BigDecimal.ZERO) > 0) {
             this.status = FeeAccountStatus.PARTIALLY_PAID;
+        } else if (this.dueBalance.compareTo(BigDecimal.ZERO) < 0) {
+            this.status = FeeAccountStatus.OVER_PAID;
         } else {
             this.status = FeeAccountStatus.PENDING;
         }
+    }
+    public static StudentFeeAccount initializeFeeAccount(SectionGroup sectionGroup, Set<Scholarship> scholarships, LocalDate dueDate) {
+        return StudentFeeAccount.builder()
+                .feeStructure(sectionGroup.getSpecialization().getFeeStructure())
+                .scholarships(scholarships)
+                .dueDate(dueDate)
+                .build();
+    }
+    public void adjustFeeStructureChange(FeeStructure feeStructure) {
+        this.feeStructure = feeStructure;
+        recalculateTotals();
+        if (this.nextAccount != null){
+            this.nextAccount.adjustFeeStructureChange(feeStructure);
+        }
+    }
+
+    public StudentFeeAccount generateNextFeeAccount(LocalDate dueDate) {
+        Set<Scholarship> scholarshipSet =
+                this.getScholarships().stream()
+                        .filter(
+                                scholarship ->
+                                        !scholarship.getScholarshipType().equals(ScholarshipType.ONE_TIME)
+                        )
+                        .collect(Collectors.toSet());
+
+        StudentFeeAccount studentFeeAccount =
+                StudentFeeAccount.builder()
+                        .feeStructure(this.feeStructure)
+                        .scholarships(scholarshipSet)
+                        .dueDate(dueDate)
+                        .build();
+
+        studentFeeAccount.linkPreviousAccount(this);
+        studentFeeAccount.recalculateTotals();
+        return studentFeeAccount;
+    }
+
+    public FeeResponse mapToResponseForStudent(){
+        return FeeResponse.builder()
+                .id(this.getId())
+                .netPayableAmount(this.getNetPayableAmount())
+                .dueDate(this.getDueDate())
+                .build();
     }
 }

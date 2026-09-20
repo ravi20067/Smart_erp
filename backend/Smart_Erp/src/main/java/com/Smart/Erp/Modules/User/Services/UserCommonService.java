@@ -4,20 +4,21 @@ import com.Smart.Erp.Core.Exception.ResourceNotFoundException;
 import com.Smart.Erp.Modules.File.Entity.FileMetadata;
 import com.Smart.Erp.Modules.File.Enum.FileType;
 import com.Smart.Erp.Modules.File.Services.FileService;
-import com.Smart.Erp.Modules.User.DTO.UserProfileDto;
+import com.Smart.Erp.Modules.User.DTO.BasicDetail.UserProfileRequest;
 import com.Smart.Erp.Modules.User.Entity.BasicDetail;
 import com.Smart.Erp.Modules.User.Entity.User;
-import com.Smart.Erp.Modules.User.Enum.UserRole;
+import com.Smart.Erp.Modules.User.Enum.UserRoles;
 import com.Smart.Erp.Modules.User.Repo.UserRepo;
 import lombok.AllArgsConstructor;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.util.List;
+
 @Service
 @AllArgsConstructor
 public class UserCommonService {
-    //do not use TeacherCommonService here because it will create circular dependency
 
     private final UserRepo userRepo;
     private final PasswordEncoder passwordEncoder;
@@ -34,13 +35,13 @@ public class UserCommonService {
         return userRepo.findByUsername(username).orElseThrow();
     }
 
-    public void updateRole(User user, UserRole userRole) {
-        user.setUserRoleUser(userRole);
-        user.setUsername(user.getUsername().replace(user.getUserRoleUser().getCode(), userRole.getCode()));
+    public void updateRole(User user, UserRoles userRole) {
+        user.setUserRole(userRole);
+        user.setUsername(user.getUsername().replace(user.getUserRole().getCode(), userRole.getCode()));
         userRepo.save(user);
     }
 
-    public User createUser(UserProfileDto detail, String userName, MultipartFile file, UserRole userRole, String password) {
+    public User createUser(UserProfileRequest detail, String userName, MultipartFile file, UserRoles userRole, String password) {
         FileMetadata metadata = null;
 
         if (!file.isEmpty()) {
@@ -48,7 +49,7 @@ public class UserCommonService {
         }
         User user = User.builder()
                 .username(userName)
-                .userRoleUser(userRole)
+                .userRole(userRole)
                 .password(passwordEncoder.encode(password))
                 .build();
 
@@ -72,5 +73,14 @@ public class UserCommonService {
         user.setBasicDetail(basicDetail);
 
         return userRepo.save(user);
+    }
+
+    public void changeEnable(User userToDisable, Boolean enable) {
+        userToDisable.setEnabled(enable);
+        userRepo.save(userToDisable);
+    }
+
+    public void saveAll(List<User> users) {
+        userRepo.saveAll(users);
     }
 }

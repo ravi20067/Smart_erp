@@ -1,5 +1,6 @@
 package com.Smart.Erp.Modules.Subject.DTO.Subject;
 
+import com.Smart.Erp.Modules.Academic.Enum.ActiveStatus;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
@@ -17,6 +18,7 @@ public class SubjectRequest {
     private String code;
     private Integer lecturesPerWeek;
     private Boolean isPracticalSubject;
+    private ActiveStatus activeStatus;
 
     private List<Long> specializationsId;
 

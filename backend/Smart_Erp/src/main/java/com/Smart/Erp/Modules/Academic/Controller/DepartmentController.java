@@ -16,18 +16,12 @@ public class DepartmentController {
 
     private final DepartmentService departmentService;
 
-    @GetMapping("/all")
-    public ResponseEntity<List<DepartmentResponse>> getAll(
-            @RequestParam Long schoolId
-    ){
-        return ResponseEntity.ok(departmentService.getAll(schoolId));
-    }
     @GetMapping
-    public ResponseEntity<DepartmentResponse> getById(
-            @RequestParam Long schoolId,
-            @RequestParam Long departmentId
+    public ResponseEntity<List<DepartmentResponse>> getAll(
+            @RequestParam Long academicYearId,
+            @RequestParam (required = false) Long schoolId
     ){
-        return ResponseEntity.ok(departmentService.getById(schoolId,departmentId));
+        return ResponseEntity.ok(departmentService.getAll(academicYearId,schoolId));
     }
     @PostMapping
     public ResponseEntity<DepartmentResponse> create(

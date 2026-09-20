@@ -19,71 +19,56 @@ import java.util.Objects;
 @RequiredArgsConstructor
 @Transactional
 public class AcademicYearService {
-
-    private final AcademicMappingService mappingService;
     private final AcademicCommonService academicCommonService;
-
     private final AcademicYearRepository academicYearRepository;
 
-
-    public @Nullable List<AcademicYearResponse> getAcademicYearByUniversityId(Long universityId) {
+    public @Nullable List<AcademicYearResponse> getAcademicYears(Long universityId) {
         return academicCommonService.getUniversity(universityId).getAcademicYears().stream()
-                .map(mappingService::mapToResponse)
+                .map(AcademicYear::mapToResponse)
                 .toList();
     }
-    public @Nullable AcademicYearResponse getAcademicYearById(Long universityId,Long academicYearId) {
-        return mappingService.mapToResponse(validateAcademicYear(academicCommonService.getAcademicYear(academicYearId),universityId));
-    }
     public @Nullable AcademicYearResponse createAcademicYear(Long universityId, AcademicYearRequest academicYearRequest) {
-
-        return mappingService.mapToResponse(
-                academicYearRepository.save(
-                        AcademicYear.builder()
-                                .name(academicYearRequest.getName())
-                                .code(academicYearRequest.getCode())
-                                .active(academicYearRequest.getActive())
-                                .current(false)
-                                .startDate(academicYearRequest.getStartDate())
-                                .endDate(academicYearRequest.getEndDate())
-                                .university(academicCommonService.getUniversity(universityId))
-                                .build()
-                )
-        );
+        return academicYearRepository.save(
+                AcademicYear.builder()
+                        .name(academicYearRequest.getName())
+                        .code(academicYearRequest.getCode())
+                        .current(false)
+                        .startDate(academicYearRequest.getStartDate())
+                        .endDate(academicYearRequest.getEndDate())
+                        .university(academicCommonService.getUniversity(universityId))
+                        .build()
+        ).mapToResponse();
     }
     public @Nullable AcademicYearResponse updateAcademicYear( Long universityId,Long academicYearId, AcademicYearRequest academicYearRequest) {
         AcademicYear academicYear = academicCommonService.getAcademicYear(academicYearId);
-        academicYear = validateAcademicYear(academicYear,universityId);
-
+        if (academicYear.getActiveStatus() != academicYearRequest.getActiveStatus()){
+            academicYear = academicCommonService.handleActiveStatusUpdate(academicYear,academicYearRequest.getActiveStatus());
+        }
         academicYear.setName(academicYearRequest.getName());
         academicYear.setCode(academicYearRequest.getCode());
-        academicYear.setActive(academicYear.getActive());
         academicYear.setEndDate(academicYearRequest.getEndDate());
         academicYear.setStartDate(academicYearRequest.getStartDate());
 
-        return mappingService.mapToResponse(academicYearRepository.save(academicYear));
+        return academicYearRepository.save(academicYear).mapToResponse();
     }
     public @Nullable String deleteAcademicYear(Long universityId ,Long academicYearId ) {
-        if (!validateAcademicYear(academicCommonService.getAcademicYear(academicYearId),universityId).getSchools().isEmpty()){
+        AcademicYear academicYear = academicCommonService.getAcademicYear(academicYearId);
+        if (academicCommonService.getAcademicYear(academicYearId).getSchools().isEmpty()){
             throw new OperationNotAllowedException("Delete its schools first");
         }
         academicYearRepository.deleteById(academicYearId);
         return "Deleted successfully";
     }
-    private AcademicYear validateAcademicYear(AcademicYear academicYear, Long universityId) {
-        if (Objects.equals(academicYear.getUniversity().getId(), universityId)) {
-            return academicYear;
-        }
-        throw new OperationNotAllowedException("Not a valid universityId");
-    }
     public void switchAcademicYear(Long universityId, Long academicYearId) {
+        AcademicYear academicYear = academicCommonService.getAcademicYear(academicYearId);
 
         University university = academicCommonService.getUniversity(universityId);
 
         AcademicYear newCurrentAcademicYear =
                 university.getAcademicYears()
                         .stream()
-                        .filter(academicYear ->
-                                academicYear.getId().equals(academicYearId)
+                        .filter(year ->
+                                year.getId().equals(academicYearId)
                         )
                         .findFirst()
                         .orElseThrow(
@@ -96,8 +81,8 @@ public class AcademicYearService {
         AcademicYear oldCurrentAcademicYear =
                 university.getAcademicYears()
                         .stream()
-                        .filter(academicYear ->
-                                Boolean.TRUE.equals(academicYear.getCurrent())
+                        .filter(year ->
+                                Boolean.TRUE.equals(year.getCurrent())
                         )
                         .findFirst()
                         .orElse(null);

@@ -1,5 +1,6 @@
 package com.Smart.Erp.Modules.Academic.DTO.Department;
 
+import com.Smart.Erp.Modules.Academic.Enum.ActiveStatus;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
@@ -14,4 +15,5 @@ public class DepartmentRequest {
     private String name;
     private String code;
     private Long hodId;
+    private ActiveStatus activeStatus;
 }

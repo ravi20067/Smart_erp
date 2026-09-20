@@ -1,6 +1,8 @@
 package com.Smart.Erp.Modules.Academic.DTO.AcademicYear;
 
+import com.Smart.Erp.Core.Common.CommonDTO;
 import com.Smart.Erp.Modules.Academic.DTO.School.SchoolResponse;
+import com.Smart.Erp.Modules.Academic.Enum.ActiveStatus;
 import lombok.Builder;
 import lombok.Data;
 
@@ -16,6 +18,7 @@ public class AcademicYearResponse {
     private LocalDate startDate;
     private LocalDate endDate;
     private Boolean current = false;
-    private Boolean active = true;
+    private ActiveStatus activeStatus;
     private List<SchoolResponse> schoolResponse;
+    private CommonDTO university;
 }

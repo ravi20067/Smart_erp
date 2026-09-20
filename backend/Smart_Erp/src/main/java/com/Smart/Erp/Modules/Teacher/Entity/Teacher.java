@@ -1,6 +1,7 @@
 package com.Smart.Erp.Modules.Teacher.Entity;
 
 import com.Smart.Erp.Config.BaseAuditableEntity;
+import com.Smart.Erp.Config.CommonReference;
 import com.Smart.Erp.Modules.User.Entity.User;
 import jakarta.persistence.*;
 import lombok.*;
@@ -14,7 +15,7 @@ import java.util.List;
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-public class Teacher extends BaseAuditableEntity {
+public class Teacher extends BaseAuditableEntity implements CommonReference {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -41,5 +42,20 @@ public class Teacher extends BaseAuditableEntity {
     public void removeEnrollment(TeacherEnrollment enrollment) {
         enrollments.remove(enrollment);
         enrollment.setTeacher(null);
+    }
+
+    @Override
+    public String getName() {
+        return this.user != null ? this.user.getBasicDetail().getFirstName() + " " + this.user.getBasicDetail().getLastName() : "";
+    }
+
+    @Override
+    public String getCode() {
+        return this.user != null ? this.user.getUsername() : "";
+    }
+
+    @Override
+    public String getPrefix() {
+        return "";
     }
 }

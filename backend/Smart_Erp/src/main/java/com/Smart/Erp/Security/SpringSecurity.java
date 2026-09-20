@@ -1,5 +1,6 @@
 package com.Smart.Erp.Security;
 
+import com.Smart.Erp.Modules.User.Enum.UserRoles;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
@@ -42,14 +43,20 @@ public class SpringSecurity {
                 .sessionManagement(session ->
                         session.sessionCreationPolicy(SessionCreationPolicy.IF_REQUIRED)
                 )
-                .authorizeHttpRequests(auth -> auth
-                        .requestMatchers("/auth/**","/oauth/success","/services/**","/ws/**").permitAll()
-                        .requestMatchers("/admin/**").hasRole("ADMIN")
-                        .requestMatchers("/devices/**").hasRole("DEVICES")
-                        .requestMatchers("/teacher/**").hasRole("TEACHER")
-                        .requestMatchers("/api/keys/all").hasRole("ADMIN")
-                        .anyRequest().authenticated()
-                )
+                .authorizeHttpRequests(auth -> {
+                    // 1. Public endpoints
+                    auth.requestMatchers("/auth/**", "/oauth/success", "/services/**", "/ws/**").permitAll();
+
+                    // 3. Specific endpoint overrides (do this before the general loop)
+                    auth.requestMatchers("/api/keys/all").hasRole(UserRoles.ADMIN.name());
+
+                    // 4. Dynamically handle all UserRoles endpoints (/admin/**, /teacher/**, /student/**, etc.)
+                    for (UserRoles role : UserRoles.values()) {
+                        auth.requestMatchers("/" + role.getUrl() + "/**").hasRole(role.name());
+                    }
+                    // 5. Catch-all for anything else
+                    auth.anyRequest().authenticated();
+                })
                 .authenticationProvider(authenticationProvider())
                 .addFilterBefore(jwtFilter,
                         UsernamePasswordAuthenticationFilter.class);

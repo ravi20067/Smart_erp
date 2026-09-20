@@ -1,5 +1,6 @@
 package com.Smart.Erp.Modules.Academic.Controller;
 
+import com.Smart.Erp.Core.Common.CommonRequest;
 import com.Smart.Erp.Modules.Academic.DTO.University.UniversityResponse;
 import com.Smart.Erp.Modules.Academic.DTO.University.UniversityUpdateRequest;
 import com.Smart.Erp.Modules.Academic.Services.UniversityService;
@@ -11,7 +12,7 @@ import java.util.List;
 
 @RestController
 @RequestMapping({
-        "/admin/university"
+        "/super-admin/university"
 })
 @RequiredArgsConstructor
 public class UniversityController {
@@ -32,9 +33,9 @@ public class UniversityController {
 
     @PostMapping()
     public ResponseEntity<UniversityResponse> createUniversity(
-            @RequestParam String name
+            @RequestBody CommonRequest request
             ){
-        return ResponseEntity.ok(universityService.createUniversity(name));
+        return ResponseEntity.ok(universityService.createUniversity(request));
     }
     @PutMapping("/{universityId}")
     public ResponseEntity<UniversityResponse>  updateUniversity(

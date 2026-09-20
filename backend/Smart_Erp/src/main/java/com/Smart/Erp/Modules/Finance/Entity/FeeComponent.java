@@ -2,6 +2,7 @@ package com.Smart.Erp.Modules.Finance.Entity;
 
 
 import com.Smart.Erp.Config.BaseAuditableEntity;
+import com.Smart.Erp.Modules.Finance.DTO.Fee.FeeComponentResponse;
 import com.Smart.Erp.Modules.Finance.Enum.FeeCategoryType;
 import jakarta.persistence.*;
 import lombok.*;
@@ -26,7 +27,7 @@ import java.math.BigDecimal;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-public class FeeComponent extends BaseAuditableEntity {
+    public class FeeComponent extends BaseAuditableEntity {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -64,5 +65,16 @@ public class FeeComponent extends BaseAuditableEntity {
     @Override
     public int hashCode() {
         return getClass().hashCode();
+    }
+
+    public FeeComponentResponse mapToResponse() {
+        return FeeComponentResponse.builder()
+                .id(id)
+                .feeCategoryType(categoryType)
+                .componentName(componentName)
+                .amount(this.getAmount())
+                .isMandatory(this.getIsMandatory())
+                .isRefundable(this.getIsRefundable())
+                .build();
     }
 }

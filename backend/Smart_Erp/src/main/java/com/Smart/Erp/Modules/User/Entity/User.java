@@ -1,12 +1,14 @@
 package com.Smart.Erp.Modules.User.Entity;
 import com.Smart.Erp.Config.BaseAuditableEntity;
-import com.Smart.Erp.Modules.Devices.Entity.Devices;
 import com.Smart.Erp.Modules.Student.Entity.Student;
 import com.Smart.Erp.Modules.Teacher.Entity.Teacher;
-import com.Smart.Erp.Modules.User.Enum.UserRole;
+import com.Smart.Erp.Modules.User.Enum.UserRoles;
 import com.Smart.Erp.Modules.Academic.Entity.University;
 import jakarta.persistence.*;
 import lombok.*;
+
+import java.util.ArrayList;
+import java.util.List;
 
 @Entity
 @Table(name = "users")
@@ -22,14 +24,10 @@ public class User  extends BaseAuditableEntity {
     @Column(unique = true)
     private String username;
     private String password;
-    private Boolean enabled;
-    private UserRole userRoleUser;
+    private Boolean enabled = false;
 
-    @ToString.Exclude
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "university_id")
-    private University university;
-
+    @Enumerated(EnumType.STRING)
+    private UserRoles userRole;
 
     @ToString.Exclude
     @OneToOne(
@@ -53,14 +51,36 @@ public class User  extends BaseAuditableEntity {
             cascade = CascadeType.ALL,
             orphanRemoval = true
     )
-    private Devices devices;
+    private BasicDetail basicDetail;
 
+    // UNIVERSITY
+    // =========================
+
+    @ManyToOne(
+            fetch = FetchType.LAZY,
+            optional = false
+    )
+    @JoinColumn(
+            name = "university_id",
+            nullable = false
+    )
     @ToString.Exclude
-    @OneToOne(
+    private University university;
+
+    // =========================
+    // ROLES
+    // =========================
+
+    @OneToMany(
             mappedBy = "user",
             cascade = CascadeType.ALL,
             orphanRemoval = true
     )
-    private BasicDetail basicDetail;
+    @ToString.Exclude
+    @Builder.Default
+    private List<UserRole> roles = new ArrayList<>();
 
+    public String getName() {
+        return this.getBasicDetail().getFirstName() + " " + this.getBasicDetail().getLastName();
+    }
 }
