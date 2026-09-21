@@ -33,7 +33,6 @@ public class UserPermissionGrant extends BaseAuditableEntity {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-
     // =========================
     // USER RECEIVING PERMISSION
     // =========================
@@ -59,8 +58,7 @@ public class UserPermissionGrant extends BaseAuditableEntity {
             optional = false
     )
     @JoinColumn(
-            name = "permission_id",
-            nullable = false
+            name = "permission_id"
     )
     @ToString.Exclude
     private Permission permission;
@@ -69,7 +67,6 @@ public class UserPermissionGrant extends BaseAuditableEntity {
     // =========================
     // VALIDITY
     // =========================
-
     @Column(
             name = "valid_from",
             nullable = false
@@ -82,12 +79,9 @@ public class UserPermissionGrant extends BaseAuditableEntity {
             nullable = false
     )
     private LocalDateTime validUntil;
-
-
     // =========================
     // APPROVAL
     // =========================
-
     @ManyToOne(
             fetch = FetchType.LAZY,
             optional = false
@@ -103,7 +97,6 @@ public class UserPermissionGrant extends BaseAuditableEntity {
     // =========================
     // STATUS
     // =========================
-
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
     private PermissionGrantStatus status;
@@ -112,7 +105,6 @@ public class UserPermissionGrant extends BaseAuditableEntity {
     // =========================
     // REASON
     // =========================
-
     @Column(length = 1000)
     private String reason;
     // =========================

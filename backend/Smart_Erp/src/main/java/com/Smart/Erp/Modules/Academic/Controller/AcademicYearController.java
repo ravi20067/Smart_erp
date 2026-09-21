@@ -21,6 +21,7 @@ public class AcademicYearController {
     private final AcademicYearService academicYearService;
 
     @GetMapping
+    @PreAuthorize("@authVerifier.can(T(com.Smart.Erp.Modules.User.Enum.PermissionAction).READ, T(com.Smart.Erp.Modules.User.Enum.ResourceType).UNIVERSITY, #universityId)")
     public ResponseEntity<List<AcademicYearResponse>> getAcademicYears(
             @PathVariable Long universityId
     ){

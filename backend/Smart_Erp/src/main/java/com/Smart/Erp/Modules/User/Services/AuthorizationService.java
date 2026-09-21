@@ -1,233 +1,123 @@
 package com.Smart.Erp.Modules.User.Services;
 
-
 import com.Smart.Erp.Modules.User.Entity.*;
 import com.Smart.Erp.Modules.User.Enum.PermissionAction;
 import com.Smart.Erp.Modules.User.Enum.ResourceType;
+import com.Smart.Erp.Modules.User.Enum.UserRoles;
 import com.Smart.Erp.Modules.User.Repo.PermissionRepo;
 import com.Smart.Erp.Modules.User.Repo.UserRepo;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.stereotype.Component;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+
+import java.util.ArrayList;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Set;
 
 @Service
 @RequiredArgsConstructor
 @Transactional(readOnly = true)
+@Component("authVerifier")
 public class AuthorizationService {
 
     private final UserRepo userRepository;
-    private final UserRoleRepo userRoleRepository;
     private final PermissionRepo permissionRepository;
 
-    private final ResourceAuthorizationService
-            resourceAuthorizationService;
-
-
     public boolean can(
-            Authentication authentication,
             PermissionAction action,
             ResourceType resourceType,
             Long resourceId
     ) {
-        // -----------------------------------------
-        // 1. Authentication check
-        // -----------------------------------------
-        if (authentication == null) {
-            return false;
-        }
-
-        if (!authentication.isAuthenticated()) {
-            return false;
-        }
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
 
         // -----------------------------------------
-        // 2. Get username
+        // 1 & 2. Authentication check
         // -----------------------------------------
+        if (authentication == null || !authentication.isAuthenticated()) {
+            return false;
+        }
 
         String username = authentication.getName();
-
         if (username == null || username.isBlank()) {
             return false;
         }
 
+        // -----------------------------------------
+        // 3 & 4. Load user and check status
+        // -----------------------------------------
+        User user = userRepository.findByUsername(username).orElse(null);
+
+        if (user == null || !Boolean.TRUE.equals(user.getEnabled()) ||  user.getUserRole() == null) {
+            return false;
+        }
+
+        if (user.getUserRole() == UserRoles.SUPER_ADMIN){
+            return true;
+        }
 
         // -----------------------------------------
-        // 3. Load user
+        // 5. Find requested permission
         // -----------------------------------------
-
-        User user = userRepository
-                .findByUsername(username)
+        Permission requestedPermission = permissionRepository
+                .findByResourceTypeAndActionAndResourceId(resourceType, action, resourceId)
                 .orElse(null);
-
-        if (user == null) {
-            return false;
-        }
-
-
-        // -----------------------------------------
-        // 4. User must be enabled
-        // -----------------------------------------
-
-        if (!Boolean.TRUE.equals(user.getEnabled())) {
-            return false;
-        }
-
-        // -----------------------------------------
-        // 6. Find permission
-        // -----------------------------------------
-        Permission requestedPermission =
-                permissionRepository
-                        .findByResourceTypeAndAction(
-                                resourceType,
-                                action
-                        )
-                        .orElse(null);
 
         if (requestedPermission == null) {
             return false;
         }
 
-
         // -----------------------------------------
-        // 7. Permission must be active
+        // 6. Build Hierarchy (Optimized to HashSet)
         // -----------------------------------------
-        if (!Boolean.TRUE.equals(
-                requestedPermission.getActive()
-        )) {
-            return false;
+        Set<Long> requestedPermissionIds = new HashSet<>();
+        while (requestedPermission != null) {
+            requestedPermissionIds.add(requestedPermission.getId());
+            requestedPermission = requestedPermission.getParent(); // Note: Can trigger N+1 query if Parent is Lazy loaded
         }
 
-
         // -----------------------------------------
-        // 8. Check user's roles
+        // 7. Final Matching (Optimized with anyMatch)
         // -----------------------------------------
-
-        return userRoleRepository
-                .findAllActiveByUserId(user.getId())
-                .stream()
-                .anyMatch(
-                        userRole ->
-                                roleHasPermission(
-                                        userRole.getRole(),
-                                        requestedPermission
-                                )
+        return user.getRoles().stream()
+                .filter(UserRole::getActive)
+                .map(UserRole::getRole)
+                .filter(Role::getActive)
+                .flatMap(role -> role.getPermissions().stream())
+                .filter(RolePermission::getActive)
+                .map(RolePermission::getPermission)
+                // anyMatch will instantly stop and return true on the first match (O(1) best case)
+                .anyMatch(permission ->
+                        permission != null && requestedPermissionIds.contains(permission.getId())
                 );
     }
 
-
-    /**
-     * Checks whether a role contains the requested
-     * permission directly or through its parent
-     * permission hierarchy.
-     */
-    private boolean roleHasPermission(
-            Role role,
-            Permission requestedPermission
+    public List<Long> getAll(
+            ResourceType resourceType
     ) {
-
-        if (role == null) {
-            return false;
-        }
-
-        if (!Boolean.TRUE.equals(role.getActive())) {
-            return false;
-        }
-
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
 
         // -----------------------------------------
-        // Check role's permissions
+        // 1 & 2. Authentication check
         // -----------------------------------------
-
-        for (RolePermission rolePermission :
-                role.getPermissions()) {
-
-            if (!Boolean.TRUE.equals(
-                    rolePermission.getActive()
-            )) {
-                continue;
-            }
-
-            Permission grantedPermission =
-                    rolePermission.getPermission();
-
-            if (grantedPermission == null) {
-                continue;
-            }
-
-            if (!Boolean.TRUE.equals(
-                    grantedPermission.getActive()
-            )) {
-                continue;
-            }
-
-
-            // Exact permission
-            if (isSamePermission(
-                    grantedPermission,
-                    requestedPermission
-            )) {
-                return true;
-            }
-
-
-            // Parent permission grants child permission
-            if (isParentPermission(
-                    grantedPermission,
-                    requestedPermission
-            )) {
-                return true;
-            }
+        if (authentication == null || !authentication.isAuthenticated()) {
+            return new ArrayList<>();
         }
 
-        return false;
-    }
-
-
-    /**
-     * Exact permission comparison.
-     */
-    private boolean isSamePermission(
-            Permission granted,
-            Permission requested
-    ) {
-
-        return granted.getId()
-                .equals(requested.getId());
-    }
-
-
-    /**
-     * Checks whether the granted permission is an
-     * ancestor of the requested permission.
-     *
-     * Example:
-     *
-     * COURSE
-     *   └── COURSE.UPDATE
-     *
-     * If role has COURSE,
-     * COURSE.UPDATE can be allowed.
-     */
-    private boolean isParentPermission(
-            Permission granted,
-            Permission requested
-    ) {
-
-        Permission current =
-                requested.getParent();
-
-        while (current != null) {
-
-            if (current.getId()
-                    .equals(granted.getId())) {
-
-                return true;
-            }
-
-            current = current.getParent();
+        String username = authentication.getName();
+        if (username == null || username.isBlank()) {
+            return new ArrayList<>();
         }
 
-        return false;
+        // -----------------------------------------
+        // 3 & 4. Load user and check status
+        // -----------------------------------------
+        User user = userRepository.findByUsername(username).orElse(null);
+        if (user == null || !Boolean.TRUE.equals(user.getEnabled()) ||  user.getUserRole() == null) {
+            return new ArrayList<>();
+        }
     }
 }

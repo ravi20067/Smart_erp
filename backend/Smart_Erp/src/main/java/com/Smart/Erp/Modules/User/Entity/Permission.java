@@ -55,4 +55,21 @@ public class Permission extends BaseAuditableEntity {
     // WHICH EXACT RESOURCE
     @Column(name = "resource_id", nullable = false)
     private Long resourceId;
+
+    // =========================
+    // HIERARCHY
+    // =========================
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "parent_id")
+    @ToString.Exclude
+    private Permission parent;
+
+    @OneToMany(
+            mappedBy = "parent"
+    )
+    @ToString.Exclude
+    @Builder.Default
+    private List<Permission> children =
+            new ArrayList<>();
+
 }
