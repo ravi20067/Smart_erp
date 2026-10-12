@@ -5,6 +5,8 @@ import com.Smart.Erp.Modules.Academic.Enum.ActiveStatus;
 import lombok.Builder;
 import lombok.Data;
 
+import java.util.List;
+
 @Data
 @Builder
 public class UniversityResponse {
@@ -15,5 +17,5 @@ public class UniversityResponse {
     private ActiveStatus activeStatus;
     private long noOfStudent;
     private long noOfTeacher;
-    private CommonDTO dean;
+    private List<CommonDTO> school;
 }

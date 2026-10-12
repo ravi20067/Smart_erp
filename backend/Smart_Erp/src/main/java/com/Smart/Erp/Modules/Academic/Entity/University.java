@@ -9,12 +9,10 @@ import com.Smart.Erp.Modules.User.Entity.User;
 import com.Smart.Erp.Modules.User.Enum.UserRoles;
 import jakarta.persistence.*;
 import lombok.*;
-import org.springframework.data.annotation.CreatedDate;
-import org.springframework.data.annotation.LastModifiedDate;
 
-import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 
 @Entity
 @Data
@@ -32,14 +30,7 @@ public class University implements CommonReference {
     @Column(unique = true)
     private String code;
 
-    @CreatedDate
-    @Column(name = "created_at", nullable = false, updatable = false)
-    private Instant createdAt;
-
-    @LastModifiedDate
-    @Column(name = "updated_at", nullable = false)
-    private Instant updatedAt;
-
+    @Builder.Default
     private ActiveStatus activeStatus = ActiveStatus.DISABLE;
 
     @Builder.Default
@@ -64,7 +55,7 @@ public class University implements CommonReference {
             cascade = CascadeType.ALL,
             orphanRemoval = true
     )
-    private List<AcademicYear> academicYears = new ArrayList<>();
+    private List<School> schools = new ArrayList<>();
 
     @Builder.Default
     @OneToMany(
@@ -75,13 +66,8 @@ public class University implements CommonReference {
     private List<Scholarship> scholarships = new ArrayList<>();
 
     @Override
-    public String getCode() {
-        return this.code;
-    }
-
-    @Override
-    public String getPrefix() {
-        return code;
+    public void setCodeWithPrefix(String code) {
+        this.code = code.toUpperCase(Locale.ROOT);
     }
 
     public UniversityResponse mapToResponse() {
@@ -104,6 +90,10 @@ public class University implements CommonReference {
                 .noOfStudent(totalStudent)
                 .noOfTeacher(totalUser - totalStudent)
                 .noOfUser(totalUser)
+                .school(this.schools.stream()
+                        .map(School::toCommonDTO)
+                        .toList()
+                )
                 .build();
     }
 }

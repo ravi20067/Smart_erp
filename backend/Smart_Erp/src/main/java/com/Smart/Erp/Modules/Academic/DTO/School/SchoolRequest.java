@@ -11,8 +11,8 @@ import lombok.NoArgsConstructor;
 @NoArgsConstructor
 @AllArgsConstructor
 public class SchoolRequest {
-    private ActiveStatus activeStatus;
+    private Long id;
     private String name;
     private String code;
-    private Long deanId;
+    private ActiveStatus activeStatus;
 }

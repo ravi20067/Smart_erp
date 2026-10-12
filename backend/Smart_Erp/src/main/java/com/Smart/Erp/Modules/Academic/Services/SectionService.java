@@ -4,6 +4,8 @@ import com.Smart.Erp.Modules.Academic.DTO.Sections.SectionRequest;
 import com.Smart.Erp.Modules.Academic.DTO.Sections.SectionResponse;
 import com.Smart.Erp.Modules.Teacher.Entity.Teacher;
 import com.Smart.Erp.Modules.Teacher.Services.TeacherCommonService;
+import com.Smart.Erp.Modules.User.Enum.PermissionAction;
+import com.Smart.Erp.Modules.User.Enum.ResourceType;
 import com.Smart.Erp.Modules.User.Enum.UserRoles;
 import com.Smart.Erp.Core.Exception.OperationNotAllowedException;
 import com.Smart.Erp.Modules.Academic.Entity.Course;
@@ -11,6 +13,7 @@ import com.Smart.Erp.Modules.Academic.Entity.Section;
 import com.Smart.Erp.Modules.Academic.Entity.SectionGroup;
 import com.Smart.Erp.Modules.Academic.Entity.Specialization;
 import com.Smart.Erp.Modules.Academic.Repo.SectionRepo;
+import com.Smart.Erp.Security.AuthorizationService;
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
 import org.jspecify.annotations.Nullable;
@@ -21,67 +24,43 @@ import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
+@Transactional
 public class SectionService {
     private final SectionRepo sectionRepo;
     private final AcademicCommonService academicCommonService;
-    private final TeacherCommonService teacherCommonService;
+    private final AuthorizationService authorizationService;
 
-    public @Nullable List<SectionResponse> getAll(Long academicYearId, Long schoolId, Long departmentId, Long courseId) {
-        if (courseId != null) {
-            return academicCommonService.getCourse(courseId).getSections().stream()
-                    .map(Section::mapToResponse)
-                    .toList();
-        } else if (departmentId != null) {
-            return academicCommonService.getDepartment(departmentId).getCourses().stream()
-                    .flatMap(course -> course.getSections().stream())
-                    .map(Section::mapToResponse)
-                    .toList();
-        } else if (schoolId != null) {
-            return academicCommonService.getSchool(schoolId).getDepartments().stream()
-                    .flatMap(department -> department.getCourses().stream())
-                    .flatMap(course -> course.getSections().stream())
-                    .map(Section::mapToResponse)
-                    .toList();
-        } else {
-            return academicCommonService.getAcademicYear(academicYearId).getSchools().stream()
-                    .flatMap(school -> school.getDepartments().stream())
-                    .flatMap(department -> department.getCourses().stream())
-                    .flatMap(course -> course.getSections().stream())
-                    .map(Section::mapToResponse)
-                    .toList();
-        }
+    public @Nullable List<SectionResponse> getAll() {
+        Map<Long,List<PermissionAction>> map = authorizationService.getAll(ResourceType.SECTION);
+        List<Section> sections = sectionRepo.findAllById(map.keySet());
+        return sections.stream()
+                .map(
+                        section -> section.mapToResponse(
+                                authorizationService.getPermissionAction(ResourceType.SECTION,section.getId())
+                        )
+                )
+                .toList();
     }
 
-    public @Nullable SectionResponse getById(Long courseId, Long sectionId) {
-        return validate(courseId, academicCommonService.getSection(sectionId)).mapToResponse();
-    }
-
-    @Transactional
     public SectionResponse create(Long courseId, SectionRequest request) {
 
         Course course = academicCommonService.getCourse(courseId);
-
-        Teacher mentor = teacherCommonService.updateTeacherRole(
-                new Teacher(),
-                request.getMentorId(),
-                UserRoles.MENTOR
-        );
 
         List<Specialization> specializations =
                 academicCommonService.getSpecialization(request.getSpecializationId());
 
         Section section = Section.builder()
                 .name(request.getName())
-                .code(request.getCode())
                 .capacity(request.getCapacity())
-                .mentor(mentor)
                 .course(course)
                 .build();
 
+        section.setCodeWithPrefix(request.getCode());
 
         List<SectionGroup> groups = specializations.stream()
                 .map(specialization -> SectionGroup.builder()
                         .name(request.getName() + "-" + specialization.getName())
+                        .code(SectionGroup.mergeForCode(section.getCode(),specialization.getCode()))
                         .specialization(specialization)
                         .section(section)
                         .build())
@@ -89,15 +68,20 @@ public class SectionService {
 
         section.setSectionGroups(groups);
 
-        return sectionRepo.save(section).mapToResponse();
+        Section savedSection = sectionRepo.save(section);
+        authorizationService.createPermission(savedSection.getId(), ResourceType.SECTION, courseId, ResourceType.COURSE);
+
+        savedSection.getSectionGroups().forEach(
+                group -> authorizationService.createPermission(group.getId(), ResourceType.SECTION_GROUP, savedSection.getId(), ResourceType.SECTION)
+        );
+        return savedSection.mapToResponse(authorizationService.getPermissionAction(ResourceType.SECTION, savedSection.getId()));
     }
     @Transactional
     public @Nullable SectionResponse update(
-            Long courseId,
             Long sectionId,
             SectionRequest request
     ) {
-        Section section = validate(courseId, academicCommonService.getSection(sectionId));
+        Section section = academicCommonService.getSection(sectionId);
 
         boolean nameChanged = !section.getName().equals(request.getName());
 
@@ -111,22 +95,30 @@ public class SectionService {
             section.setName(request.getName());
         }
 
-        section.setCode(request.getCode());
+        section.setCodeWithPrefix(request.getCode());
 
-        handleUpdateSpecialization(section, request, nameChanged);
+        // Capture newly created groups from the helper method
+        List<SectionGroup> newlyAddedGroups = handleUpdateSpecialization(section, request, nameChanged);
 
-        section.setMentor(
-                teacherCommonService.updateTeacherRole(
-                        section.getMentor(),
-                        request.getMentorId(),
-                        UserRoles.MENTOR
-                )
+        // Save to ensure new groups get their IDs generated via Cascade
+        Section savedSection = sectionRepo.save(section);
+
+        // Apply permissions to only the new groups
+        for (SectionGroup group : newlyAddedGroups) {
+            authorizationService.createPermission(
+                    group.getId(),
+                    ResourceType.SECTION_GROUP,
+                    savedSection.getId(),
+                    ResourceType.SECTION
+            );
+        }
+
+        return savedSection.mapToResponse(
+                authorizationService.getPermissionAction(ResourceType.SECTION, savedSection.getId())
         );
-
-        return sectionRepo.save(section).mapToResponse();
     }
 
-    private void handleUpdateSpecialization(
+    private List<SectionGroup> handleUpdateSpecialization(
             Section section,
             SectionRequest request,
             boolean nameChanged
@@ -136,7 +128,6 @@ public class SectionService {
         }
 
         List<SectionGroup> sectionGroups = section.getSectionGroups();
-
         Set<Long> requestedIds = new HashSet<>(request.getSpecializationId());
 
         Set<Long> existingIds = sectionGroups.stream()
@@ -144,9 +135,9 @@ public class SectionService {
                 .collect(Collectors.toSet());
 
         if (!nameChanged && existingIds.equals(requestedIds)) {
-            return;
+            return Collections.emptyList();
         }
-        // CHANGED: Using Iterator to allow safe removal during traversal
+
         Iterator<SectionGroup> iterator = sectionGroups.iterator();
 
         while (iterator.hasNext()) {
@@ -154,7 +145,6 @@ public class SectionService {
             Long specializationId = group.getSpecialization().getId();
 
             if (requestedIds.contains(specializationId)) {
-
                 if (nameChanged) {
                     group.setName(
                             request.getName()
@@ -162,16 +152,18 @@ public class SectionService {
                                     + group.getSpecialization().getName()
                     );
                 }
-
             } else {
-
                 if (!group.getStudentEnrollments().isEmpty()) {
                     throw new OperationNotAllowedException(
                             "You can't remove specialization from this section : "
                                     + "It carry student specialization"
                     );
                 }
-                // CHANGED: Actually remove the group from the sectionGroups list
+                // Delete the permission for the section group
+                authorizationService.deletePermission(
+                        ResourceType.SECTION_GROUP,
+                        group.getId()
+                );
                 iterator.remove();
             }
         }
@@ -179,7 +171,7 @@ public class SectionService {
         requestedIds.removeAll(existingIds);
 
         if (requestedIds.isEmpty()) {
-            return;
+            return Collections.emptyList();
         }
 
         Section finalSection = section;
@@ -193,6 +185,7 @@ public class SectionService {
                                                         + "-"
                                                         + specialization.getName()
                                         )
+                                        .code(SectionGroup.mergeForCode(finalSection.getCode(), specialization.getCode()))
                                         .specialization(specialization)
                                         .section(finalSection)
                                         .build()
@@ -200,26 +193,25 @@ public class SectionService {
                         .toList();
 
         sectionGroups.addAll(newGroups);
+
+        return newGroups;
     }
 
-    public @Nullable String delete(Long sectionId, Long courseId) {
-        Section section = validate(courseId, academicCommonService.getSection(sectionId));
+    public @Nullable String delete(Long sectionId) {
+        Section section = academicCommonService.getSection(sectionId);
         if (
                 section.getSectionGroups().stream()
                         .allMatch(sectionGroup -> sectionGroup.getStudentEnrollments().isEmpty())
         ){
             sectionRepo.delete(section);
+            authorizationService.deletePermission(ResourceType.SECTION, section.getId());
             return "Deleted Successfully";
         } else {
             throw new OperationNotAllowedException("You can't delete this section because it carry students");
         }
     }
 
-    private Section validate(Long courseId, Section section) {
-        if (Objects.equals(section.getCourse().getId(), courseId)) {
-            return section;
-        } else {
-            throw new OperationNotAllowedException("Course id is not valid for this section");
-        }
+    public String getPrefix(Long courseId) {
+        return academicCommonService.getCourse(courseId).getCode();
     }
 }

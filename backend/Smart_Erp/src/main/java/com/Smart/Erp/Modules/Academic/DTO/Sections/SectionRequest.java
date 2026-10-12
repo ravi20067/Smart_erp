@@ -16,5 +16,4 @@ public class SectionRequest {
     private Integer capacity;
     private ActiveStatus activeStatus ;
     private List<Long> specializationId;
-    private Long mentorId;
 }

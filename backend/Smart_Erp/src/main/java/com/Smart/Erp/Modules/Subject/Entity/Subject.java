@@ -1,12 +1,13 @@
 package com.Smart.Erp.Modules.Subject.Entity;
 import com.Smart.Erp.Config.BaseAuditableEntity;
 import com.Smart.Erp.Config.CommonReference;
+import com.Smart.Erp.Modules.Academic.Entity.*;
 import com.Smart.Erp.Modules.Academic.Enum.ActiveStatus;
 import com.Smart.Erp.Modules.Exam.Entity.ExamResult;
+import com.Smart.Erp.Modules.Subject.DTO.Subject.SubjectResponse;
 import com.Smart.Erp.Modules.Teacher.Entity.Teacher;
 import com.Smart.Erp.Modules.Teacher.Entity.TeacherEnrollment;
-import com.Smart.Erp.Modules.Academic.Entity.Course;
-import com.Smart.Erp.Modules.Academic.Entity.Specialization;
+import com.Smart.Erp.Modules.User.Enum.PermissionAction;
 import jakarta.persistence.*;
 import lombok.*;
 
@@ -105,7 +106,41 @@ public class Subject  extends BaseAuditableEntity implements CommonReference {
 
     private LocalDate lastDateStudyMaterialSummit;
 
-    public String getPrefix(){
-        return this.getCourse().getPrefix() + this.getCourse().getCode();
+    public void setCodeWithPrefix(String code){
+        this.code = course.getCode() + code;
+    }
+
+    public SubjectResponse mapToResponse(List<PermissionAction> permissionActions) {
+        AcademicYear academicYear = course.getAcademicYear();
+        Department department = academicYear.getDepartment();
+        School school = department.getSchool();
+        University university = school.getUniversity();
+
+        return SubjectResponse.builder()
+                .id(this.getId())
+                .name(this.getName())
+                .code(this.getCode())
+                .activeStatus(this.getActiveStatus())
+                .lecturesPerWeek(this.getLecturesPerWeek())
+                .isPracticalSubject(this.getIsPracticalSubject())
+                .specializations(this.getSpecializations().stream()
+                        .map(CommonReference::toCommonDTO)
+                        .toList()
+                )
+                .questionBankTeacher(this.getQuestionBankTeacher().toCommonDTO())
+                .studyMaterialTeacher(this.getStudyMaterialTeacher().toCommonDTO())
+                .subjectTeachers(this.getSubjectTeachers().stream()
+                        .map(teacherEnrollment -> teacherEnrollment.getTeacher().toCommonDTO())
+                        .toList()
+                )
+                .lastDateQuestionBankSummit(this.getLastDateQuestionBankSummit())
+                .lastDateStudyMaterialSummit(this.getLastDateStudyMaterialSummit())
+                .permissionActions(permissionActions)
+                .course(course.toCommonDTO())
+                .academicYear(academicYear.toCommonDTO())
+                .department(department.toCommonDTO())
+                .school(school.toCommonDTO())
+                .university(university.toCommonDTO())
+                .build();
     }
 }

@@ -24,13 +24,6 @@ public class UniversityController {
         return ResponseEntity.ok(universityService.getAll());
     }
 
-    @GetMapping("/{id}")
-    public ResponseEntity<UniversityResponse>getById(
-            @PathVariable long id
-    ){
-        return ResponseEntity.ok(universityService.getUniversityById(id));
-    }
-
     @PostMapping()
     public ResponseEntity<UniversityResponse> createUniversity(
             @RequestBody CommonRequest request

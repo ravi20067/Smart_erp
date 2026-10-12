@@ -86,28 +86,31 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const getDashboardRoute = () => {
         switch (role) {
 
-            case "ROLE_STUDENT":
+            case "STUDENT":
                 return "/student";
 
-            case "ROLE_TEACHER":
+            case "TEACHER":
                 return "/teacher";
 
-            case "ROLE_LIBRARY":
+            case "LIBRARY":
                 return "/library";
 
-            case "ROLE_ADMISSION":
+            case "ADMISSION":
                 return "/admission";
 
-            case "ROLE_EXAMINATION":
+            case "EXAMINATION":
                 return "/examination-dept";
 
-            case "ROLE_FINANCE":
+            case "FINANCE":
                 return "/finance";
 
-            case "ROLE_ADMIN":
+            case "ADMIN":
                 return "/admin";
 
-            case "ROLE_DEVICES":
+            case "SUPER_ADMIN":
+                return "/super-admin";
+
+            case "DEVICES":
                 return "/devices";
 
             default:

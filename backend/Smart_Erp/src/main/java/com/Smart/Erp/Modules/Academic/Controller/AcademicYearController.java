@@ -13,52 +13,81 @@ import java.util.List;
 @RequiredArgsConstructor
 @RequestMapping({
         "/super-admin/academic-year",
-        "/{role:admin|dean|super-admin}/{universityId}/academic-year"
+        "/{role:head-of-department|admin|dean|super-admin}/academic-year"
 })
-//here i want to pass like this UserRoles.ADMIN
-@PreAuthorize("@securityVerifier.hasAccessToUniversity(#universityId)")
 public class AcademicYearController {
     private final AcademicYearService academicYearService;
 
     @GetMapping
-    @PreAuthorize("@authVerifier.can(T(com.Smart.Erp.Modules.User.Enum.PermissionAction).READ, T(com.Smart.Erp.Modules.User.Enum.ResourceType).UNIVERSITY, #universityId)")
-    public ResponseEntity<List<AcademicYearResponse>> getAcademicYears(
-            @PathVariable Long universityId
-    ){
-        return ResponseEntity.ok(academicYearService.getAcademicYears(universityId));
+    public ResponseEntity<List<AcademicYearResponse>> getAcademicYears(){
+        return ResponseEntity.ok(academicYearService.getAcademicYears());
     }
 
+    @PreAuthorize("@authVerifier.can(" +
+            "T(com.Smart.Erp.Modules.User.Enum.PermissionAction).CREATE_CHILD, " +
+            "T(com.Smart.Erp.Modules.User.Enum.ResourceType).DEPARTMENT, " +
+            "#departmentId)")
     @PostMapping
     public ResponseEntity<AcademicYearResponse> createAcademicYear(
-            @PathVariable Long universityId,
+            @RequestParam Long departmentId,
             @RequestBody AcademicYearRequest academicYearRequest
     ){
-        return ResponseEntity.ok(academicYearService.createAcademicYear(universityId,academicYearRequest));
+        return ResponseEntity.ok(academicYearService.createAcademicYear(departmentId,academicYearRequest));
     }
 
+    @PreAuthorize("@authVerifier.can(" +
+            "T(com.Smart.Erp.Modules.User.Enum.PermissionAction).UPDATE, " +
+            "T(com.Smart.Erp.Modules.User.Enum.ResourceType).ACADEMIC_YEAR, " +
+            "#academicYearId)")
     @PutMapping
     public ResponseEntity<AcademicYearResponse> updateAcademicYear(
-            @PathVariable Long universityId,
             @RequestParam Long academicYearId,
             @RequestBody AcademicYearRequest academicYearRequest
     ){
-        return ResponseEntity.ok(academicYearService.updateAcademicYear(universityId,academicYearId,academicYearRequest));
+        return ResponseEntity.ok(academicYearService.updateAcademicYear(academicYearId,academicYearRequest));
     }
 
+
+    @PreAuthorize("@authVerifier.can(" +
+            "T(com.Smart.Erp.Modules.User.Enum.PermissionAction).DELETE, " +
+            "T(com.Smart.Erp.Modules.User.Enum.ResourceType).ACADEMIC_YEAR, " +
+            "#academicYearId)")
     @DeleteMapping
     public ResponseEntity<String> deleteAcademicYear(
-            @PathVariable Long universityId,
             @RequestParam Long academicYearId
     ){
-        return ResponseEntity.ok(academicYearService.deleteAcademicYear(universityId,academicYearId));
+        return ResponseEntity.ok(academicYearService.deleteAcademicYear(academicYearId));
     }
 
+    @PreAuthorize("@authVerifier.can(" +
+            "T(com.Smart.Erp.Modules.User.Enum.PermissionAction).UPDATE, " +
+            "T(com.Smart.Erp.Modules.User.Enum.ResourceType).ACADEMIC_YEAR, " +
+            "#academicYearId)")
     @PostMapping("/switch")
     public ResponseEntity<String> switchToCurrentYear(
-            @RequestParam Long universityID,
+            @RequestParam Long departmentId,
             @RequestParam Long academicYearId
     ){
-        academicYearService.switchAcademicYear(universityID,academicYearId);
+        academicYearService.switchAcademicYear(departmentId,academicYearId);
         return ResponseEntity.ok("Academic Year switched successfully");
+    }
+
+    @PreAuthorize(
+            "@authVerifier.can(" +
+                    "T(com.Smart.Erp.Modules.User.Enum.PermissionAction).CREATE_CHILD, " +
+                    "T(com.Smart.Erp.Modules.User.Enum.ResourceType).DEPARTMENT, " +
+                    "#departmentId) || " +
+                    "(#academicYearId != null && " +
+                    "@authVerifier.can(" +
+                    "T(com.Smart.Erp.Modules.User.Enum.PermissionAction).UPDATE, " +
+                    "T(com.Smart.Erp.Modules.User.Enum.ResourceType).ACADEMIC_YEAR, " +
+                    "#academicYearId))"
+    )
+    @GetMapping("/prefix")
+    public ResponseEntity<String> getPrefix(
+            @RequestParam(required = false) Long academicYearId,
+            @RequestParam Long departmentId
+    ) {
+        return ResponseEntity.ok(academicYearService.getPrefix(departmentId));
     }
 }

@@ -18,7 +18,6 @@ public class TeacherCommonService {
 
     private final TeacherRepo teacherRepo;
     private final UserCommonService userService;
-    private final UserMappingService userMappingService;
 
     public Teacher getTeacher(Long id) {
         return teacherRepo.findById(id).orElseThrow(

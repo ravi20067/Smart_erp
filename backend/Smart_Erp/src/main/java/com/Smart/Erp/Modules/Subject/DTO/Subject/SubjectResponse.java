@@ -2,6 +2,7 @@ package com.Smart.Erp.Modules.Subject.DTO.Subject;
 
 import com.Smart.Erp.Core.Common.CommonDTO;
 import com.Smart.Erp.Modules.Academic.Enum.ActiveStatus;
+import com.Smart.Erp.Modules.User.Enum.PermissionAction;
 import lombok.Builder;
 import lombok.Data;
 
@@ -31,10 +32,13 @@ public class SubjectResponse {
     private LocalDate lastDateStudyMaterialSummit;
 
     private CommonDTO course;
+    private CommonDTO academicYear;
 
     private CommonDTO department;
 
     private CommonDTO school;
 
-    private CommonDTO academicYear;
+    private CommonDTO university;
+
+    private List<PermissionAction> permissionActions;
 }

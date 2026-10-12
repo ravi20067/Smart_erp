@@ -7,14 +7,15 @@ interface DecodedToken {
 }
 
 const ROLE_BASE_URL: Record<string, string> = {
-    ROLE_STUDENT: "/student",
-    ROLE_TEACHER: "/teacher",
-    ROLE_LIBRARY: "/library",
-    ROLE_ADMISSION: "/admission",
-    ROLE_EXAMINATION: "/examination-dept",
-    ROLE_FINANCE: "/finance",
-    ROLE_ADMIN: "/admin",
-    ROLE_DEVICES: "/devices",
+    STUDENT: "/student",
+    TEACHER: "/teacher",
+    LIBRARY: "/library",
+    ADMISSION: "/admission",
+    EXAMINATION: "/examination-dept",
+    FINANCE: "/finance",
+    SUPER_ADMIN: "/super-admin",
+    ADMIN: "/admin",
+    DEVICES: "/devices",
 };
 
 export const getRoleFromToken = (): string | null => {

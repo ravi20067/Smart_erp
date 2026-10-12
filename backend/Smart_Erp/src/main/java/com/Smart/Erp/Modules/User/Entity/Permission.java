@@ -65,11 +65,16 @@ public class Permission extends BaseAuditableEntity {
     private Permission parent;
 
     @OneToMany(
-            mappedBy = "parent"
+            mappedBy = "parent",
+            cascade = CascadeType.ALL,
+            orphanRemoval = true
     )
     @ToString.Exclude
     @Builder.Default
-    private List<Permission> children =
-            new ArrayList<>();
+    private List<Permission> children = new ArrayList<>();
 
+    public void addChildren(Permission permission){
+        permission.setParent(this);
+        children.add(permission);
+    }
 }

@@ -6,8 +6,11 @@ import com.Smart.Erp.Modules.File.Enum.FileType;
 import com.Smart.Erp.Modules.File.Services.FileService;
 import com.Smart.Erp.Modules.User.DTO.BasicDetail.UserProfileRequest;
 import com.Smart.Erp.Modules.User.Entity.BasicDetail;
+import com.Smart.Erp.Modules.User.Entity.Role;
 import com.Smart.Erp.Modules.User.Entity.User;
+import com.Smart.Erp.Modules.User.Entity.UserRole;
 import com.Smart.Erp.Modules.User.Enum.UserRoles;
+import com.Smart.Erp.Modules.User.Repo.RoleRepo;
 import com.Smart.Erp.Modules.User.Repo.UserRepo;
 import lombok.AllArgsConstructor;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -15,12 +18,15 @@ import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.util.List;
+import java.util.Objects;
+import java.util.stream.Collectors;
 
 @Service
 @AllArgsConstructor
 public class UserCommonService {
 
     private final UserRepo userRepo;
+    private final RoleRepo roleRepo;
     private final PasswordEncoder passwordEncoder;
     private final FileService fileService;
 
@@ -82,5 +88,26 @@ public class UserCommonService {
 
     public void saveAll(List<User> users) {
         userRepo.saveAll(users);
+    }
+
+    public Role getRole(Long roleId) {
+        roleRepo.findById(roleId).orElseThrow(
+                () ->
+                        new ResourceNotFoundException("Role not found with this id : " + roleId)
+        );
+        return null;
+    }
+
+    public void handleRoleUserRoleEnumChange(Role role) {
+        List<User> users = role.getUsers().stream()
+                .map(UserRole::getUser)
+                .filter(Objects::nonNull)
+                .collect(Collectors.toList());
+
+        users.forEach(user ->
+            user.setUserRole(role.getUserRole())
+        );
+
+        saveAll(users);
     }
 }

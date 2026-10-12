@@ -6,7 +6,7 @@ import com.Smart.Erp.Config.CommonReference;
 import com.Smart.Erp.Modules.Academic.DTO.Courses.CourseResponse;
 import com.Smart.Erp.Modules.Academic.Enum.ActiveStatus;
 import com.Smart.Erp.Modules.Subject.Entity.Subject;
-import com.Smart.Erp.Modules.Teacher.Entity.Teacher;
+import com.Smart.Erp.Modules.User.Enum.PermissionAction;
 import jakarta.persistence.*;
 import lombok.*;
 
@@ -30,8 +30,8 @@ public class Course extends BaseAuditableEntity implements CommonReference {
     private String code;
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "department_id")
-    private Department department;
+    @JoinColumn(name = "academic_year_id")
+    private AcademicYear academicYear;
 
     private ActiveStatus activeStatus = ActiveStatus.DISABLE;
 
@@ -55,11 +55,6 @@ public class Course extends BaseAuditableEntity implements CommonReference {
     )
     private List<Section> sections = new ArrayList<>();
 
-    // Assignment only
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "program_coordinator_id")
-    private Teacher programCoordinator;
-
     @OneToMany(
             mappedBy = "course",
             cascade = CascadeType.ALL,
@@ -67,20 +62,19 @@ public class Course extends BaseAuditableEntity implements CommonReference {
     )
     private List<Specialization> specializations = new ArrayList<>();
 
-    public String getPrefix(){
-        return this.getDepartment().getPrefix();
+    public void setCodeWithPrefix(String code){
+        this.code = academicYear.getCode()+code;
     }
 
-    public CourseResponse mapToResponse() {
+    public CourseResponse mapToResponse(List<PermissionAction> permissionActions) {
+        Department department = this.getAcademicYear().getDepartment();
         School school = department.getSchool();
-        AcademicYear academicYear = school.getAcademicYear();
-
+        University university = school.getUniversity();
         return CourseResponse.builder()
                 .id(this.getId())
                 .name(this.getName())
                 .code(this.getCode())
                 .activeStatus(this.getActiveStatus())
-                .programCoordinator(this.getProgramCoordinator().toCommonDTO())
                 .specializations(this.getSpecializations().stream()
                         .map(CommonReference::toCommonDTO)
                         .toList()
@@ -93,10 +87,12 @@ public class Course extends BaseAuditableEntity implements CommonReference {
                         .map(CommonReference::toCommonDTO)
                         .toList()
                 )
-                .academicYear(academicYear.toCommonDTO())
-                .school(school.toCommonDTO())
+                .newEnrollmentAllowed(this.getNewEnrollmentAllowed())
+                .academicYear(this.getAcademicYear().toCommonDTO())
                 .department(department.toCommonDTO())
-                .NewEnrollmentAllowed(this.getNewEnrollmentAllowed())
+                .school(school.toCommonDTO())
+                .university(university.toCommonDTO())
+                .permissionActions(permissionActions)
                 .build();
     }
 }

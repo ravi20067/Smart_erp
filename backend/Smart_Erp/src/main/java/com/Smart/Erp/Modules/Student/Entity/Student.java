@@ -5,6 +5,7 @@ import com.Smart.Erp.Config.BaseAuditableEntity;
 import com.Smart.Erp.Modules.Student.DTO.Enrollment.StudentEnrollmentResponse;
 import com.Smart.Erp.Modules.Student.DTO.Student.StudentResponse;
 import com.Smart.Erp.Modules.User.Entity.User;
+import com.Smart.Erp.Modules.User.Enum.PermissionAction;
 import jakarta.persistence.*;
 import lombok.*;
 
@@ -15,6 +16,7 @@ import java.util.stream.Collectors;
 @Entity
 @Table(name = "students")
 @Data
+@EqualsAndHashCode(callSuper = true)
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
@@ -59,7 +61,7 @@ public class Student  extends BaseAuditableEntity {
         enrollment.setStudent(null);
     }
 
-    public StudentResponse mapToResponse() {
+    public StudentResponse mapToResponse(List<PermissionAction> permissionActions) {
         return StudentResponse.builder()
                 .id(this.getId())
                 .registrationNumber(this.getRegistrationNumber())
@@ -68,6 +70,7 @@ public class Student  extends BaseAuditableEntity {
                         .map(StudentEnrollment::mapToResponse)
                         .collect(Collectors.toList())
                 )
+                .permissionActions(permissionActions)
                 .build();
     }
 }

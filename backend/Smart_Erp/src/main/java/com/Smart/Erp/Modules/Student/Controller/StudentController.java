@@ -8,13 +8,14 @@ import com.Smart.Erp.Modules.Student.Services.StudentService;
 import com.Smart.Erp.Modules.User.Enum.EnrollmentStatus;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.util.List;
 
 @RestController
-@RequestMapping("/admin/student")
+@RequestMapping("/{role:head-of-department|admin|dean|super-admin}/student")
 @RequiredArgsConstructor
 public class StudentController{
 
@@ -23,26 +24,18 @@ public class StudentController{
 
     @GetMapping
     public ResponseEntity<List<StudentResponse>> getStudent(
-            @RequestParam Long universityId,
-            @RequestParam (required = false) Long academicYearId,
-            @RequestParam (required = false) Long schoolId,
-            @RequestParam (required = false) Long departmentId,
-            @RequestParam (required = false) Long courseId,
-            @RequestParam (required = false) Long sectionId
     ){
         List<StudentResponse> response =
-                studentService.get(
-                        universityId,
-                        academicYearId,
-                        schoolId,
-                        departmentId,
-                        courseId,
-                        sectionId
-                );
+                studentService.get();
 
         return ResponseEntity.ok(response);
     }
 
+    @PreAuthorize(
+            "@authVerifier.can(" +
+                    "T(com.Smart.Erp.Modules.User.Enum.PermissionAction).CREATE_CHILD, " +
+                    "T(com.Smart.Erp.Modules.User.Enum.ResourceType).SECTION_GROUP, " +
+                    "#request.sectionGroupId)")
     @PostMapping(
             consumes = "multipart/form-data"
     )
@@ -65,7 +58,12 @@ public class StudentController{
         return ResponseEntity.ok(response);
     }
 
-    @PutMapping("/update/scholarship")
+    @PreAuthorize(
+            "@authVerifier.can(" +
+                    "T(com.Smart.Erp.Modules.User.Enum.PermissionAction).UPDATE, " +
+                    "T(com.Smart.Erp.Modules.User.Enum.ResourceType).STUDENT, " +
+                    "#enrollmentId)")
+    @PutMapping("/update/enrollment/scholarship")
     public ResponseEntity<StudentEnrollmentResponse> updateScholarship(
             @RequestParam Long enrollmentId,
             @RequestParam List<Long> scholarshipId
@@ -75,10 +73,14 @@ public class StudentController{
                         enrollmentId,
                         scholarshipId
                 );
-
         return ResponseEntity.ok(response);
     }
 
+    @PreAuthorize(
+            "@authVerifier.can(" +
+                    "T(com.Smart.Erp.Modules.User.Enum.PermissionAction).UPDATE, " +
+                    "T(com.Smart.Erp.Modules.User.Enum.ResourceType).STUDENT, " +
+                    "#enrollmentId)")
     @PutMapping("/update/course")
     public ResponseEntity<StudentResponse> changeCourse(
             @RequestParam Long enrollmentId,
@@ -93,6 +95,11 @@ public class StudentController{
         return ResponseEntity.ok(response);
     }
 
+    @PreAuthorize(
+            "@authVerifier.can(" +
+                    "T(com.Smart.Erp.Modules.User.Enum.PermissionAction).UPDATE, " +
+                    "T(com.Smart.Erp.Modules.User.Enum.ResourceType).STUDENT, " +
+                    "#enrollmentId)")
     @PutMapping("/update/section")
     public ResponseEntity<StudentEnrollmentResponse> changeSection(
             @RequestParam Long enrollmentId,
@@ -107,6 +114,11 @@ public class StudentController{
         return ResponseEntity.ok(response);
     }
 
+    @PreAuthorize(
+            "@authVerifier.can(" +
+                    "T(com.Smart.Erp.Modules.User.Enum.PermissionAction).UPDATE, " +
+                    "T(com.Smart.Erp.Modules.User.Enum.ResourceType).STUDENT, " +
+                    "#enrollmentId)")
     @PutMapping("/update/enrollment-status")
     public ResponseEntity<StudentEnrollmentResponse> changeEnrollmentStatus(
             @RequestParam Long enrollmentId,

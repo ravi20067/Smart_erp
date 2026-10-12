@@ -3,7 +3,6 @@ package com.Smart.Erp.Modules.Academic.Controller;
 import com.Smart.Erp.Core.Common.CommonDTO;
 import com.Smart.Erp.Modules.Academic.Services.AcademicCommonService;
 import lombok.RequiredArgsConstructor;
-import org.springframework.security.core.Authentication;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -16,75 +15,52 @@ public class CommonController {
 
     private final AcademicCommonService academicCommonService;
 
-    @GetMapping("admin/common/teacher")
-    public ResponseEntity<List<CommonDTO>> getTeacherDTO(
-            @RequestParam Long universityId,
-            @RequestParam(required = false) Long schoolId,
-            @RequestParam(required = false) Long departmentId,
-            @RequestParam(required = false) Long coursesId
-            ){
-        return ResponseEntity.ok(academicCommonService.getCommonTeachersDto(universityId,schoolId,departmentId,coursesId));
+    //It can be empty
+    @GetMapping("/super-admin/filter/university")
+    public ResponseEntity<List<CommonDTO>> getUniversityFilter(){
+        return ResponseEntity.ok(academicCommonService.getUniversityFilter());
     }
 
-    @GetMapping("admin/common/university")
-    public ResponseEntity<List<CommonDTO>> getDto(Authentication authentication){
-        String userName = authentication.getName();
-        return ResponseEntity.ok(academicCommonService.getUniversityCommonDTO(userName));
+    @GetMapping("/{role:admin|dean|super-admin}/filter/school")
+    public ResponseEntity<List<CommonDTO>> getSchoolFilter(){
+        return ResponseEntity.ok(academicCommonService.getSchoolFilter());
     }
 
-    @GetMapping("admin/common/academic-year")
-    public ResponseEntity<List<CommonDTO>> getAcademicYear(
-            @RequestParam(required = false) Long universityId,
-            Authentication authentication
+    @GetMapping("/{role:school-dean|admin|dean|super-admin}/filter/department")
+    public ResponseEntity<List<CommonDTO>> getDepartmentFilter(){
+        return ResponseEntity.ok(academicCommonService.getDepartmentFilter());
+    }
+
+    @GetMapping("/{role:head-of-department|school-dean|admin|dean|super-admin}/filter/academic-year")
+    public ResponseEntity<List<CommonDTO>> getAcademicYearFilter(){
+        return ResponseEntity.ok(academicCommonService.getAcademicYearFilter());
+    }
+
+    @GetMapping("{role:program-coordinator|head-of-department|school-dean|admin|dean|super-admin}/filter/courses")
+    public ResponseEntity<List<CommonDTO>> getCourseFilter(){
+        return ResponseEntity.ok(academicCommonService.getCourseFilter());
+    }
+
+    @GetMapping("{role:mentor|program-coordinator|head-of-department|school-dean|admin|dean|super-admin}/filter/section")
+    public ResponseEntity<List<CommonDTO>> getSectionFilter(
     ){
-        return ResponseEntity.ok(academicCommonService.getAcademicCommonDTO(universityId, authentication ));
+        return ResponseEntity.ok(academicCommonService.getSectionFilter());
     }
 
-    @GetMapping("admin/common/school")
-    public ResponseEntity<List<CommonDTO>> getSchoolDTO(
-            @RequestParam(required = false) Long academicYearId,
-            Authentication authentication
-    ){
-        return ResponseEntity.ok(academicCommonService.getCommonSchoolDTO(academicYearId,authentication));
-    }
-
-    @GetMapping("admin/common/department")
-    public ResponseEntity<List<CommonDTO>> getDepartmentDTO(
-            @RequestParam(required = false) Long schoolId,
-            Authentication authentication
-    ){
-        return ResponseEntity.ok(academicCommonService.getCommonDepartmentDTO(schoolId, authentication));
-    }
-
-    @GetMapping("admin/common/courses")
-    public ResponseEntity<List<CommonDTO>> getCourseDTO(
-            @RequestParam(required = false) Long departmentId,
-            Authentication authentication
-    ){
-        return ResponseEntity.ok(academicCommonService.getCommonCourseDTO(departmentId, authentication));
-    }
-
-    @GetMapping("admin/common/section")
-    public ResponseEntity<List<CommonDTO>> getSection(
-            @RequestParam(required = false) Long courseId,
-            Authentication authentication
-    ){
-        return ResponseEntity.ok(academicCommonService.getCommonSectionDTO(courseId, authentication ));
-    }
-
-    @GetMapping("admin/common/subject")
+    @GetMapping("{role:program-coordinator|head-of-department|school-dean|admin|dean|super-admin}/filter/subject")
     public ResponseEntity<List<CommonDTO>> getSubject(
-            @RequestParam Long courseId
     ){
-        return ResponseEntity.ok(academicCommonService.getCommonSubjectDTO(courseId));
+        return ResponseEntity.ok(academicCommonService.getSubjectFilter());
     }
 
-    @GetMapping("admin/common/specialization")
+    @GetMapping("{role:program-coordinator|head-of-department|school-dean|admin|dean|super-admin}/filter/specialization")
     public ResponseEntity<List<CommonDTO>> getSpecialization(
-            @RequestParam Long courseId,
-            @RequestParam(required = false) Long sectionId,
-            @RequestParam(required = false) Long subjectId
     ){
-        return ResponseEntity.ok(academicCommonService.getCommonSpecializationDTO(courseId,sectionId,subjectId));
+        return ResponseEntity.ok(academicCommonService.getSpecializationFilter());
+    }
+    @GetMapping("{role:program-coordinator|head-of-department|school-dean|admin|dean|super-admin}/filter/teacher")
+    public ResponseEntity<List<CommonDTO>> getTeacherDTO(
+            ){
+        return ResponseEntity.ok(academicCommonService.getTeacherFilter());
     }
 }

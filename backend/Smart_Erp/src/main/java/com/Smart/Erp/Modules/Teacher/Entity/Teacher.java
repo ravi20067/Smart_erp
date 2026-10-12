@@ -9,6 +9,7 @@ import lombok.*;
 import java.util.ArrayList;
 import java.util.List;
 
+@EqualsAndHashCode(callSuper = true)
 @Entity
 @Table(name = "teachers")
 @Data
@@ -55,7 +56,7 @@ public class Teacher extends BaseAuditableEntity implements CommonReference {
     }
 
     @Override
-    public String getPrefix() {
-        return "";
+    public void setCodeWithPrefix(String code) {
+
     }
 }

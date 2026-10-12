@@ -1,25 +1,27 @@
+
 package com.Smart.Erp.Modules.Academic.Services;
 
-import com.Smart.Erp.Config.BaseAuditableEntity;
 import com.Smart.Erp.Config.CommonReference;
 import com.Smart.Erp.Core.Common.CommonDTO;
+import com.Smart.Erp.Core.Exception.ResourceNotFoundException;
+import com.Smart.Erp.Modules.Academic.Entity.*;
 import com.Smart.Erp.Modules.Academic.Enum.ActiveStatus;
+import com.Smart.Erp.Modules.Academic.Repo.*;
 import com.Smart.Erp.Modules.Student.Entity.StudentEnrollment;
 import com.Smart.Erp.Modules.Student.Repo.StudentEnrollmentRepo;
 import com.Smart.Erp.Modules.Subject.Entity.Subject;
-import com.Smart.Erp.Modules.Teacher.Entity.Teacher;
+import com.Smart.Erp.Modules.Subject.Repo.SubjectRepo;
 import com.Smart.Erp.Modules.Teacher.Entity.TeacherEnrollment;
 import com.Smart.Erp.Modules.Teacher.Repo.TeacherEnrollmentRepo;
-import com.Smart.Erp.Modules.User.Enum.EnrollmentStatus;
-import com.Smart.Erp.Modules.User.Enum.UserRoles;
-import com.Smart.Erp.Core.Exception.ResourceNotFoundException;
-import com.Smart.Erp.Modules.Academic.Entity.*;
-import com.Smart.Erp.Modules.Academic.Repo.*;
 import com.Smart.Erp.Modules.User.Entity.User;
+import com.Smart.Erp.Modules.User.Enum.EnrollmentStatus;
+import com.Smart.Erp.Modules.User.Enum.PermissionAction;
+import com.Smart.Erp.Modules.User.Enum.ResourceType;
 import com.Smart.Erp.Modules.User.Services.UserCommonService;
+import com.Smart.Erp.Security.AuthorizationService;
 import lombok.AllArgsConstructor;
+import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
-import org.springframework.security.core.Authentication;
 import org.springframework.stereotype.Service;
 
 import java.util.*;
@@ -38,442 +40,731 @@ public class AcademicCommonService {
     private final SectionGroupRepo sectionGroupRepo;
     private final StudentEnrollmentRepo studentEnrollmentRepo;
     private final TeacherEnrollmentRepo teacherEnrollmentRepo;
-
     private final UserCommonService userService;
+    private final AuthorizationService authorizationService;
+    private final SubjectRepo subjectRepo;
 
-    public @Nullable List<CommonDTO> getCommonTeachersDto(Long universityId, Long schoolId, Long departmentId, Long coursesId) {
-        University university = getUniversity(universityId);
-        if (coursesId != null) {
-            return getCoursesAllTeacher(getCourse(coursesId));
-        } else if (departmentId != null) {
-            return getDepartmentAllTeacher(getDepartment(departmentId));
-        } else if (schoolId != null) {
-            return getSchoolAllTeachers(getSchool(schoolId));
-        } else {
-            return allUniversityTeachers(university);
+    // =========================================================
+    // FILTER METHODS
+    // =========================================================
+
+    public @Nullable List<CommonDTO> getTeacherFilter() {
+        Map<Long, List<PermissionAction>> map =
+                authorizationService.getAll(ResourceType.TEACHER_ENROLLMENT);
+
+        if (map == null || map.isEmpty()) {
+            return Collections.emptyList();
         }
-    }
 
-    public List<CommonDTO> allUniversityTeachers(University university) {
-        List<Teacher> teachers = university.getUsers()
-                .stream().map(User::getTeacher)
-                .filter(
-                        Objects::nonNull
-                )
-                .toList();
-        return teachers.stream()
+        List<TeacherEnrollment> enrollments =
+                teacherEnrollmentRepo.findAllById(map.keySet());
+
+        if (enrollments.isEmpty()) {
+            return Collections.emptyList();
+        }
+
+        return enrollments.stream()
+                .filter(Objects::nonNull)
+                .map(TeacherEnrollment::getTeacher)
+                .filter(Objects::nonNull)
+                .distinct()
                 .map(CommonReference::toCommonDTO)
+                .filter(Objects::nonNull)
                 .toList();
     }
 
-    public List<CommonDTO> getSchoolAllTeachers(School school) {
-        return school.getDepartments().stream()
-                .flatMap(
-                        department -> getDepartmentAllTeacher(department).stream()
-                )
-                .distinct()
+    private List<Long> filterHelper(
+            Map<Long, List<PermissionAction>> map) {
+
+        if (map == null || map.isEmpty()) {
+            return Collections.emptyList();
+        }
+
+        return map.entrySet().stream()
+                .filter(Objects::nonNull)
+                .filter(entry ->
+                        entry.getValue() != null
+                                && entry.getValue().contains(
+                                PermissionAction.CREATE_CHILD))
+                .map(Map.Entry::getKey)
+                .filter(Objects::nonNull)
                 .toList();
     }
 
-    public List<CommonDTO> getDepartmentAllTeacher(Department department) {
-        return department.getCourses()
-                .stream()
-                .flatMap(
-                        course -> getCoursesAllTeacher(course).stream()
-                )
-                .distinct()
+    public List<CommonDTO> getUniversityFilter() {
+        Map<Long, List<PermissionAction>> map =
+                authorizationService.getAll(ResourceType.UNIVERSITY);
+
+        List<University> universities =
+                universityRepo.findAllById(filterHelper(map));
+
+        if (universities.isEmpty()) {
+            return Collections.emptyList();
+        }
+
+        return universities.stream()
+                .filter(Objects::nonNull)
+                .map(University::toCommonDTO)
+                .filter(Objects::nonNull)
                 .toList();
     }
 
-    public List<CommonDTO> getCoursesAllTeacher(Course course) {
-        return course.getSubjects().stream()
-                .flatMap(subject -> subject.getSubjectTeachers().stream())
-                .distinct()
-                .map(
-                        teacherEnrollment -> teacherEnrollment.getTeacher().toCommonDTO()
-                )
+    public @Nullable List<CommonDTO> getSchoolFilter() {
+        Map<Long, List<PermissionAction>> map =
+                authorizationService.getAll(ResourceType.SCHOOL);
+
+        List<School> schools =
+                schoolRepo.findAllById(filterHelper(map));
+
+        if (schools.isEmpty()) {
+            return Collections.emptyList();
+        }
+
+        return schools.stream()
+                .filter(Objects::nonNull)
+                .map(School::toCommonDTO)
+                .filter(Objects::nonNull)
                 .toList();
     }
 
-    public List<CommonDTO> getUniversityCommonDTO(String username) {
-        User user = userService.getUser(username);
-        if (UserRoles.isSuperAdmin(user.getUserRole())) {
-            return universityRepo.findAll()
-                    .stream()
-                    .map(CommonReference::toCommonDTO)
-                    .toList();
-        }
-        return List.of(user.getUniversity().toCommonDTO());
-    }
+    public @Nullable List<CommonDTO> getDepartmentFilter() {
+        Map<Long, List<PermissionAction>> map =
+                authorizationService.getAll(ResourceType.DEPARTMENT);
 
-    public @Nullable List<CommonDTO> getAcademicCommonDTO(Long universityId, Authentication authentication) {
-        User user = userService.getUser(authentication.getName());
-        if (UserRoles.isUniversityUser(user.getUserRole()) && universityId != null) {
-            return getUniversity(universityId).getAcademicYears().stream()
-                    .map(CommonReference::toCommonDTO)
-                    .toList();
-        } else {
-            return user.getUniversity().getAcademicYears().stream()
-                    .filter(
-                            AcademicYear::getCurrent
-                    )
-                    .map(CommonReference::toCommonDTO)
-                    .toList();
-        }
-    }
+        List<Department> departments =
+                departmentRepo.findAllById(filterHelper(map));
 
-    public @Nullable List<CommonDTO> getCommonSchoolDTO(Long academicYearId, Authentication authentication) {
-        User user = userService.getUser(authentication.getName());
-        if (UserRoles.isUniversityUser(user.getUserRole()) && academicYearId != null) {
-            return getAcademicYear(academicYearId).getSchools().stream()
-                    .map(CommonReference::toCommonDTO)
-                    .toList();
-        } else {
-            if (UserRoles.isSchoolUser(user.getUserRole())) {
-                return Collections.singletonList(schoolRepo.findBySchoolDean(user.getTeacher()).toCommonDTO());
-            } else {
-                return null;
-            }
+        if (departments.isEmpty()) {
+            return Collections.emptyList();
         }
-    }
 
-    public @Nullable List<CommonDTO> getCommonDepartmentDTO(Long schoolId, Authentication authentication) {
-        User user = userService.getUser(authentication.getName());
-        if (UserRoles.isSchoolUser(user.getUserRole()) && schoolId != null) {
-            return getSchool(schoolId).getDepartments().stream()
-                    .map(CommonReference::toCommonDTO)
-                    .toList();
-        } else if (UserRoles.isDepartmentUser(user.getUserRole())) {
-            return Collections.singletonList(departmentRepo.findByDepartmentHead(user.getTeacher()).toCommonDTO());
-        } else {
-            return null;
-        }
-    }
-
-    public @Nullable List<CommonDTO> getCommonCourseDTO(Long departmentId, Authentication authentication) {
-        User user = userService.getUser(authentication.getName());
-        if (UserRoles.isDepartmentUser(user.getUserRole()) && departmentId != null) {
-            return getDepartment(departmentId).getCourses().stream()
-                    .map(CommonReference::toCommonDTO)
-                    .toList();
-        } else if (UserRoles.isCourseUser(user.getUserRole())) {
-            return Collections.singletonList(courseRepo.findByProgramCoordinator(user.getTeacher()).toCommonDTO());
-        } else {
-            return null;
-        }
-    }
-
-    public @Nullable List<CommonDTO> getCommonSectionDTO(Long courseId, Authentication authentication) {
-        User user = userService.getUser(authentication.getName());
-        if (UserRoles.isCourseUser(user.getUserRole()) && courseId != null) {
-            return getCourse(courseId).getSections().stream()
-                    .map(CommonReference::toCommonDTO)
-                    .toList();
-        } else if (UserRoles.isSectionUser(user.getUserRole())) {
-            return Collections.singletonList(sectionRepo.findByMentor(user.getTeacher()).toCommonDTO());
-        } else {
-            return null;
-        }
-    }
-
-    public @Nullable List<CommonDTO> getCommonSubjectDTO(Long courseId) {
-        return getCourse(courseId).getSubjects().stream()
-                .map(CommonReference::toCommonDTO)
+        return departments.stream()
+                .filter(Objects::nonNull)
+                .map(Department::toCommonDTO)
+                .filter(Objects::nonNull)
                 .toList();
     }
 
-    public @Nullable List<CommonDTO> getCommonSpecializationDTO(Long courseId, Long sectionId, Long subjectId) {
-        Course course = getCourse(courseId);
-        if (subjectId != null) {
-            return course.getSubjects().stream()
-                    .filter(
-                            subject -> Objects.equals(subject.getId(), subjectId)
-                    )
-                    .findFirst()
-                    .orElseThrow(
-                            () ->
-                                    new ResourceNotFoundException("Subject not found with id : " + subjectId)
-                    )
-                    .getSpecializations()
-                    .stream()
-                    .map(Specialization::toCommonDTO)
-                    .toList();
-        }
-        if (sectionId != null) {
-            return course.getSections().stream()
-                    .filter(
-                            section -> Objects.equals(section.getId(), sectionId)
-                    )
-                    .findFirst()
-                    .orElseThrow(
-                            () ->
-                                    new ResourceNotFoundException("Sections not found : " + sectionId)
-                    )
-                    .getSectionGroups().stream()
-                    .map(sectionGroup -> sectionGroup.getSpecialization().toCommonDTO())
-                    .toList();
+    public @Nullable List<CommonDTO> getAcademicYearFilter() {
+        Map<Long, List<PermissionAction>> map =
+                authorizationService.getAll(ResourceType.ACADEMIC_YEAR);
+
+        List<AcademicYear> academicYears =
+                academicYearRepository.findAllById(filterHelper(map));
+
+        if (academicYears.isEmpty()) {
+            return Collections.emptyList();
         }
 
-        return course.getSpecializations().stream()
+        return academicYears.stream()
+                .filter(Objects::nonNull)
+                .map(AcademicYear::toCommonDTO)
+                .filter(Objects::nonNull)
+                .toList();
+    }
+
+    public @Nullable List<CommonDTO> getCourseFilter() {
+        Map<Long, List<PermissionAction>> map =
+                authorizationService.getAll(ResourceType.COURSE);
+
+        List<Course> courses =
+                courseRepo.findAllById(filterHelper(map));
+
+        if (courses.isEmpty()) {
+            return Collections.emptyList();
+        }
+
+        return courses.stream()
+                .filter(Objects::nonNull)
+                .map(Course::toCommonDTO)
+                .filter(Objects::nonNull)
+                .toList();
+    }
+
+    public @Nullable List<CommonDTO> getSectionFilter() {
+        Map<Long, List<PermissionAction>> map =
+                authorizationService.getAll(ResourceType.SECTION);
+
+        List<Section> sections =
+                sectionRepo.findAllById(filterHelper(map));
+
+        if (sections.isEmpty()) {
+            return Collections.emptyList();
+        }
+
+        return sections.stream()
+                .filter(Objects::nonNull)
+                .map(Section::toCommonDTO)
+                .filter(Objects::nonNull)
+                .toList();
+    }
+
+    public @Nullable List<CommonDTO> getSubjectFilter() {
+        Map<Long, List<PermissionAction>> map =
+                authorizationService.getAll(ResourceType.SUBJECT);
+
+        List<Subject> subjects =
+                subjectRepo.findAllById(filterHelper(map));
+
+        if (subjects.isEmpty()) {
+            return Collections.emptyList();
+        }
+
+        return subjects.stream()
+                .filter(Objects::nonNull)
+                .map(Subject::toCommonDTO)
+                .filter(Objects::nonNull)
+                .toList();
+    }
+
+    public @Nullable List<CommonDTO> getSpecializationFilter() {
+        Map<Long, List<PermissionAction>> map =
+                authorizationService.getAll(ResourceType.SPECIALIZATION);
+
+        List<Specialization> specializations =
+                specializationRepo.findAllById(filterHelper(map));
+
+        if (specializations.isEmpty()) {
+            return Collections.emptyList();
+        }
+
+        return specializations.stream()
+                .filter(Objects::nonNull)
                 .map(Specialization::toCommonDTO)
+                .filter(Objects::nonNull)
                 .toList();
     }
+
+    // =========================================================
+    // ENTITY FETCH METHODS
+    // =========================================================
 
     public SectionGroup getSectionGroup(Long sectionGroupId) {
         if (sectionGroupId == null) {
             return new SectionGroup();
         }
 
-        return sectionGroupRepo.findById(sectionGroupId).orElseThrow(
-                () ->
-                        new ResourceNotFoundException("Section Group not found with id : " + sectionGroupId)
-        );
+        return sectionGroupRepo.findById(sectionGroupId)
+                .orElseThrow(() ->
+                        new ResourceNotFoundException(
+                                "Section Group not found with id : "
+                                        + sectionGroupId));
     }
 
     public University getUniversity(Long universityId) {
-        return universityRepo.findById(universityId).orElseThrow(
-                () ->
-                        new ResourceNotFoundException("Not found a university with id : " + universityId)
-        );
+        return universityRepo.findById(universityId)
+                .orElseThrow(() ->
+                        new ResourceNotFoundException(
+                                "Not found a university with id : "
+                                        + universityId));
     }
 
     public AcademicYear getAcademicYear(Long academicYearId) {
-        return academicYearRepository.findById(academicYearId).orElseThrow(
-                () ->
-                        new ResourceNotFoundException("Academic Year not found id : " + academicYearId)
-        );
+        return academicYearRepository.findById(academicYearId)
+                .orElseThrow(() ->
+                        new ResourceNotFoundException(
+                                "Academic Year not found id : "
+                                        + academicYearId));
     }
 
     public School getSchool(Long schoolId) {
-        return schoolRepo.findById(schoolId).orElseThrow(
-                () ->
-                        new ResourceNotFoundException("School Not Found with id :" + schoolId)
-        );
+        return schoolRepo.findById(schoolId)
+                .orElseThrow(() ->
+                        new ResourceNotFoundException(
+                                "School Not Found with id :"
+                                        + schoolId));
+    }
+
+    public List<School> getSchool(Set<Long> schoolIds) {
+        if (schoolIds == null || schoolIds.isEmpty()) {
+            return Collections.emptyList();
+        }
+
+        return schoolRepo.findAllById(schoolIds);
     }
 
     public Department getDepartment(Long departmentId) {
-        return departmentRepo.findById(departmentId).orElseThrow(
-                () ->
-                        new ResourceNotFoundException("Department not found with id :" + departmentId)
-        );
+        return departmentRepo.findById(departmentId)
+                .orElseThrow(() ->
+                        new ResourceNotFoundException(
+                                "Department not found with id :"
+                                        + departmentId));
     }
 
     public Course getCourse(Long courseId) {
-        return courseRepo.findById(courseId).orElseThrow(
-                () -> new ResourceNotFoundException("Course not found with id : " + courseId)
-        );
+        return courseRepo.findById(courseId)
+                .orElseThrow(() ->
+                        new ResourceNotFoundException(
+                                "Course not found with id : "
+                                        + courseId));
     }
 
     public Section getSection(Long sectionId) {
-        return sectionRepo.findById(sectionId).orElseThrow(
-                () ->
-                        new ResourceNotFoundException("Section not found with id : " + sectionId)
-        );
+        return sectionRepo.findById(sectionId)
+                .orElseThrow(() ->
+                        new ResourceNotFoundException(
+                                "Section not found with id : "
+                                        + sectionId));
     }
 
     public Specialization getSpecialization(Long specializationId) {
-        return specializationRepo.findById(specializationId).orElseThrow(
-                () ->
-                        new ResourceNotFoundException("Specialization not found with this id " + specializationId)
-        );
+        return specializationRepo.findById(specializationId)
+                .orElseThrow(() ->
+                        new ResourceNotFoundException(
+                                "Specialization not found with this id "
+                                        + specializationId));
     }
 
-    public List<Specialization> getSpecialization(List<Long> specializationId) {
-        return specializationRepo.findByIdIn(specializationId);
+    public List<Specialization> getSpecialization(
+            List<Long> specializationIds) {
+
+        if (specializationIds == null || specializationIds.isEmpty()) {
+            return Collections.emptyList();
+        }
+
+        return specializationRepo.findByIdIn(specializationIds);
     }
 
-    public University handleActiveStatusUpdate(University university, ActiveStatus activeStatus){
+    // =========================================================
+    // ACTIVE STATUS UPDATE
+    //
+    // Important:
+    // Never replace a Hibernate-managed collection when
+    // orphanRemoval = true.
+    //
+    // Process children in place instead.
+    // =========================================================
+
+    public University handleActiveStatusUpdate(
+            University university,
+            ActiveStatus activeStatus) {
+
+        if (university == null || activeStatus == null) {
+            return university;
+        }
+
         university.setActiveStatus(activeStatus);
-        List<AcademicYear> academicYears = university.getAcademicYears().stream()
-                .map(
-                        academicYear -> handleActiveStatusUpdate(academicYear,activeStatus)
-                )
-                .toList();
-        university.setAcademicYears(academicYears);
+
+        // Preserve the existing behavior:
+        // ENABLE affects only the selected entity.
+        if (activeStatus == ActiveStatus.ENABLE) {
+            return university;
+        }
+
+        if (university.getSchools() != null) {
+            university.getSchools().stream()
+                    .filter(Objects::nonNull)
+                    .forEach(school ->
+                            handleActiveStatusUpdate(school, activeStatus));
+        }
+
+        // Do not call university.setSchools(...).
         return university;
     }
 
-    public AcademicYear handleActiveStatusUpdate(AcademicYear academicYear, ActiveStatus activeStatus){
-        academicYear.setActiveStatus(activeStatus);
+    public School handleActiveStatusUpdate(
+            School school,
+            ActiveStatus activeStatus) {
 
-        List<School> schools = academicYear.getSchools().stream()
-                .map(
-                        school -> handleActiveStatusUpdate(school,activeStatus)
-                )
-                .toList();
-        academicYear.setSchools(schools);
-        return academicYear;
-    }
+        if (school == null || activeStatus == null) {
+            return school;
+        }
 
-    public School handleActiveStatusUpdate(School school, ActiveStatus activeStatus){
         school.setActiveStatus(activeStatus);
-        List<Department> departments = school.getDepartments().stream()
-                .map(
-                        department -> handleActiveStatusUpdate(department,activeStatus)
-                )
-                .toList();
-        school.setDepartments(departments);
+
+        if (activeStatus == ActiveStatus.ENABLE) {
+            return school;
+        }
+
+        if (school.getDepartments() != null) {
+            school.getDepartments().stream()
+                    .filter(Objects::nonNull)
+                    .forEach(department ->
+                            handleActiveStatusUpdate(
+                                    department, activeStatus));
+        }
+
+        // Do not replace the managed departments collection.
         return school;
     }
 
-    public Department handleActiveStatusUpdate(Department department, ActiveStatus activeStatus){
+    public Department handleActiveStatusUpdate(
+            Department department,
+            ActiveStatus activeStatus) {
+
+        if (department == null || activeStatus == null) {
+            return department;
+        }
+
         department.setActiveStatus(activeStatus);
 
-        List<Course> courses = department.getCourses().stream()
-                .map(
-                        course -> handleActiveStatusUpdate(course,activeStatus)
-                )
-                .toList();
-        department.setCourses(courses);
+        if (activeStatus == ActiveStatus.ENABLE) {
+            return department;
+        }
+
+        if (department.getAcademicYears() != null) {
+            department.getAcademicYears().stream()
+                    .filter(Objects::nonNull)
+                    .forEach(academicYear ->
+                            handleActiveStatusUpdate(
+                                    academicYear, activeStatus));
+        }
+
+        // Do not replace the managed academicYears collection.
         return department;
     }
 
-    public Course handleActiveStatusUpdate(Course course, ActiveStatus activeStatus){
+    public AcademicYear handleActiveStatusUpdate(
+            AcademicYear academicYear,
+            ActiveStatus activeStatus) {
+
+        if (academicYear == null || activeStatus == null) {
+            return academicYear;
+        }
+
+        academicYear.setActiveStatus(activeStatus);
+
+        if (activeStatus == ActiveStatus.ENABLE) {
+            return academicYear;
+        }
+
+        if (academicYear.getCourses() != null) {
+            academicYear.getCourses().stream()
+                    .filter(Objects::nonNull)
+                    .forEach(course ->
+                            handleActiveStatusUpdate(course, activeStatus));
+        }
+
+        // Do not replace the managed courses collection.
+        return academicYear;
+    }
+
+    public Course handleActiveStatusUpdate(
+            Course course,
+            ActiveStatus activeStatus) {
+
+        if (course == null || activeStatus == null) {
+            return course;
+        }
+
         course.setActiveStatus(activeStatus);
-        List<Section> sections = course.getSections().stream()
-                .map(
-                        section -> handleActiveStatusUpdate(section,activeStatus)
-                )
-                .toList();
-        course.setSections(sections);
-        List<Subject> subjects = course.getSubjects().stream()
-                .map(
-                        subject -> handleActiveStatusUpdate(subject,activeStatus)
-                )
-                .toList();
-        course.setSubjects(subjects);
+
+        if (activeStatus == ActiveStatus.ENABLE) {
+            return course;
+        }
+
+        if (course.getSections() != null) {
+            course.getSections().stream()
+                    .filter(Objects::nonNull)
+                    .forEach(section ->
+                            handleActiveStatusUpdate(section, activeStatus));
+        }
+
+        if (course.getSubjects() != null) {
+            course.getSubjects().stream()
+                    .filter(Objects::nonNull)
+                    .forEach(subject ->
+                            handleActiveStatusUpdate(subject, activeStatus));
+        }
+
+        // Do not replace sections or subjects collections.
         return course;
     }
 
-    public Section handleActiveStatusUpdate(Section section, ActiveStatus activeStatus){
+    public Section handleActiveStatusUpdate(
+            Section section,
+            ActiveStatus activeStatus) {
+
+        if (section == null || activeStatus == null) {
+            return section;
+        }
+
         section.setActiveStatus(activeStatus);
-        List<SectionGroup> sectionGroups = section.getSectionGroups().stream()
-                .map(
-                        sectionGroup -> handleActiveStatusUpdate(sectionGroup,activeStatus)
-                )
-                .toList();
-        section.setSectionGroups(sectionGroups);
+
+        if (activeStatus == ActiveStatus.ENABLE) {
+            return section;
+        }
+
+        if (section.getSectionGroups() != null) {
+            section.getSectionGroups().stream()
+                    .filter(Objects::nonNull)
+                    .forEach(sectionGroup ->
+                            handleActiveStatusUpdate(
+                                    sectionGroup, activeStatus));
+        }
+
+        // Do not replace the managed sectionGroups collection.
         return section;
     }
 
-    public SectionGroup handleActiveStatusUpdate(SectionGroup sectionGroup, ActiveStatus activeStatus) {
+    public void handleActiveStatusUpdate(
+            SectionGroup sectionGroup,
+            ActiveStatus activeStatus) {
+
+        if (sectionGroup == null || activeStatus == null) {
+            return;
+        }
+
         sectionGroup.setActiveStatus(activeStatus);
-        handleActiveStatusUpdate(sectionGroup.getStudentEnrollments(), activeStatus);
-        return sectionGroupRepo.save(sectionGroup);
+
+        if (activeStatus == ActiveStatus.ENABLE) {
+            return;
+        }
+
+        handleActiveStatusUpdate(
+                sectionGroup.getStudentEnrollments(), activeStatus);
+
+        sectionGroupRepo.save(sectionGroup);
     }
 
-    public Specialization handleActiveStatusUpdate(Specialization specialization, ActiveStatus activeStatus) {
-        specialization.setActiveStatus(activeStatus);
-        List<SectionGroup> sectionGroups = specialization.getSectionGroups().stream()
-                .map(
-                        sectionGroup -> handleActiveStatusUpdateWithSaving(sectionGroup,activeStatus)
-                )
-                .toList();
-        specialization.setSectionGroups(sectionGroups);
+    public Specialization handleActiveStatusUpdate(
+            Specialization specialization,
+            ActiveStatus activeStatus) {
 
+        if (specialization == null || activeStatus == null) {
+            return specialization;
+        }
+
+        specialization.setActiveStatus(activeStatus);
+
+        if (activeStatus == ActiveStatus.ENABLE) {
+            return specialization;
+        }
+
+        if (specialization.getSectionGroups() != null) {
+            specialization.getSectionGroups().stream()
+                    .filter(Objects::nonNull)
+                    .forEach(sectionGroup ->
+                            handleActiveStatusUpdateWithSaving(
+                                    sectionGroup, activeStatus));
+        }
+
+        // Do not replace the managed sectionGroups collection.
         return specialization;
     }
 
-    private SectionGroup handleActiveStatusUpdateWithSaving(SectionGroup sectionGroup, ActiveStatus activeStatus) {
-        sectionGroup.setActiveStatus(activeStatus);
-        handleActiveStatusUpdate(sectionGroup.getStudentEnrollments(), activeStatus);
-        return sectionGroupRepo.save(sectionGroup);
-    }
+    private void handleActiveStatusUpdateWithSaving(
+            SectionGroup sectionGroup,
+            ActiveStatus activeStatus) {
 
-    private void handleActiveStatusUpdate(List<StudentEnrollment> studentEnrollments, ActiveStatus activeStatus) {
-        if (activeStatus == ActiveStatus.DISABLE) {
-            studentEnrollments.forEach(studentEnrollment ->
-                    studentEnrollment.setStatus(studentEnrollment.getStatus() ==
-                            EnrollmentStatus.ACTIVE ? EnrollmentStatus.DISABLE : studentEnrollment.getStatus()
-                    )
-            );
-        } else if (activeStatus == ActiveStatus.ENABLE) {
-            studentEnrollments.forEach(
-                    studentEnrollment ->
-                            studentEnrollment.setStatus(studentEnrollment.getStatus() ==
-                                    EnrollmentStatus.DISABLE ? EnrollmentStatus.ACTIVE : studentEnrollment.getStatus())
-            );
+        if (sectionGroup == null || activeStatus == null) {
+            return;
         }
-        studentEnrollmentRepo.saveAll(studentEnrollments);
+
+        sectionGroup.setActiveStatus(activeStatus);
+
+        if (activeStatus == ActiveStatus.DISABLE) {
+            handleActiveStatusUpdate(
+                    sectionGroup.getStudentEnrollments(), activeStatus);
+        }
+
+        sectionGroupRepo.save(sectionGroup);
     }
 
-    public Subject handleActiveStatusUpdate(Subject subject, ActiveStatus activeStatus) {
+    // =========================================================
+    // STUDENT ENROLLMENT STATUS
+    // =========================================================
+
+    private void handleActiveStatusUpdate(
+            List<StudentEnrollment> studentEnrollments,
+            ActiveStatus activeStatus) {
+
+        if (studentEnrollments == null
+                || studentEnrollments.isEmpty()
+                || activeStatus == null) {
+            return;
+        }
+
+        for (StudentEnrollment enrollment : studentEnrollments) {
+            if (enrollment == null || enrollment.getStatus() == null) {
+                continue;
+            }
+
+            if (activeStatus == ActiveStatus.DISABLE
+                    && enrollment.getStatus() == EnrollmentStatus.ACTIVE) {
+
+                enrollment.setStatus(EnrollmentStatus.DISABLE);
+
+            } else if (activeStatus == ActiveStatus.ENABLE
+                    && enrollment.getStatus() == EnrollmentStatus.DISABLE) {
+
+                enrollment.setStatus(EnrollmentStatus.ACTIVE);
+            }
+        }
+
+        studentEnrollmentRepo.saveAll(studentEnrollments.stream()
+                .filter(Objects::nonNull)
+                .toList());
+    }
+
+    // =========================================================
+    // SUBJECT / TEACHER ENROLLMENT STATUS
+    // =========================================================
+
+    public Subject handleActiveStatusUpdate(
+            Subject subject,
+            ActiveStatus activeStatus) {
+
+        if (subject == null || activeStatus == null) {
+            return subject;
+        }
+
         subject.setActiveStatus(activeStatus);
-        handleActiveStatusUpdate(subject.getSubjectTeachers(),activeStatus);
+
+        handleActiveStatusUpdate(
+                subject.getSubjectTeachers(), activeStatus);
+
         return subject;
     }
 
-    private void handleActiveStatusUpdate(Set<TeacherEnrollment> teacherEnrollments, ActiveStatus activeStatus){
-        if (activeStatus == ActiveStatus.DISABLE) {
-            teacherEnrollments.forEach(
-                    teacherEnrollment ->
-                    teacherEnrollment.setStatus(teacherEnrollment.getStatus() ==
-                            EnrollmentStatus.ACTIVE ? EnrollmentStatus.DISABLE : teacherEnrollment.getStatus()
-                    )
-            );
+    private void handleActiveStatusUpdate(
+            Set<TeacherEnrollment> teacherEnrollments,
+            ActiveStatus activeStatus) {
 
-        } else if (activeStatus == ActiveStatus.ENABLE) {
-            teacherEnrollments.forEach(
-                    teacherEnrollment ->
-                            teacherEnrollment.setStatus(teacherEnrollment.getStatus() ==
-                                    EnrollmentStatus.DISABLE ? EnrollmentStatus.ACTIVE : teacherEnrollment.getStatus())
-            );
+        if (teacherEnrollments == null
+                || teacherEnrollments.isEmpty()
+                || activeStatus == null) {
+            return;
         }
-        teacherEnrollmentRepo.saveAll(teacherEnrollments);
+
+        for (TeacherEnrollment enrollment : teacherEnrollments) {
+            if (enrollment == null || enrollment.getStatus() == null) {
+                continue;
+            }
+
+            if (activeStatus == ActiveStatus.DISABLE
+                    && enrollment.getStatus() == EnrollmentStatus.ACTIVE) {
+
+                enrollment.setStatus(EnrollmentStatus.DISABLE);
+
+            } else if (activeStatus == ActiveStatus.ENABLE
+                    && enrollment.getStatus() == EnrollmentStatus.DISABLE) {
+
+                enrollment.setStatus(EnrollmentStatus.ACTIVE);
+            }
+        }
+
+        teacherEnrollmentRepo.saveAll(teacherEnrollments.stream()
+                .filter(Objects::nonNull)
+                .toList());
     }
 
+    // =========================================================
+    // STUDENT ROLL NUMBER MANAGEMENT
+    // =========================================================
+
     public void handleStudentChange(SectionGroup sectionGroup) {
-        List<StudentEnrollment> studentEnrollments = sectionGroup.getStudentEnrollments();
+
+        if (sectionGroup == null
+                || sectionGroup.getStudentEnrollments() == null
+                || sectionGroup.getStudentEnrollments().isEmpty()) {
+            return;
+        }
+
+        List<StudentEnrollment> studentEnrollments =
+                sectionGroup.getStudentEnrollments();
+
+        studentEnrollments.removeIf(Objects::isNull);
 
         studentEnrollments.sort(
                 Comparator.comparing(
-                        enrollment -> enrollment.getStudent()
-                                .getUser()
-                                .getBasicDetail()
-                                .getFirstName(),
+                        enrollment -> {
+                            if (enrollment.getStudent() == null
+                                    || enrollment.getStudent().getUser() == null
+                                    || enrollment.getStudent().getUser()
+                                    .getBasicDetail() == null
+                                    || enrollment.getStudent().getUser()
+                                    .getBasicDetail().getFirstName() == null) {
+                                return "";
+                            }
+
+                            return enrollment.getStudent().getUser()
+                                    .getBasicDetail().getFirstName();
+                        },
                         String.CASE_INSENSITIVE_ORDER
                 )
         );
 
         String prefix = sectionGroup.getStudentRollPrefix();
-        int i = 1;
-        for (StudentEnrollment studentEnrollment:studentEnrollments){
-            studentEnrollment.setRollNumber(prefix + i++);
+        if (prefix == null) {
+            prefix = "";
         }
+
+        int i = 1;
+
+        for (StudentEnrollment enrollment : studentEnrollments) {
+            enrollment.setRollNumber(prefix + i++);
+        }
+
         studentEnrollmentRepo.saveAll(studentEnrollments);
     }
 
-    public void handleStudentChange(Specialization specialization ,AcademicYear academicYear) {
-        List<SectionGroup> sectionGroups = specialization.getSectionGroups();
+    public void handleStudentChange(
+            Specialization specialization) {
 
-        List<User> users = new ArrayList<>(sectionGroups.stream()
-                .flatMap(
-                        sectionGroup -> sectionGroup.getStudentEnrollments().stream()
-                                .map(
-                                        studentEnrollment -> studentEnrollment.getStudent().getUser()
-                                )
-                )
-                .distinct()
-                .toList());
+        if (specialization == null
+                || specialization.getSectionGroups() == null
+                || specialization.getSectionGroups().isEmpty()) {
+            return;
+        }
+
+        List<User> users = getList(specialization);
+
+        users.removeIf(Objects::isNull);
 
         users.sort(
                 Comparator.comparing(
-                        BaseAuditableEntity::getCreatedAt
+                        User::getCreatedAt,
+                        Comparator.nullsLast(Comparator.naturalOrder())
                 )
         );
 
+        String prefix = specialization.getCode();
 
-        String prefix = academicYear.getUniversity().getCode() + academicYear.getCode() + specialization.getPostfix();
+        if (prefix == null) {
+            prefix = "";
+        }
+
         int i = 1;
 
         for (User user : users) {
             user.setUsername(prefix + String.format("%04d", i++));
-
-            //do mail to all students with their new username
+            // Send notification or email here if required.
         }
 
-        userService.saveAll(users);
+        if (!users.isEmpty()) {
+            userService.saveAll(users);
+        }
+    }
 
+    private static @NonNull List<User> getList(Specialization specialization) {
+        List<SectionGroup> sectionGroups =
+                specialization.getSectionGroups();
 
+        List<User> users = new ArrayList<>();
+
+        for (SectionGroup sectionGroup : sectionGroups) {
+            if (sectionGroup == null
+                    || sectionGroup.getStudentEnrollments() == null) {
+                continue;
+            }
+
+            for (StudentEnrollment enrollment
+                    : sectionGroup.getStudentEnrollments()) {
+
+                if (enrollment == null
+                        || enrollment.getStudent() == null
+                        || enrollment.getStudent().getUser() == null) {
+                    continue;
+                }
+
+                User user = enrollment.getStudent().getUser();
+
+                if (!users.contains(user)) {
+                    users.add(user);
+                }
+            }
+        }
+        return users;
     }
 }

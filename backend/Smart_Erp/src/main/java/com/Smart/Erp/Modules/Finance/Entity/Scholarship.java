@@ -5,7 +5,6 @@ import com.Smart.Erp.Config.CommonReference;
 import com.Smart.Erp.Modules.Finance.DTO.Scholarship.ScholarshipResponse;
 import com.Smart.Erp.Modules.Finance.Enum.AmountType;
 import com.Smart.Erp.Modules.Finance.Enum.ScholarshipType;
-import com.Smart.Erp.Modules.Student.Entity.StudentEnrollment;
 import com.Smart.Erp.Modules.Academic.Entity.University;
 import jakarta.persistence.*;
 import lombok.*;
@@ -47,8 +46,8 @@ public class Scholarship  extends BaseAuditableEntity implements CommonReference
     private University university;
 
     @Override
-    public String getPrefix() {
-        return "";
+    public void setCodeWithPrefix(String code) {
+        this.code = university.getCode()+code;
     }
 
     public BigDecimal getFinalAmount(FeeStructure feeStructure){

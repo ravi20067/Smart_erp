@@ -70,7 +70,6 @@ public class User  extends BaseAuditableEntity {
     // =========================
     // ROLES
     // =========================
-
     @OneToMany(
             mappedBy = "user",
             cascade = CascadeType.ALL,
@@ -79,6 +78,15 @@ public class User  extends BaseAuditableEntity {
     @ToString.Exclude
     @Builder.Default
     private List<UserRole> roles = new ArrayList<>();
+
+    @OneToMany(
+            mappedBy = "user",
+            cascade = CascadeType.ALL,
+            orphanRemoval = true
+    )
+    @ToString.Exclude
+    @Builder.Default
+    private List<UserPermissionGrant> extraPermissions = new ArrayList<>();
 
     public String getName() {
         return this.getBasicDetail().getFirstName() + " " + this.getBasicDetail().getLastName();

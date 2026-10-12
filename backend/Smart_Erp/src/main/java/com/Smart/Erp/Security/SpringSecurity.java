@@ -47,12 +47,9 @@ public class SpringSecurity {
                     // 1. Public endpoints
                     auth.requestMatchers("/auth/**", "/oauth/success", "/services/**", "/ws/**").permitAll();
 
-                    // 3. Specific endpoint overrides (do this before the general loop)
-                    auth.requestMatchers("/api/keys/all").hasRole(UserRoles.ADMIN.name());
-
                     // 4. Dynamically handle all UserRoles endpoints (/admin/**, /teacher/**, /student/**, etc.)
                     for (UserRoles role : UserRoles.values()) {
-                        auth.requestMatchers("/" + role.getUrl() + "/**").hasRole(role.name());
+                        auth.requestMatchers("/" + role.getUrl() + "/**").hasAuthority(role.name());
                     }
                     // 5. Catch-all for anything else
                     auth.anyRequest().authenticated();

@@ -4,7 +4,7 @@ import com.Smart.Erp.Config.BaseAuditableEntity;
 import com.Smart.Erp.Config.CommonReference;
 import com.Smart.Erp.Modules.Academic.DTO.Department.DepartmentResponse;
 import com.Smart.Erp.Modules.Academic.Enum.ActiveStatus;
-import com.Smart.Erp.Modules.Teacher.Entity.Teacher;
+import com.Smart.Erp.Modules.User.Enum.PermissionAction;
 import jakarta.persistence.*;
 import lombok.*;
 import java.util.ArrayList;
@@ -26,6 +26,7 @@ public class Department extends BaseAuditableEntity implements CommonReference {
 
     private String name;
 
+    @Column(unique = true)
     private String code;
 
     private ActiveStatus activeStatus = ActiveStatus.DISABLE;
@@ -40,31 +41,27 @@ public class Department extends BaseAuditableEntity implements CommonReference {
             cascade = CascadeType.ALL,
             orphanRemoval = true
     )
-    private List<Course> courses = new ArrayList<>();
+    private List<AcademicYear> academicYears = new ArrayList<>();
 
-    // Assignment only
-    @ManyToOne
-    @JoinColumn(name = "hod_id")
-    private Teacher departmentHead;
 
-    public String getPrefix(){
-        return this.school.getPrefix();
+    public void setCodeWithPrefix(String code){
+        this.code = school.getCode() + code;
     }
 
-    public DepartmentResponse mapToResponse() {
-        AcademicYear academicYear = school.getAcademicYear();
+    public DepartmentResponse mapToResponse(List<PermissionAction> permissionActions) {
+
         return DepartmentResponse.builder()
                 .id(this.getId())
                 .name(this.getName())
                 .code(this.getCode())
                 .activeStatus(this.getActiveStatus())
-                .hod(this.getDepartmentHead().toCommonDTO())
-                .courses(this.getCourses().stream()
-                        .map(CommonReference::toCommonDTO)
+                .academicYears(this.academicYears.stream()
+                        .map(AcademicYear::toCommonDTO)
                         .toList()
                 )
                 .school(school.toCommonDTO())
-                .academicYear(academicYear.toCommonDTO())
+                .university(school.getUniversity().toCommonDTO())
+                .permissionActions(permissionActions)
                 .build();
     }
 }

@@ -14,6 +14,5 @@ public class DepartmentRequest {
     private Long id;
     private String name;
     private String code;
-    private Long hodId;
     private ActiveStatus activeStatus;
 }

@@ -4,7 +4,7 @@ import com.Smart.Erp.Config.BaseAuditableEntity;
 import com.Smart.Erp.Config.CommonReference;
 import com.Smart.Erp.Modules.Academic.DTO.School.SchoolResponse;
 import com.Smart.Erp.Modules.Academic.Enum.ActiveStatus;
-import com.Smart.Erp.Modules.Teacher.Entity.Teacher;
+import com.Smart.Erp.Modules.User.Enum.PermissionAction;
 import jakarta.persistence.*;
 import lombok.*;
 import lombok.experimental.SuperBuilder;
@@ -27,13 +27,14 @@ public class School extends BaseAuditableEntity implements CommonReference {
 
     private String name;
 
+    @Column(unique = true)
     private String code;
 
     private ActiveStatus activeStatus = ActiveStatus.DISABLE;
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "academic_year_id")
-    private AcademicYear academicYear;
+    @JoinColumn(name = "university_id", nullable = false)
+    private University university;
 
     @Builder.Default
     @OneToMany(
@@ -43,22 +44,23 @@ public class School extends BaseAuditableEntity implements CommonReference {
     )
     private List<Department> departments = new ArrayList<>();
 
-    // Assignment only
-    @ManyToOne
-    @JoinColumn(name = "school_dean_id")
-    private Teacher schoolDean;
-
-    public String getPrefix(){
-        return this.academicYear.getCode();
+    public void setCodeWithPrefix(String code){
+        this.code = university.getCode() + code;
     }
 
-    public SchoolResponse mapToResponse() {
+    public SchoolResponse mapToResponse(List<PermissionAction> permissionActions) {
         return SchoolResponse.builder()
                 .id(this.getId())
                 .name(this.getName())
                 .code(this.getCode())
                 .activeStatus(this.getActiveStatus())
-                .dean(this.getSchoolDean() != null ? this.getSchoolDean().toCommonDTO() : null)
+                .departments(
+                        this.departments.stream()
+                                .map(Department::toCommonDTO)
+                                .toList()
+                )
+                .permissionActions(permissionActions)
+                .university(university.toCommonDTO())
                 .build();
     }
 }

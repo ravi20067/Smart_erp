@@ -3,6 +3,9 @@ package com.Smart.Erp.Modules.User.Entity;
 import com.Smart.Erp.Config.BaseAuditableEntity;
 import com.Smart.Erp.Modules.Academic.Entity.University;
 
+import com.Smart.Erp.Modules.User.DTO.Role.RoleRequest;
+import com.Smart.Erp.Modules.User.DTO.Role.RoleResponse;
+import com.Smart.Erp.Modules.User.Enum.PermissionAction;
 import com.Smart.Erp.Modules.User.Enum.UserRoles;
 import jakarta.persistence.*;
 import lombok.*;
@@ -34,19 +37,6 @@ public class Role extends BaseAuditableEntity {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    // =========================
-    // UNIVERSITY
-    // =========================
-    @ManyToOne(
-            fetch = FetchType.LAZY,
-            optional = false
-    )
-    @JoinColumn(
-            name = "university_id",
-            nullable = false
-    )
-    @ToString.Exclude
-    private University university;
 
     // =========================
     // ROLE INFORMATION
@@ -64,18 +54,26 @@ public class Role extends BaseAuditableEntity {
     @Enumerated(EnumType.STRING)
     private UserRoles userRole;
 
-    // =========================
-    // SYSTEM ROLE
-    // =========================
-    @Column(nullable = false)
-    private Boolean systemRole = false;
-
 
     // =========================
     // ACTIVE
     // =========================
     @Column(nullable = false)
     private Boolean active = true;
+
+    // =========================
+    // UNIVERSITY
+    // =========================
+    @ManyToOne(
+            fetch = FetchType.LAZY,
+            optional = false
+    )
+    @JoinColumn(
+            name = "university_id",
+            nullable = false
+    )
+    @ToString.Exclude
+    private University university;
 
     // =========================
     // USERS
@@ -100,4 +98,23 @@ public class Role extends BaseAuditableEntity {
     @Builder.Default
     private List<RolePermission> permissions =
             new ArrayList<>();
+
+    /**
+     * Maps the Role entity to a RoleResponse DTO.
+     *
+     * @param permissions The list of permissions associated with the role.
+     * @return A RoleResponse DTO representing the role.
+     */
+    public RoleResponse mapToResponse(List<PermissionAction> permissions) {
+        return RoleResponse.builder()
+                .id(this.id)
+                .name(this.name)
+                .description(this.description)
+                .userRole(this.userRole)
+                .active(this.active)
+                .userCount(this.users.size())
+                .university(this.university.toCommonDTO())
+                .permissions(permissions)
+                .build();
+    }
 }

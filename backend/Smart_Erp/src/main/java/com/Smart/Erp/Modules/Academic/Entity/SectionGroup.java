@@ -35,23 +35,26 @@ public class SectionGroup  extends BaseAuditableEntity implements CommonReferenc
     @OneToMany(mappedBy = "sectionGroup")
     @Builder.Default
     private List<StudentEnrollment> studentEnrollments = new ArrayList<>();
-    public String getPrefix(){
-        return this.getSection().getPrefix() + this.getSpecialization().getCode();
+
+
+    public void setCodeWithPrefix(String code){
+        this.code = merge(specialization.getCode() , section.getCode()) + code;
     }
 
     public String getStudentRollPrefix() {
         Course course = section.getCourse();
-        Department department = course.getDepartment();
+        AcademicYear academicYear = course.getAcademicYear();
+        Department department = academicYear.getDepartment();
         School school = department.getSchool();
-        AcademicYear academicYear = school.getAcademicYear();
+        University university = school.getUniversity();
 
-        return academicYear.getCode()
+        return university.getCode()
                 + school.getId()
                 + department.getId()
+                + academicYear.getId()
                 + course.getId()
                 + section.getId();
     }
-
 
     public SectionGroupResponse mapToResponse(SectionGroup this){
         return SectionGroupResponse.builder()
@@ -63,4 +66,27 @@ public class SectionGroup  extends BaseAuditableEntity implements CommonReferenc
                 .build();
     }
 
+    public String merge(String sectionCode, String specializationCode) {
+        int i = 0;
+
+        while (i < sectionCode.length()
+                && i < specializationCode.length()
+                && sectionCode.charAt(i) == specializationCode.charAt(i)) {
+            i++;
+        }
+
+        return sectionCode + specializationCode.substring(i);
+    }
+
+    public static String mergeForCode(String sectionCode, String specializationCode) {
+        int i = 0;
+
+        while (i < sectionCode.length()
+                && i < specializationCode.length()
+                && sectionCode.charAt(i) == specializationCode.charAt(i)) {
+            i++;
+        }
+
+        return sectionCode + specializationCode.substring(i);
+    }
 }

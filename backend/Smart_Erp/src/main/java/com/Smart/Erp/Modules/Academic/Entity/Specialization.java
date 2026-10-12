@@ -6,6 +6,7 @@ import com.Smart.Erp.Modules.Academic.DTO.Specialization.SpecializationResponse;
 import com.Smart.Erp.Modules.Academic.Enum.ActiveStatus;
 import com.Smart.Erp.Modules.Finance.Entity.FeeStructure;
 import com.Smart.Erp.Modules.Subject.Entity.Subject;
+import com.Smart.Erp.Modules.User.Enum.PermissionAction;
 import jakarta.persistence.*;
 import lombok.*;
 
@@ -55,8 +56,8 @@ public class Specialization  extends BaseAuditableEntity implements CommonRefere
     private FeeStructure feeStructure;
 
 
-    public String getPrefix(){
-        return this.getCourse().getPrefix() + this.getCourse().getCode();
+    public void setCodeWithPrefix(String code){
+        this.code = course.getCode()+code;
     }
 
     public String getPostfix(){
@@ -66,10 +67,12 @@ public class Specialization  extends BaseAuditableEntity implements CommonRefere
 
     }
 
-    public SpecializationResponse mapToResponse() {
-        Department department = course.getDepartment();
+    public SpecializationResponse mapToResponse(List<PermissionAction> permissionActions) {
+
+        AcademicYear academicYear = course.getAcademicYear();
+        Department department = academicYear.getDepartment();
         School school = department.getSchool();
-        AcademicYear academicYear = school.getAcademicYear();
+        University university = school.getUniversity();
 
         return SpecializationResponse.builder()
                 .id(this.getId())
@@ -88,6 +91,8 @@ public class Specialization  extends BaseAuditableEntity implements CommonRefere
                 .department(department.toCommonDTO())
                 .school(school.toCommonDTO())
                 .academicYear(academicYear.toCommonDTO())
+                .university(university.toCommonDTO())
+                .permissionActions(permissionActions)
                 .build();
     }
 }

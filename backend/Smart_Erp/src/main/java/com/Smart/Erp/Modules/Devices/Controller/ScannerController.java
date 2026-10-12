@@ -35,7 +35,7 @@ public class ScannerController {
 
                 teacherAttendanceService.verifyQr(
                         request,
-                        user.getDevices().getLocation()
+                        user.getUserRole().name()
                 )
 
         );

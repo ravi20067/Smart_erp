@@ -16,9 +16,7 @@ export default defineConfig(({ mode }) => {
           cert: fs.readFileSync("./certs/localhost+3.pem"),
         }
         : undefined,
-      allowedHosts: [
-        env.VITE_ALLOWED_HOST,              // or env.VITE_URL
-      ],
+      allowedHosts: env.VITE_ALLOWED_HOST ? [env.VITE_ALLOWED_HOST] : true,
       fs: {
         allow: ["./client", "./shared", "index.html"],
         deny: [".env", ".env.*", "*.{crt,pem}", "**/.git/**", "server/**"],

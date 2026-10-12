@@ -21,9 +21,9 @@ public class StudentEnrollmentResponse {
     private EnrollmentStatus status;
     private List<CommonDTO> scholarships;
     private List<FeeResponse> fees;
-    private CommonDTO academicYear;
     private CommonDTO school;
     private CommonDTO department;
+    private CommonDTO academicYear;
     private CommonDTO course;
     private CommonDTO sectionGroup;
     private CommonDTO specialization;

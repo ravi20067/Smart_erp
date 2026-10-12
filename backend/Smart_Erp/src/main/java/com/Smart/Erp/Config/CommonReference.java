@@ -6,13 +6,13 @@ public interface CommonReference {
     Long getId();
     String getName();
     String getCode();
-    String getPrefix();
+    void setCodeWithPrefix(String code);
 
     default CommonDTO toCommonDTO() {
         return new CommonDTO(
                 getId(),
                 getName(),
-                getPrefix()+getCode()
+                getCode()
         );
     }
 }

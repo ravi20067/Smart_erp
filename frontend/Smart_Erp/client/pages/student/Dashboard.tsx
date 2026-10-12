@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { MessageCircle, X } from "lucide-react";
 
-import Header from "@/components/Header";
+import Header from "@/components/CommonHeader";
 import StudentSidebar from "@/components/student/StudentSidebar";
 import StudentCopilot from "@/components/student/StudentCopilot";
 import StatsCards from "@/components/student/StatsCards";

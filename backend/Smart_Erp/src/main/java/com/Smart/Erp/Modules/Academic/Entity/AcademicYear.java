@@ -6,9 +6,9 @@ import com.Smart.Erp.Modules.Academic.DTO.AcademicYear.AcademicYearResponse;
 import com.Smart.Erp.Modules.Academic.Enum.ActiveStatus;
 import com.Smart.Erp.Modules.Student.Entity.StudentEnrollment;
 import com.Smart.Erp.Modules.Teacher.Entity.TeacherEnrollment;
+import com.Smart.Erp.Modules.User.Enum.PermissionAction;
 import jakarta.persistence.*;
 import lombok.*;
-import lombok.experimental.SuperBuilder;
 
 import java.time.LocalDate;
 import java.util.ArrayList;
@@ -49,8 +49,8 @@ public class AcademicYear extends BaseAuditableEntity implements CommonReference
     private Boolean current = false;
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "university_id", nullable = false)
-    private University university;
+    @JoinColumn(name = "department_id", nullable = false)
+    private Department department;
 
     @Builder.Default
     @OneToMany(
@@ -58,7 +58,7 @@ public class AcademicYear extends BaseAuditableEntity implements CommonReference
             cascade = CascadeType.ALL,
             orphanRemoval = true
     )
-    private List<School> schools = new ArrayList<>();
+    private List<Course> courses = new ArrayList<>();
 
     @ToString.Exclude
     @OneToMany(mappedBy = "academicYear")
@@ -79,15 +79,14 @@ public class AcademicYear extends BaseAuditableEntity implements CommonReference
     }
 
     @Override
-    public String getPrefix() {
-        if (this.getCurrent()) {
-            return "CURRENT";
-        } else {
-            return "";
-        }
+    public void setCodeWithPrefix(String code) {
+        this.code = code + "-" +  department.getCode();
     }
 
-    public AcademicYearResponse mapToResponse() {
+    public AcademicYearResponse mapToResponse(List<PermissionAction> permissionActions) {
+        School school = department.getSchool();
+        University university = school.getUniversity();
+
         return AcademicYearResponse.builder()
                 .id(this.getId())
                 .name(this.getName())
@@ -96,14 +95,15 @@ public class AcademicYear extends BaseAuditableEntity implements CommonReference
                 .endDate(this.getEndDate())
                 .current(this.getCurrent())
                 .activeStatus(this.getActiveStatus())
-                .schoolResponse(
-                        this.getSchools().stream()
-                                .map(
-                                        School::mapToResponse
-                                )
+                .courses(
+                        this.courses.stream()
+                                .map(Course::toCommonDTO)
                                 .toList()
                 )
-                .university(this.getUniversity().toCommonDTO())
+                .department(department.toCommonDTO())
+                .school(school.toCommonDTO())
+                .university(university.toCommonDTO())
+                .permissionActions(permissionActions)
                 .build();
     }
 }

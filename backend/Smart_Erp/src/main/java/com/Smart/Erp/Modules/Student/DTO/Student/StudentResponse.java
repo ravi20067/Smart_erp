@@ -2,6 +2,7 @@ package com.Smart.Erp.Modules.Student.DTO.Student;
 
 import com.Smart.Erp.Modules.Student.DTO.Enrollment.StudentEnrollmentResponse;
 import com.Smart.Erp.Modules.User.DTO.BasicDetail.UserProfileResponse;
+import com.Smart.Erp.Modules.User.Enum.PermissionAction;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -18,4 +19,5 @@ public class StudentResponse {
     private String registrationNumber;
     private UserProfileResponse basicDetailRequest;
     private List<StudentEnrollmentResponse> enrollment;
+    private List<PermissionAction> permissionActions;
 }

@@ -40,7 +40,6 @@ public class CustomUserDetailService implements UserDetailsService {
             universityId = user.getUniversity().getId();
         }
 
-        // 2. Map the role to Spring Security's GrantedAuthority
         SimpleGrantedAuthority authority = new SimpleGrantedAuthority(user.getUserRole().name());
 
         // 3. Return our new CustomUserDetails

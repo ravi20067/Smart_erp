@@ -5,5 +5,4 @@ import com.Smart.Erp.Modules.Teacher.Entity.Teacher;
 import org.springframework.data.jpa.repository.JpaRepository;
 
 public interface SchoolRepo extends JpaRepository<School,Long> {
-    School findBySchoolDean(Teacher teacher);
 }

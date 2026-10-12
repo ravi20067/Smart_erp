@@ -17,5 +17,4 @@ public class CourseRequest {
 
     private ActiveStatus activeStatus;
     private Boolean NewEnrollmentAllowed;
-    private Long programCoordinatorId;
 }

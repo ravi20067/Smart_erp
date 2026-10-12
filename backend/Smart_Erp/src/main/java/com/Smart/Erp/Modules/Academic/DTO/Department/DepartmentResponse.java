@@ -1,7 +1,9 @@
 package com.Smart.Erp.Modules.Academic.DTO.Department;
 
 import com.Smart.Erp.Core.Common.CommonDTO;
+import com.Smart.Erp.Modules.Academic.Entity.AcademicYear;
 import com.Smart.Erp.Modules.Academic.Enum.ActiveStatus;
+import com.Smart.Erp.Modules.User.Enum.PermissionAction;
 import lombok.Builder;
 import lombok.Data;
 
@@ -13,9 +15,9 @@ public class DepartmentResponse {
     private Long id;
     private String name;
     private String code;
-    private List<CommonDTO> courses;
-    private CommonDTO hod;
-    private CommonDTO school;
     private ActiveStatus activeStatus;
-    private CommonDTO academicYear;
+    private List<CommonDTO> academicYears;
+    private CommonDTO school;
+    private CommonDTO university;
+    List<PermissionAction> permissionActions;
 }

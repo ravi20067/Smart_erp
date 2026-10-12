@@ -8,9 +8,19 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import Index from "./pages/Index";
 import About from "./pages/About";
-import Admissions from "./pages/Admissions";
-import Apply from "./pages/Apply";
-import Gallery from "./pages/Gallery";
+import Features from "./pages/Features";
+import Modules from "./pages/Modules";
+import {
+  AcademicAdministrationPage,
+  StudentManagementPage,
+  TeacherManagementPage,
+  AttendanceManagementPage,
+  TimetableSchedulingPage,
+  ReportsAnalyticsPage,
+} from "./pages/ModulePages";
+import AIAutomation from "./pages/AIAutomation";
+import SmartERPChatbot from "./components/assistant/SmartERPChatbot";
+import Solutions from "./pages/Solutions";
 import Contact from "./pages/Contact";
 import Login from "./pages/Login";
 import NotFound from "./pages/NotFound";
@@ -20,17 +30,18 @@ import LibraryDashboard from "./pages/library/Dashboard";
 import AdmissionDashboard from "./pages/admission/Dashboard";
 import ExaminationDeptDashboard from "./pages/examination_department/Dashboard";
 import FinanceDashboard from "./pages/finance/Dashboard";
-import AdminDashboard from "./pages/admin/Dashboard";
-import AdminLayout from "./pages/admin/AdminLayout";
+import SuperAdminDashboard from "./pages/super-admin/Dashboard";
+import SuperAdminLayout from "./pages/super-admin/Layout";
 import TeacherLayout from "./pages/teacher/TeacherLayout";
 import AttendenceAuthenticator from "./pages/teacher/AttendenceAuthenticator";
 import DeviceDashboard from "./pages/Devices/dashboard";
-import University from './pages/admin/University';
-import School from './pages/admin/School';
-import Department from "./pages/admin/Department";
 
 import { AuthProvider } from "@/services/authContext";
 import ProtectedRoute from "@/services/protectedRoute";
+import Blog from "./pages/Blog";
+import BookDemo from "./pages/BookDemo";
+import University from "./pages/organisation/University";
+import School from "./pages/organisation/School";
 
 const queryClient = new QueryClient();
 
@@ -48,33 +59,93 @@ const App = () => (
 
             <Route path="/" element={<Index />} />
             <Route path="/about" element={<About />} />
-            <Route path="/admissions" element={<Admissions />} />
-            <Route path="/apply" element={<Apply />} />
-            <Route path="/gallery" element={<Gallery />} />
+            <Route path="/features" element={<Features />} />
+            <Route
+              path="/modules/academic-administration"
+              element={<AcademicAdministrationPage />}
+            />
+
+            <Route
+              path="/modules/student-management"
+              element={<StudentManagementPage />}
+            />
+
+            <Route
+              path="/modules/teacher-management"
+              element={<TeacherManagementPage />}
+            />
+
+            <Route
+              path="/modules/attendance"
+              element={<AttendanceManagementPage />}
+            />
+
+            <Route
+              path="/modules/timetable"
+              element={<TimetableSchedulingPage />}
+            />
+
+            <Route
+              path="/modules/analytics"
+              element={<ReportsAnalyticsPage />}
+            />
+            <Route path="/modules" element={<Modules />} />
+            <Route path="/ai-automation" element={<AIAutomation />} />
+            <Route path="/solutions" element={<Solutions />} />
+            <Route path="/blog" element={<Blog />} />
             <Route path="/contact" element={<Contact />} />
             <Route path="/login" element={<Login />} />
-            <Route path="/test" element={<Department />} />
+            <Route path="/book-demo" element={<BookDemo />} />
+            <Route path="/test" element={<SuperAdminDashboard />} />
+            {/* TEMPORARY UI TEST ROUTE — remove after testing */}
+            <Route path="/test-admin" element={<SuperAdminLayout />}>
+              <Route index element={<School />} />
+            </Route>
 
             {/* Protected Routes */}
 
             <Route
-              path="/admin"
+              path="/super-admin"
               element={
-                <ProtectedRoute allowedRoles={["ROLE_ADMIN"]}>
-                  <AdminLayout />
+                <ProtectedRoute allowedRoles={["SUPER_ADMIN"]}>
+                  <SuperAdminLayout />
                 </ProtectedRoute>
               }
             >
-              <Route index element={<AdminDashboard />} />
+              {/* Dashboard: /admin */}
+              <Route index element={<SuperAdminDashboard />} />
+
+              {/* Organization */}
               <Route path="universities" element={<University />} />
               <Route path="schools" element={<School />} />
-              <Route path="departments" element={<Department />} />
+              {/* <Route path="departments" element={<Department />} /> */}
+
+              {/* Add your other existing admin routes here */}
+            </Route>
+
+            <Route
+              path="/admin"
+              element={
+                <ProtectedRoute allowedRoles={["ADMIN"]}>
+                  <SuperAdminLayout />
+                </ProtectedRoute>
+              }
+            >
+              {/* Dashboard: /admin */}
+              <Route index element={<SuperAdminDashboard />} />
+
+              {/* Organization */}
+              {/* <Route path="universities" element={<University />} />
+              <Route path="schools" element={<School />} />
+              <Route path="departments" element={<Department />} /> */}
+
+              {/* Add your other existing admin routes here */}
             </Route>
 
             <Route
               path="/student"
               element={
-                <ProtectedRoute allowedRoles={["ROLE_STUDENT"]}>
+                <ProtectedRoute allowedRoles={["STUDENT"]}>
                   <StudentDashboard />
                 </ProtectedRoute>
               }
@@ -82,7 +153,7 @@ const App = () => (
             <Route
               path="/devices"
               element={
-                <ProtectedRoute allowedRoles={["ROLE_DEVICES"]}>
+                <ProtectedRoute allowedRoles={["DEVICES"]}>
                   <DeviceDashboard />
                 </ProtectedRoute>
               }
@@ -91,7 +162,7 @@ const App = () => (
             <Route
               path="/teacher"
               element={
-                <ProtectedRoute allowedRoles={["ROLE_TEACHER"]}>
+                <ProtectedRoute allowedRoles={["TEACHER"]}>
                   <TeacherLayout />
                 </ProtectedRoute>
               }
@@ -103,7 +174,7 @@ const App = () => (
             <Route
               path="/library"
               element={
-                <ProtectedRoute allowedRoles={["ROLE_LIBRARY"]}>
+                <ProtectedRoute allowedRoles={["LIBRARY"]}>
                   <LibraryDashboard />
                 </ProtectedRoute>
               }
@@ -112,7 +183,7 @@ const App = () => (
             <Route
               path="/admission"
               element={
-                <ProtectedRoute allowedRoles={["ROLE_ADMISSION"]}>
+                <ProtectedRoute allowedRoles={["ADMISSION"]}>
                   <AdmissionDashboard />
                 </ProtectedRoute>
               }
@@ -121,7 +192,7 @@ const App = () => (
             <Route
               path="/examination-dept"
               element={
-                <ProtectedRoute allowedRoles={["ROLE_EXAMINATION"]}>
+                <ProtectedRoute allowedRoles={["EXAMINATION"]}>
                   <ExaminationDeptDashboard />
                 </ProtectedRoute>
               }
@@ -130,7 +201,7 @@ const App = () => (
             <Route
               path="/finance"
               element={
-                <ProtectedRoute allowedRoles={["ROLE_FINANCE"]}>
+                <ProtectedRoute allowedRoles={["FINANCE"]}>
                   <FinanceDashboard />
                 </ProtectedRoute>
               }
@@ -139,6 +210,10 @@ const App = () => (
             <Route path="*" element={<NotFound />} />
 
           </Routes>
+          <SmartERPChatbot
+            title="Smart ERP AI"
+            subtitle="Your multilingual assistant"
+          />
         </BrowserRouter>
       </TooltipProvider>
     </AuthProvider>

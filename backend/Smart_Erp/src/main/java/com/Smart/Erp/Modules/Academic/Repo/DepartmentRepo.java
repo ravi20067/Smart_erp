@@ -6,5 +6,4 @@ import com.Smart.Erp.Modules.Teacher.Entity.Teacher;
 import org.springframework.data.jpa.repository.JpaRepository;
 
 public interface DepartmentRepo extends JpaRepository<Department,Long> {
-    Department findByDepartmentHead(Teacher teacher);
 }

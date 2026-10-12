@@ -124,7 +124,7 @@ public class StudentEnrollment extends BaseAuditableEntity {
     public StudentEnrollmentResponse mapToResponse() {
         Specialization specialization = sectionGroup.getSpecialization();
         Course course = specialization.getCourse();
-        Department department = course.getDepartment();
+        Department department = course.getAcademicYear().getDepartment();
         School school = department.getSchool();
 
         return StudentEnrollmentResponse.builder()

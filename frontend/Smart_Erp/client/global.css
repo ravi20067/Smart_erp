@@ -1,120 +1,524 @@
 /** @import must precede all other statements */
-@import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap");
+@import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap");
 
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
+/* =========================================================
+   SMART ERP — DARK GLASSMORPHISM DESIGN SYSTEM
+   ========================================================= */
+
 @layer base {
-  /**
-   * Tailwind CSS theme
-   * tailwind.config.ts expects the following color variables to be expressed as HSL values.
-   * A different format will require also updating the theme in tailwind.config.ts.
-  */
   :root {
-    --background: 0 0% 100%;
-    --foreground: 210 15% 15%;
+    color-scheme: dark;
 
-    --card: 0 0% 100%;
-    --card-foreground: 210 15% 15%;
+    /* Core application theme — HSL values */
+    --background: 222 47% 5%;
+    --foreground: 215 35% 96%;
 
-    --popover: 0 0% 100%;
-    --popover-foreground: 210 15% 15%;
+    --card: 218 44% 9%;
+    --card-foreground: 215 35% 96%;
 
-    --primary: 218 100% 49%;
-    --primary-foreground: 210 40% 98%;
+    --popover: 219 42% 10%;
+    --popover-foreground: 215 35% 96%;
 
-    --secondary: 270 70% 58%;
-    --secondary-foreground: 210 40% 98%;
+    /* Cyan-blue primary gradient foundation */
+    --primary: 190 91% 56%;
+    --primary-foreground: 222 47% 7%;
 
-    --muted: 210 7% 88%;
-    --muted-foreground: 210 8% 50%;
+    --secondary: 225 37% 15%;
+    --secondary-foreground: 215 35% 96%;
 
-    --accent: 34 97% 58%;
-    --accent-foreground: 210 15% 15%;
+    --muted: 218 30% 13%;
+    --muted-foreground: 216 19% 64%;
 
-    --destructive: 0 84.2% 60.2%;
-    --destructive-foreground: 210 40% 98%;
+    --accent: 257 85% 72%;
+    --accent-foreground: 215 35% 98%;
 
-    --border: 210 10% 90%;
-    --input: 210 10% 95%;
-    --ring: 218 100% 49%;
+    --destructive: 0 75% 58%;
+    --destructive-foreground: 0 0% 100%;
 
-    --radius: 0.75rem;
+    --border: 217 30% 19%;
+    --input: 218 30% 16%;
+    --ring: 190 91% 56%;
 
-    --sidebar-background: 0 0% 98%;
+    --radius: 1rem;
 
-    --sidebar-foreground: 210 15% 15%;
+    /* Sidebar theme */
+    --sidebar-background: 218 48% 7%;
+    --sidebar-foreground: 216 24% 82%;
 
-    --sidebar-primary: 218 100% 49%;
+    --sidebar-primary: 190 91% 56%;
+    --sidebar-primary-foreground: 222 47% 7%;
 
-    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 220 36% 13%;
+    --sidebar-accent-foreground: 190 90% 78%;
 
-    --sidebar-accent: 270 70% 58%;
+    --sidebar-border: 217 30% 16%;
+    --sidebar-ring: 190 91% 56%;
 
-    --sidebar-accent-foreground: 0 0% 100%;
+    /* Smart ERP visual tokens */
+    --erp-bg: #060b15;
+    --erp-surface: #0b1525;
+    --erp-surface-raised: #101d30;
+    --erp-cyan: #48d9f4;
+    --erp-blue: #3985f6;
+    --erp-violet: #9a8aff;
+    --erp-text: #f2f6ff;
+    --erp-muted: #8d9db5;
+    --erp-border: rgba(148, 171, 207, 0.14);
 
-    --sidebar-border: 210 10% 90%;
+    --erp-glass:
+      linear-gradient(145deg,
+        rgba(17, 36, 58, 0.88),
+        rgba(12, 20, 39, 0.82));
 
-    --sidebar-ring: 218 100% 49%;
+    --erp-gradient:
+      linear-gradient(110deg, #22d3ee 0%, #3985f6 100%);
+
+    --erp-gradient-text:
+      linear-gradient(100deg, #55e4f6 0%, #a2b9ff 100%);
+
+    --erp-shadow:
+      0 18px 60px rgba(0, 0, 0, 0.22);
+
+    --erp-glow:
+      0 0 32px rgba(56, 189, 248, 0.10);
+
+    --erp-radius-sm: 0.75rem;
+    --erp-radius-md: 1rem;
+    --erp-radius-lg: 1.35rem;
+    --erp-radius-xl: 1.75rem;
+
+    --erp-transition:
+      220ms cubic-bezier(0.2, 0.8, 0.2, 1);
   }
 
+  /* Preserve compatibility with existing .dark selectors. */
   .dark {
-    --background: 210 18% 12%;
-    --foreground: 210 8% 92%;
-
-    --card: 210 20% 18%;
-    --card-foreground: 210 8% 92%;
-
-    --popover: 210 20% 18%;
-    --popover-foreground: 210 8% 92%;
-
-    --primary: 218 99% 62%;
-    --primary-foreground: 210 20% 10%;
-
-    --secondary: 270 70% 58%;
-    --secondary-foreground: 210 40% 98%;
-
-    --muted: 210 12% 32%;
-    --muted-foreground: 210 8% 70%;
-
-    --accent: 34 97% 58%;
-    --accent-foreground: 210 15% 15%;
-
-    --destructive: 0 84.2% 60.2%;
-    --destructive-foreground: 210 40% 98%;
-
-    --border: 210 15% 28%;
-    --input: 210 15% 25%;
-    --ring: 218 99% 62%;
-    --sidebar-background: 210 18% 12%;
-    --sidebar-foreground: 210 8% 92%;
-    --sidebar-primary: 218 99% 62%;
-    --sidebar-primary-foreground: 210 20% 10%;
-    --sidebar-accent: 270 70% 58%;
-    --sidebar-accent-foreground: 0 0% 100%;
-    --sidebar-border: 210 15% 28%;
-    --sidebar-ring: 218 99% 62%;
+    color-scheme: dark;
   }
-}
 
-@layer base {
-  * {
+  *,
+  *::before,
+  *::after {
+    box-sizing: border-box;
     @apply border-border;
   }
 
+  html {
+    min-height: 100%;
+    scroll-behavior: smooth;
+    background: var(--erp-bg);
+    color-scheme: dark;
+    scrollbar-gutter: stable;
+  }
+
   body {
-    @apply bg-background text-foreground;
+    min-width: 320px;
+    min-height: 100vh;
+    margin: 0;
+    overflow-x: clip;
+
+    background:
+      radial-gradient(ellipse at 80% 5%,
+        rgba(31, 91, 151, 0.10),
+        transparent 38%),
+      var(--erp-bg);
+
+    color: var(--erp-text);
+    font-family: "Inter", system-ui, -apple-system, BlinkMacSystemFont,
+      "Segoe UI", sans-serif;
+    font-size: 14px;
+    line-height: 1.6;
+    font-feature-settings: "cv11", "ss01";
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
   }
 
-  :where(p, span, li, h1, h2, h3, h4, h5, h6, a, button, label, td, th) {
-    overflow-wrap: anywhere;
-    word-break: break-word;
+  #root {
+    min-height: 100vh;
+    isolation: isolate;
   }
 
-  pre,
-  code {
+  ::selection {
+    color: #ffffff;
+    background: rgba(56, 189, 248, 0.32);
+  }
+
+  :where(h1, h2, h3, h4, h5, h6) {
+    color: var(--erp-text);
+    font-weight: 700;
+    letter-spacing: -0.035em;
+    line-height: 1.2;
+    overflow-wrap: break-word;
+  }
+
+  :where(p, li, td, th) {
+    overflow-wrap: break-word;
+  }
+
+  :where(a) {
+    color: inherit;
+    text-decoration: none;
+  }
+
+  :where(button, input, textarea, select) {
+    font: inherit;
+  }
+
+  :where(button, a, input, textarea, select, [tabindex]) {
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  :where(button, a, input, textarea, select):focus-visible {
+    outline: 2px solid var(--erp-cyan);
+    outline-offset: 3px;
+  }
+
+  :where(img, video, canvas, svg) {
+    max-width: 100%;
+  }
+
+  img,
+  video {
+    height: auto;
+  }
+
+  pre {
+    max-width: 100%;
     overflow-x: auto;
-    white-space: pre;
+  }
+
+  code {
+    overflow-wrap: anywhere;
+  }
+}
+
+/* =========================================================
+   SHARED COMPONENT UTILITIES
+   ========================================================= */
+
+@layer components {
+  .erp-glass {
+    border: 1px solid var(--erp-border);
+    border-radius: var(--erp-radius-lg);
+    background: var(--erp-glass);
+    box-shadow: var(--erp-shadow);
+    backdrop-filter: blur(18px);
+    -webkit-backdrop-filter: blur(18px);
+  }
+
+  .erp-card {
+    position: relative;
+    min-width: 0;
+    overflow: hidden;
+    border: 1px solid var(--erp-border);
+    border-radius: var(--erp-radius-lg);
+    background: rgba(11, 21, 37, 0.88);
+    transition:
+      border-color var(--erp-transition),
+      box-shadow var(--erp-transition),
+      background var(--erp-transition),
+      transform var(--erp-transition);
+  }
+
+  .erp-card:hover {
+    border-color: rgba(72, 217, 244, 0.28);
+    background: rgba(15, 29, 49, 0.96);
+    box-shadow: var(--erp-glow);
+  }
+
+  .erp-button-primary {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.6rem;
+    min-height: 44px;
+    padding: 0.75rem 1.25rem;
+    border: 1px solid transparent;
+    border-radius: var(--erp-radius-sm);
+    background: var(--erp-gradient);
+    color: #04121f;
+    font-weight: 700;
+    cursor: pointer;
+    transition:
+      transform var(--erp-transition),
+      box-shadow var(--erp-transition),
+      filter var(--erp-transition);
+  }
+
+  .erp-button-primary:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 10px 30px rgba(56, 189, 248, 0.2);
+    filter: saturate(1.12);
+  }
+
+  .erp-button-primary:active {
+    transform: translateY(0) scale(0.985);
+  }
+
+  .erp-button-secondary {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.6rem;
+    min-height: 44px;
+    padding: 0.75rem 1.15rem;
+    border: 1px solid var(--erp-border);
+    border-radius: var(--erp-radius-sm);
+    background: rgba(255, 255, 255, 0.035);
+    color: var(--erp-text);
+    font-weight: 600;
+    cursor: pointer;
+    transition:
+      background var(--erp-transition),
+      border-color var(--erp-transition),
+      transform var(--erp-transition);
+  }
+
+  .erp-button-secondary:hover {
+    transform: translateY(-1px);
+    border-color: var(--erp-border-hover, rgba(72, 217, 244, 0.35));
+    background: rgba(255, 255, 255, 0.07);
+  }
+
+  .erp-input {
+    width: 100%;
+    min-width: 0;
+    min-height: 44px;
+    padding: 0.7rem 0.9rem;
+    border: 1px solid var(--erp-border);
+    border-radius: var(--erp-radius-sm);
+    background: rgba(5, 12, 23, 0.72);
+    color: var(--erp-text);
+    transition:
+      border-color var(--erp-transition),
+      box-shadow var(--erp-transition);
+  }
+
+  .erp-input::placeholder {
+    color: var(--erp-muted);
+  }
+
+  .erp-input:focus {
+    border-color: rgba(72, 217, 244, 0.65);
+    outline: none;
+    box-shadow: 0 0 0 3px rgba(72, 217, 244, 0.09);
+  }
+
+  .erp-gradient-text {
+    color: var(--erp-cyan);
+    background: var(--erp-gradient-text);
+    background-clip: text;
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
+
+  .erp-eyebrow {
+    color: var(--erp-cyan);
+    font-size: 0.72rem;
+    font-weight: 800;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+  }
+
+  .erp-muted {
+    color: var(--erp-muted);
+  }
+
+  .erp-page-container {
+    width: 100%;
+    max-width: 1800px;
+    min-width: 0;
+    margin-inline: auto;
+  }
+}
+
+/* =========================================================
+   GLOBAL ANIMATIONS
+   Use these alongside Framer Motion where appropriate.
+   ========================================================= */
+
+@keyframes erp-fade-up {
+  from {
+    opacity: 0;
+    transform: translate3d(0, 14px, 0);
+  }
+
+  to {
+    opacity: 1;
+    transform: translate3d(0, 0, 0);
+  }
+}
+
+@keyframes erp-soft-glow {
+
+  0%,
+  100% {
+    opacity: 0.55;
+  }
+
+  50% {
+    opacity: 0.9;
+  }
+}
+
+@keyframes erp-shimmer {
+  from {
+    background-position: 180% 0;
+  }
+
+  to {
+    background-position: -180% 0;
+  }
+}
+
+@layer utilities {
+  .animate-erp-fade-up {
+    animation: erp-fade-up 500ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+  }
+
+  .animate-erp-soft-glow {
+    animation: erp-soft-glow 4s ease-in-out infinite;
+  }
+
+  .erp-stagger>* {
+    animation: erp-fade-up 450ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+  }
+
+  .erp-stagger>*:nth-child(1) {
+    animation-delay: 40ms;
+  }
+
+  .erp-stagger>*:nth-child(2) {
+    animation-delay: 90ms;
+  }
+
+  .erp-stagger>*:nth-child(3) {
+    animation-delay: 140ms;
+  }
+
+  .erp-stagger>*:nth-child(4) {
+    animation-delay: 190ms;
+  }
+
+  .erp-stagger>*:nth-child(5) {
+    animation-delay: 240ms;
+  }
+
+  .erp-stagger>*:nth-child(6) {
+    animation-delay: 290ms;
+  }
+
+  .erp-scrollbar {
+    scrollbar-width: thin;
+    scrollbar-color: #263951 transparent;
+  }
+
+  .erp-scrollbar::-webkit-scrollbar {
+    width: 5px;
+    height: 5px;
+  }
+
+  .erp-scrollbar::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  .erp-scrollbar::-webkit-scrollbar-thumb {
+    border-radius: 999px;
+    background: #263951;
+  }
+
+  .erp-scrollbar::-webkit-scrollbar-thumb:hover {
+    background: #3b587b;
+  }
+
+  .erp-no-scrollbar {
+    scrollbar-width: none;
+  }
+
+  .erp-no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+}
+
+
+/* Shared Smart ERP scrollbar theme */
+.erp-scrollbar,
+.erp-main-scrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: #30445f transparent;
+}
+
+.erp-scrollbar::-webkit-scrollbar,
+.erp-main-scrollbar::-webkit-scrollbar {
+  width: 7px;
+  height: 7px;
+}
+
+.erp-scrollbar::-webkit-scrollbar-track,
+.erp-main-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.erp-scrollbar::-webkit-scrollbar-thumb,
+.erp-main-scrollbar::-webkit-scrollbar-thumb {
+  background: #30445f;
+  border: 1px solid transparent;
+  background-clip: padding-box;
+  border-radius: 999px;
+}
+
+.erp-scrollbar::-webkit-scrollbar-thumb:hover,
+.erp-main-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: #486482;
+  background-clip: padding-box;
+}
+
+.erp-scrollbar::-webkit-scrollbar-corner,
+.erp-main-scrollbar::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
+
+/* =========================================================
+   RESPONSIVE FIXES
+   ========================================================= */
+
+@media (max-width: 1024px) {
+  .erp-glass {
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+  }
+}
+
+@media (max-width: 640px) {
+  body {
+    font-size: 13px;
+  }
+
+  .erp-glass,
+  .erp-card {
+    border-radius: var(--erp-radius-md);
+  }
+
+  .erp-button-primary,
+  .erp-button-secondary {
+    min-height: 44px;
+  }
+}
+
+/* Accessibility: avoid motion for users who request less animation. */
+@media (prefers-reduced-motion: reduce) {
+
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
   }
 }

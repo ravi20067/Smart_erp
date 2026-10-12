@@ -7,26 +7,26 @@ import com.Smart.Erp.Core.Common.CommonRequest;
 import com.Smart.Erp.Modules.Academic.Services.SpecializationService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 
 @RestController
-@RequestMapping("/admin/specialization")
+@RequestMapping("/{role:program-coordinator|head-of-department|admin|dean|super-admin}/admin/specializations")
 @RequiredArgsConstructor
 public class SpecializationController {
-
     private final SpecializationService specializationService;
-
     @GetMapping
     public ResponseEntity<List<SpecializationResponse>> getAll(
-            @RequestParam Long academicYearId,
-            @RequestParam (required = false) Long schoolId,
-            @RequestParam (required = false) Long departmentId,
-            @RequestParam (required = false) Long courseId
     ){
-        return ResponseEntity.ok(specializationService.getAll(academicYearId,schoolId,departmentId,courseId));
+        return ResponseEntity.ok(specializationService.getAll());
     }
+
+    @PreAuthorize("@authVerifier.can(" +
+            "T(com.Smart.Erp.Modules.User.Enum.PermissionAction).CREATE_CHILD, " +
+            "T(com.Smart.Erp.Modules.User.Enum.ResourceType).COURSE, " +
+            "#courseId)")
     @PostMapping
     public ResponseEntity<SpecializationResponse> create(
             @RequestParam Long courseId,
@@ -34,18 +34,45 @@ public class SpecializationController {
     ){
         return ResponseEntity.ok(specializationService.create(courseId,request));
     }
+
+    @PreAuthorize("@authVerifier.can(" +
+            "T(com.Smart.Erp.Modules.User.Enum.PermissionAction).UPDATE, " +
+            "T(com.Smart.Erp.Modules.User.Enum.ResourceType).SPECIALIZATION, " +
+            "#request.id)")
     @PutMapping
     public ResponseEntity<SpecializationResponse> update(
-            @RequestParam Long courseId,
             @RequestBody SpecializationRequest request
     ){
-        return ResponseEntity.ok(specializationService.update(courseId,request));
+        return ResponseEntity.ok(specializationService.update(request));
     }
+
+    @PreAuthorize("@authVerifier.can(" +
+            "T(com.Smart.Erp.Modules.User.Enum.PermissionAction).DELETE, " +
+            "T(com.Smart.Erp.Modules.User.Enum.ResourceType).SPECIALIZATION, " +
+            "#specializationId)")
     @DeleteMapping
     public ResponseEntity<String> delete(
-            @RequestParam Long courseId,
             @RequestParam Long specializationId
     ){
-        return ResponseEntity.ok(specializationService.delete(specializationId,courseId));
+        return ResponseEntity.ok(specializationService.delete(specializationId));
+    }
+
+    @PreAuthorize(
+            "@authVerifier.can(" +
+                    "T(com.Smart.Erp.Modules.User.Enum.PermissionAction).CREATE_CHILD, " +
+                    "T(com.Smart.Erp.Modules.User.Enum.ResourceType).COURSE, " +
+                    "#courseId) || " +
+                    "(#specializationId != null && " +
+                    "@authVerifier.can(" +
+                    "T(com.Smart.Erp.Modules.User.Enum.PermissionAction).UPDATE, " +
+                    "T(com.Smart.Erp.Modules.User.Enum.ResourceType).SPECIALIZATION, " +
+                    "#specializationId))"
+    )
+    @GetMapping("/prefix")
+    public ResponseEntity<String> getPrefix(
+            @RequestParam(required = false) Long specializationId,
+            @RequestParam Long courseId
+    ) {
+        return ResponseEntity.ok(specializationService.getPrefix(courseId));
     }
 }

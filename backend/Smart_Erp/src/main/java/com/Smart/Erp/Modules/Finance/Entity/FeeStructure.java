@@ -98,9 +98,9 @@ public class FeeStructure extends BaseAuditableEntity {
 
         Specialization specialization = this.getSpecializations().getFirst();
         Course course = specialization.getCourse();
-        Department department = course.getDepartment();
+        AcademicYear academicYear = course.getAcademicYear();
+        Department department = academicYear.getDepartment();
         School school = department.getSchool();
-        AcademicYear academicYear = school.getAcademicYear();
 
 
         return FeeStructureResponse.builder()

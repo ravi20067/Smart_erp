@@ -1,19 +1,25 @@
 package com.Smart.Erp.Modules.Academic.Services;
 
+import com.Smart.Erp.Core.Common.CommonRequest;
 import com.Smart.Erp.Modules.Academic.DTO.School.SchoolRequest;
 import com.Smart.Erp.Modules.Academic.DTO.School.SchoolResponse;
-import com.Smart.Erp.Modules.Academic.Entity.AcademicYear;
 import com.Smart.Erp.Modules.Academic.Entity.School;
+import com.Smart.Erp.Modules.Academic.Entity.University;
 import com.Smart.Erp.Modules.Teacher.Services.TeacherCommonService;
+import com.Smart.Erp.Modules.User.Enum.PermissionAction;
+import com.Smart.Erp.Modules.User.Enum.ResourceType;
 import com.Smart.Erp.Modules.User.Enum.UserRoles;
 import com.Smart.Erp.Core.Exception.OperationNotAllowedException;
 import com.Smart.Erp.Modules.Academic.Repo.SchoolRepo;
 import com.Smart.Erp.Modules.User.Services.UserCommonService;
+import com.Smart.Erp.Security.AuthorizationService;
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
 import org.jspecify.annotations.Nullable;
-import org.springframework.security.core.Authentication;
 import org.springframework.stereotype.Service;
+
+import java.util.List;
+import java.util.Map;
 
 @Service
 @RequiredArgsConstructor
@@ -24,55 +30,59 @@ public class SchoolService {
 
 
     private final AcademicCommonService academicCommonService;
-    private final UserCommonService userCommonService;
+    private final AuthorizationService authorizationService;
 
-    private final TeacherCommonService teacherCommonService;
+    public @Nullable SchoolResponse createSchool(Long universityId, CommonRequest request) {
+        University university = academicCommonService.getUniversity(universityId);
 
-    public @Nullable SchoolResponse findBySchoolId(Long schoolId, Long academicYearId, Authentication authentication) {
-        return validateSchool(academicCommonService.getSchool(schoolId), academicYearId).mapToResponse();
+        School school = School.builder()
+                .name(request.getName())
+                .university(university)
+                .build();
+        school.setCodeWithPrefix(request.getCode());
+        school = schoolRepo.save(school);
+
+        authorizationService.createPermission(school.getId(),ResourceType.SCHOOL,universityId,ResourceType.UNIVERSITY);
+
+        return school.mapToResponse(authorizationService.getPermissionAction(ResourceType.SCHOOL,school.getId()));
     }
 
-    public @Nullable SchoolResponse createSchool(Long academicYearId, String name, String code) {
-        AcademicYear academicYear = academicCommonService.getAcademicYear(academicYearId);
-        return schoolRepo.save(
-                School.builder()
-                        .name(name)
-                        .code(code)
-                        .academicYear(academicYear)
-                        .build()
-        ).mapToResponse();
-    }
+    public @Nullable SchoolResponse updateSchool(SchoolRequest schoolRequest) {
+        School school = academicCommonService.getSchool(schoolRequest.getId());
 
-    public @Nullable SchoolResponse updateSchool(Long schoolId, SchoolRequest schoolRequest, Long academicYearId) {
-        School school = validateSchool(academicCommonService.getSchool(schoolId), academicYearId);
         school.setName(schoolRequest.getName());
-        school.setCode(schoolRequest.getCode());
+        school.setCodeWithPrefix(schoolRequest.getCode());
 
         if (school.getActiveStatus() != schoolRequest.getActiveStatus()){
             school = academicCommonService.handleActiveStatusUpdate(school,schoolRequest.getActiveStatus());
         }
 
-        school.setSchoolDean(teacherCommonService.updateTeacherRole(school.getSchoolDean(), schoolRequest.getDeanId(), UserRoles.SCHOOL_DEAN));
-
-        return schoolRepo.save(school).mapToResponse();
+        return schoolRepo.save(school).mapToResponse(authorizationService.getPermissionAction(ResourceType.SCHOOL,school.getId()));
     }
 
-    public @Nullable String deleteSchool(Long schoolId, Long academicYearId) {
-        School school = validateSchool(academicCommonService.getSchool(schoolId), academicYearId);
+    public @Nullable String deleteSchool(Long schoolId) {
+        School school = academicCommonService.getSchool(schoolId);
         if (!school.getDepartments().isEmpty())
             throw new OperationNotAllowedException("Remove its department first.");
 
-        if (school.getSchoolDean() != null) {
-            userCommonService.updateRole(school.getSchoolDean().getUser(), UserRoles.TEACHER);
-        }
         schoolRepo.deleteById(schoolId);
+        authorizationService.deletePermission(ResourceType.SCHOOL,schoolId);
         return "Deleted Successfully";
     }
 
-    private School validateSchool(School school, Long academicYearId) {
-        if (school.getAcademicYear().getId().equals(academicYearId)) {
-            return school;
-        }
-        throw new OperationNotAllowedException("Not a valid academicYearId");
+    public List<SchoolResponse> findSchool() {
+        Map<Long, List<PermissionAction>> all = authorizationService.getAll(ResourceType.SCHOOL);
+
+        List<School> school = academicCommonService.getSchool(all.keySet());
+
+        return school.stream()
+                .map(
+                        s -> s.mapToResponse(all.get(s.getId()))
+                )
+                .toList();
+    }
+
+    public String getPrefix(Long universityId) {
+        return academicCommonService.getUniversity(universityId).getCode();
     }
 }

@@ -10,6 +10,8 @@ import com.Smart.Erp.Modules.Student.Entity.Student;
 import com.Smart.Erp.Modules.Student.Entity.StudentEnrollment;
 import com.Smart.Erp.Modules.Student.Repo.StudentEnrollmentRepo;
 import com.Smart.Erp.Modules.User.Enum.EnrollmentStatus;
+import com.Smart.Erp.Modules.User.Enum.PermissionAction;
+import com.Smart.Erp.Modules.User.Enum.ResourceType;
 import com.Smart.Erp.Modules.User.Enum.UserRoles;
 import com.Smart.Erp.Modules.Academic.Entity.AcademicYear;
 import com.Smart.Erp.Modules.Academic.Entity.Section;
@@ -20,6 +22,7 @@ import com.Smart.Erp.Modules.User.Entity.User;
 import com.Smart.Erp.Modules.Student.Repo.StudentRepo;
 import com.Smart.Erp.Modules.Academic.Services.AcademicCommonService;
 import com.Smart.Erp.Modules.User.Services.UserCommonService;
+import com.Smart.Erp.Security.AuthorizationService;
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -29,6 +32,7 @@ import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
 import java.util.Collections;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 @Service
@@ -43,50 +47,20 @@ public class StudentService {
     private final AcademicCommonService academicCommonService;
     private final AccountCommonService accountCommonService;
     private final UserCommonService userService;
+    private final AuthorizationService authorizationService;
 
-    public List<StudentResponse> get(Long universityId, Long academicYearId, Long schoolId, Long departmentId, Long courseId, Long sectionId) {
-        if (sectionId != null) {
-            return getAllSectionStudents(academicCommonService.getSection(sectionId));
-        } else if (courseId != null) {
-            return academicCommonService.getCourse(courseId)
-                    .getSections().stream()
-                    .flatMap(section -> getAllSectionStudents(section).stream())
-                    .toList();
-        } else if (departmentId != null) {
-            return academicCommonService.getDepartment(departmentId)
-                    .getCourses().stream()
-                    .flatMap(course -> course.getSections().stream())
-                    .flatMap(section -> getAllSectionStudents(section).stream())
-                    .toList();
-        } else if (schoolId != null) {
-            return academicCommonService.getSchool(schoolId)
-                    .getDepartments().stream()
-                    .flatMap(department -> department.getCourses().stream())
-                    .flatMap(course -> course.getSections().stream())
-                    .flatMap(section -> getAllSectionStudents(section).stream())
-                    .toList();
-        } else if (academicYearId != null) {
-            return academicCommonService.getAcademicYear(academicYearId)
-                    .getSchools().stream()
-                    .flatMap(school -> school.getDepartments().stream())
-                    .flatMap(department -> department.getCourses().stream())
-                    .flatMap(course -> course.getSections().stream())
-                    .flatMap(section -> getAllSectionStudents(section).stream())
-                    .toList();
-        } else {
-            return academicCommonService.getUniversity(universityId)
-                    .getUsers()
-                    .stream()
-                    .filter(user -> user.getUserRole() == UserRoles.STUDENT)
-                    .map(user -> user.getStudent().mapToResponse())
-                    .toList();
-        }
+    public List<StudentResponse> get() {
+        Map<Long, List<PermissionAction>> map = authorizationService.getAll(ResourceType.STUDENT);
+        List<Student> students = studentRepo.findAllById(map.keySet());
+        return students.stream()
+                .distinct()
+                .map(student -> student.mapToResponse(authorizationService.getPermissionAction(ResourceType.STUDENT, student.getId())))
+                .toList();
     }
 
-    @Transactional
     public StudentResponse create(StudentRequest studentRequest, MultipartFile file) {
         SectionGroup sectionGroup = academicCommonService.getSectionGroup(studentRequest.getSectionGroupId());
-        AcademicYear academicYear = sectionGroup.getSpecialization().getCourse().getDepartment().getSchool().getAcademicYear();
+        AcademicYear academicYear = sectionGroup.getSpecialization().getCourse().getAcademicYear();
 
         if (sectionGroup.getSection().getCapacity() <= sectionGroup.getSection().getSectionGroups().size()) {
             throw new OperationNotAllowedException("Section is full");
@@ -100,8 +74,8 @@ public class StudentService {
                 .mapToInt(group -> group.getStudentEnrollments().size())
                 .sum();
 
-        String userName = academicYear.getUniversity().getCode() + academicYear.getCode() + sectionGroup.getSpecialization().getPostfix() + String.format("%04d", studentCount + 1);
-        String registrationNo = academicYear.getStudentPostfix();
+        String userName =  sectionGroup.getSpecialization().getCode() + String.format("%04d", studentCount + 1);
+        String registrationNo = academicYear.getStudentPostfix() + 1;
 
         LocalDate dob = studentRequest.getBasicDetailRequest().getDob();
         String formattedDob = dob != null ? dob.format(DateTimeFormatter.ISO_LOCAL_DATE) : "";
@@ -124,19 +98,11 @@ public class StudentService {
         student = studentRepo.save(student);
         academicCommonService.handleStudentChange(sectionGroup);
         student = commonService.getStudent(student.getId());
-
-        return student.mapToResponse();
-    }
-
-    private List<StudentResponse> getAllSectionStudents(Section section) {
-        return section.getSectionGroups().stream()
-                .flatMap(sectionGroup -> sectionGroup.getStudentEnrollments().stream())
-                .map(studentEnrollment -> studentEnrollment.getStudent().mapToResponse())
-                .toList();
+        authorizationService.createPermission(student.getId(), ResourceType.STUDENT, sectionGroup.getId(), ResourceType.SECTION_GROUP);
+        return student.mapToResponse(authorizationService.getPermissionAction(ResourceType.STUDENT, student.getId()));
     }
 
     public StudentEnrollmentResponse updateScholarship(Long enrollmentId, List<Long> scholarshipId) {
-
         StudentEnrollment studentEnrollment = commonService.getStudentEnrollment(enrollmentId);
         Set<Scholarship> scholarships = accountCommonService.getScholarship(scholarshipId);
 
@@ -197,12 +163,18 @@ public class StudentService {
 
         studentEnrollment = studentEnrollmentRepo.save(studentEnrollment);
 
-        academicCommonService.handleStudentChange(oldSpecialization, studentEnrollment.getAcademicYear());
+        academicCommonService.handleStudentChange(oldSpecialization);
 
         academicCommonService.handleStudentChange(oldSectionGroup);
         academicCommonService.handleStudentChange(newSectionGroup);
+        authorizationService.changeParent(
+                studentEnrollment.getStudent().getId(),
+                ResourceType.STUDENT,
+                newSectionGroup.getId(),
+                ResourceType.SECTION_GROUP
+        );
 
-        return commonService.getStudent(studentEnrollment.getStudent().getId()).mapToResponse();
+        return commonService.getStudent(studentEnrollment.getStudent().getId()).mapToResponse(authorizationService.getPermissionAction(ResourceType.STUDENT, studentEnrollment.getStudent().getId()));
     }
 
     public StudentEnrollmentResponse changeEnrollmentStatus(Long enrollmentId, EnrollmentStatus enrollmentStatus) {
