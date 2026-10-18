@@ -29,6 +29,7 @@ public class Specialization  extends BaseAuditableEntity implements CommonRefere
 
     private String code = "";
 
+    @Builder.Default
     private ActiveStatus activeStatus = ActiveStatus.DISABLE;
 
     @ToString.Exclude
@@ -47,14 +48,12 @@ public class Specialization  extends BaseAuditableEntity implements CommonRefere
     private List<SectionGroup> sectionGroups = new ArrayList<>();
 
 
-    @ManyToOne(fetch = FetchType.LAZY, optional = false)
+    @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(
             name = "fee_structure_id",
-            nullable = false,
             foreignKey = @ForeignKey(name = "fk_specialization_fee_structure")
     )
     private FeeStructure feeStructure;
-
 
     public void setCodeWithPrefix(String code){
         this.code = course.getCode()+code;

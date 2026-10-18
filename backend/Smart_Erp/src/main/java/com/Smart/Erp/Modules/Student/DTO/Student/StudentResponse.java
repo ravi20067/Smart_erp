@@ -18,6 +18,4 @@ public class StudentResponse {
     private Long id;
     private String registrationNumber;
     private UserProfileResponse basicDetailRequest;
-    private List<StudentEnrollmentResponse> enrollment;
-    private List<PermissionAction> permissionActions;
 }

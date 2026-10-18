@@ -133,10 +133,10 @@ function UniversityDialog({
     const [form, setForm] = useState<UniversityForm>(
         university
             ? {
-                  name: university.name ?? "",
-                  code: university.code ?? "",
-                  activeStatus: university.activeStatus ?? "ENABLE",
-              }
+                name: university.name ?? "",
+                code: university.code ?? "",
+                activeStatus: university.activeStatus ?? "ENABLE",
+            }
             : { ...EMPTY_FORM }
     );
     const [dialogError, setDialogError] = useState<string>("");
@@ -359,11 +359,10 @@ function UniversityDialog({
                                     readOnly={readOnly || busy}
                                     maxLength={150}
                                     placeholder="e.g. Stanford University"
-                                    className={`w-full rounded-xl border bg-slate-950/60 px-4 py-3 text-sm text-white outline-none transition placeholder:text-slate-500 ${
-                                        fieldErrors.name
+                                    className={`w-full rounded-xl border bg-slate-950/60 px-4 py-3 text-sm text-white outline-none transition placeholder:text-slate-500 ${fieldErrors.name
                                             ? "border-rose-500/60 focus:border-rose-400"
                                             : "border-white/10 focus:border-cyan-400/60"
-                                    } read-only:opacity-75 disabled:opacity-50`}
+                                        } read-only:opacity-75 disabled:opacity-50`}
                                 />
                                 {fieldErrors.name && (
                                     <p className="mt-1.5 flex items-center gap-1.5 text-xs text-rose-400">
@@ -390,11 +389,10 @@ function UniversityDialog({
                                     readOnly={!isCreate || busy}
                                     maxLength={40}
                                     placeholder="e.g. STAN-01"
-                                    className={`w-full rounded-xl border bg-slate-950/60 px-4 py-3 font-mono text-sm uppercase text-white outline-none transition placeholder:text-slate-500 ${
-                                        fieldErrors.code
+                                    className={`w-full rounded-xl border bg-slate-950/60 px-4 py-3 font-mono text-sm uppercase text-white outline-none transition placeholder:text-slate-500 ${fieldErrors.code
                                             ? "border-rose-500/60 focus:border-rose-400"
                                             : "border-white/10 focus:border-cyan-400/60"
-                                    } read-only:opacity-60 disabled:opacity-50`}
+                                        } read-only:opacity-60 disabled:opacity-50`}
                                 />
                                 {fieldErrors.code ? (
                                     <p className="mt-1.5 flex items-center gap-1.5 text-xs text-rose-400">
@@ -419,16 +417,14 @@ function UniversityDialog({
                                     {isView ? (
                                         <div className="flex items-center pt-1">
                                             <span
-                                                className={`inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-xs font-semibold ${
-                                                    form.activeStatus === "ENABLE"
+                                                className={`inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-xs font-semibold ${form.activeStatus === "ENABLE"
                                                         ? "border-emerald-400/30 bg-emerald-500/10 text-emerald-300"
                                                         : "border-amber-400/30 bg-amber-500/10 text-amber-300"
-                                                }`}
+                                                    }`}
                                             >
                                                 <span
-                                                    className={`h-1.5 w-1.5 rounded-full ${
-                                                        form.activeStatus === "ENABLE" ? "bg-emerald-400" : "bg-amber-400"
-                                                    }`}
+                                                    className={`h-1.5 w-1.5 rounded-full ${form.activeStatus === "ENABLE" ? "bg-emerald-400" : "bg-amber-400"
+                                                        }`}
                                                 />
                                                 {form.activeStatus === "ENABLE" ? "Active" : "Inactive"}
                                             </span>
@@ -498,20 +494,19 @@ function UniversityDialog({
                             <button
                                 type="submit"
                                 disabled={busy}
-                                className={`inline-flex items-center justify-center gap-2 rounded-xl px-5 py-2.5 text-sm font-semibold text-white shadow-lg transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-60 ${
-                                    isDelete
+                                className={`inline-flex items-center justify-center gap-2 rounded-xl px-5 py-2.5 text-sm font-semibold text-white shadow-lg transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-60 ${isDelete
                                         ? "bg-gradient-to-r from-red-600 to-rose-500 shadow-red-500/20"
                                         : "bg-gradient-to-r from-violet-600 via-blue-600 to-cyan-500 shadow-blue-500/20"
-                                }`}
+                                    }`}
                             >
                                 {busy && <LoaderCircle size={16} className="animate-spin" />}
                                 {busy
                                     ? "Processing..."
                                     : isDelete
-                                    ? "Confirm Delete"
-                                    : isCreate
-                                    ? "Create University"
-                                    : "Save Changes"}
+                                        ? "Confirm Delete"
+                                        : isCreate
+                                            ? "Create University"
+                                            : "Save Changes"}
                             </button>
                         )}
                     </div>
@@ -701,7 +696,7 @@ export default function Universities() {
             {/* Header & Breadcrumbs */}
             <section>
                 <div className="mb-4 flex items-center gap-2 text-sm text-slate-400">
-                    <span>Dashboard</span>
+                    <span>Organisation</span>
                     <ChevronRight size={15} />
                     <span className="text-cyan-300">Universities</span>
                 </div>
@@ -744,11 +739,10 @@ export default function Universities() {
                         initial={{ opacity: 0, y: -8 }}
                         animate={{ opacity: 1, y: 0 }}
                         exit={{ opacity: 0, y: -8 }}
-                        className={`flex items-start justify-between gap-4 rounded-xl border p-4 text-sm ${
-                            pageError
+                        className={`flex items-start justify-between gap-4 rounded-xl border p-4 text-sm ${pageError
                                 ? "border-rose-400/30 bg-rose-500/10 text-rose-200"
                                 : "border-emerald-400/30 bg-emerald-500/10 text-emerald-200"
-                        }`}
+                            }`}
                     >
                         <div className="flex items-start gap-3">
                             {pageError ? (
@@ -1002,16 +996,14 @@ export default function Universities() {
                                                 </td>
                                                 <td className="px-4 py-5">
                                                     <span
-                                                        className={`inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-xs font-semibold ${
-                                                            u.activeStatus === "ENABLE"
+                                                        className={`inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-xs font-semibold ${u.activeStatus === "ENABLE"
                                                                 ? "border-emerald-400/30 bg-emerald-500/10 text-emerald-300"
                                                                 : "border-amber-400/30 bg-amber-500/10 text-amber-300"
-                                                        }`}
+                                                            }`}
                                                     >
                                                         <span
-                                                            className={`h-1.5 w-1.5 rounded-full ${
-                                                                u.activeStatus === "ENABLE" ? "bg-emerald-400" : "bg-amber-400"
-                                                            }`}
+                                                            className={`h-1.5 w-1.5 rounded-full ${u.activeStatus === "ENABLE" ? "bg-emerald-400" : "bg-amber-400"
+                                                                }`}
                                                         />
                                                         {u.activeStatus === "ENABLE" ? "Active" : "Inactive"}
                                                     </span>
@@ -1105,13 +1097,12 @@ export default function Universities() {
                         {filtered.length === 0
                             ? "Showing 0 universities"
                             : `Showing ${(currentPage - 1) * PAGE_SIZE + 1}–${Math.min(
-                                  currentPage * PAGE_SIZE,
-                                  filtered.length
-                              )} of ${filtered.length} universities${
-                                  hasActiveFilters && filtered.length !== universities.length
-                                      ? ` (filtered from ${universities.length})`
-                                      : ""
-                              }`}
+                                currentPage * PAGE_SIZE,
+                                filtered.length
+                            )} of ${filtered.length} universities${hasActiveFilters && filtered.length !== universities.length
+                                ? ` (filtered from ${universities.length})`
+                                : ""
+                            }`}
                     </p>
                     <div className="flex flex-wrap items-center gap-2">
                         <button
@@ -1145,11 +1136,10 @@ export default function Universities() {
                                         disabled={loading}
                                         onClick={() => setPage(n)}
                                         aria-current={currentPage === n ? "page" : undefined}
-                                        className={`min-w-9 rounded-lg border px-3 py-2 text-sm transition ${
-                                            currentPage === n
+                                        className={`min-w-9 rounded-lg border px-3 py-2 text-sm transition ${currentPage === n
                                                 ? "border-cyan-300/40 bg-gradient-to-r from-violet-600 to-blue-500 font-semibold text-white shadow-md shadow-blue-500/20"
                                                 : "border-white/10 bg-white/[0.035] text-slate-300 hover:bg-white/10"
-                                        }`}
+                                            }`}
                                     >
                                         {n}
                                     </button>

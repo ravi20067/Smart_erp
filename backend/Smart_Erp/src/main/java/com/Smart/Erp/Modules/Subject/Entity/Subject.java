@@ -33,6 +33,7 @@ public class Subject  extends BaseAuditableEntity implements CommonReference {
 
     private String code;
 
+    @Builder.Default
     private ActiveStatus activeStatus = ActiveStatus.DISABLE;
 
     private Integer lecturesPerWeek;
@@ -110,11 +111,24 @@ public class Subject  extends BaseAuditableEntity implements CommonReference {
         this.code = course.getCode() + code;
     }
 
+
     public SubjectResponse mapToResponse(List<PermissionAction> permissionActions) {
-        AcademicYear academicYear = course.getAcademicYear();
-        Department department = academicYear.getDepartment();
-        School school = department.getSchool();
-        University university = school.getUniversity();
+
+        AcademicYear academicYear = course != null
+                ? course.getAcademicYear()
+                : null;
+
+        Department department = academicYear != null
+                ? academicYear.getDepartment()
+                : null;
+
+        School school = department != null
+                ? department.getSchool()
+                : null;
+
+        University university = school != null
+                ? school.getUniversity()
+                : null;
 
         return SubjectResponse.builder()
                 .id(this.getId())
@@ -123,24 +137,50 @@ public class Subject  extends BaseAuditableEntity implements CommonReference {
                 .activeStatus(this.getActiveStatus())
                 .lecturesPerWeek(this.getLecturesPerWeek())
                 .isPracticalSubject(this.getIsPracticalSubject())
-                .specializations(this.getSpecializations().stream()
-                        .map(CommonReference::toCommonDTO)
-                        .toList()
+
+                .specializations(
+                        this.getSpecializations() == null
+                                ? List.of()
+                                : this.getSpecializations().stream()
+                                .filter(java.util.Objects::nonNull)
+                                .map(CommonReference::toCommonDTO)
+                                .toList()
                 )
-                .questionBankTeacher(this.getQuestionBankTeacher().toCommonDTO())
-                .studyMaterialTeacher(this.getStudyMaterialTeacher().toCommonDTO())
-                .subjectTeachers(this.getSubjectTeachers().stream()
-                        .map(teacherEnrollment -> teacherEnrollment.getTeacher().toCommonDTO())
-                        .toList()
+
+                .questionBankTeacher(
+                        this.getQuestionBankTeacher() == null
+                                ? null
+                                : this.getQuestionBankTeacher().toCommonDTO()
                 )
+
+                .studyMaterialTeacher(
+                        this.getStudyMaterialTeacher() == null
+                                ? null
+                                : this.getStudyMaterialTeacher().toCommonDTO()
+                )
+
+                .subjectTeachers(
+                        this.getSubjectTeachers() == null
+                                ? List.of()
+                                : this.getSubjectTeachers().stream()
+                                .filter(java.util.Objects::nonNull)
+                                .filter(enrollment -> enrollment.getTeacher() != null)
+                                .map(enrollment -> enrollment.getTeacher().toCommonDTO())
+                                .toList()
+                )
+
                 .lastDateQuestionBankSummit(this.getLastDateQuestionBankSummit())
                 .lastDateStudyMaterialSummit(this.getLastDateStudyMaterialSummit())
-                .permissionActions(permissionActions)
-                .course(course.toCommonDTO())
-                .academicYear(academicYear.toCommonDTO())
-                .department(department.toCommonDTO())
-                .school(school.toCommonDTO())
-                .university(university.toCommonDTO())
+                .permissionActions(
+                        permissionActions == null ? List.of() : permissionActions
+                )
+
+                .course(course == null ? null : course.toCommonDTO())
+                .academicYear(academicYear == null ? null : academicYear.toCommonDTO())
+                .department(department == null ? null : department.toCommonDTO())
+                .school(school == null ? null : school.toCommonDTO())
+                .university(university == null ? null : university.toCommonDTO())
+
                 .build();
     }
 }

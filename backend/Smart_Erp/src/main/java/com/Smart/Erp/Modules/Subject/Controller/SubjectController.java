@@ -1,5 +1,6 @@
 package com.Smart.Erp.Modules.Subject.Controller;
 
+import com.Smart.Erp.Core.Common.CommonDTO;
 import com.Smart.Erp.Modules.Subject.DTO.Subject.SubjectRequest;
 import com.Smart.Erp.Modules.Subject.DTO.Subject.SubjectResponse;
 import com.Smart.Erp.Core.Common.CommonRequest;
@@ -12,11 +13,12 @@ import org.springframework.web.bind.annotation.*;
 import java.util.List;
 
 @RestController
-@RequestMapping("/{role:program-coordinator|head-of-department|admin|dean|super-admin}/admin/courses")
+@RequestMapping("/{role:program-coordinator|head-of-department|admin|school-dean|dean|super-admin}/subjects")
 @RequiredArgsConstructor
 public class SubjectController {
     private final SubjectService subjectService;
 
+    @GetMapping
     public ResponseEntity<List<SubjectResponse>> getAll(){
         return ResponseEntity.ok(subjectService.getAll());
     }
@@ -72,5 +74,16 @@ public class SubjectController {
             @RequestParam Long courseId
     ) {
         return ResponseEntity.ok(subjectService.getPrefix(courseId));
+    }
+
+    @PreAuthorize("@authVerifier.can(" +
+            "T(com.Smart.Erp.Modules.User.Enum.PermissionAction).UPDATE, " +
+            "T(com.Smart.Erp.Modules.User.Enum.ResourceType).SUBJECT, " +
+            "#subjectId)")
+    @GetMapping("/filter/teacher")
+    public ResponseEntity<List<CommonDTO>> getTeacherDTO(
+            @RequestParam Long subjectId
+    ){
+        return ResponseEntity.ok(subjectService.getTeacherFilter(subjectId));
     }
 }

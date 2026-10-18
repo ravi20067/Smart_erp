@@ -3,10 +3,8 @@ package com.Smart.Erp.Modules.Academic.Services;
 import com.Smart.Erp.Modules.Academic.DTO.AcademicYear.AcademicYearRequest;
 import com.Smart.Erp.Modules.Academic.DTO.AcademicYear.AcademicYearResponse;
 import com.Smart.Erp.Core.Exception.OperationNotAllowedException;
-import com.Smart.Erp.Core.Exception.ResourceNotFoundException;
 import com.Smart.Erp.Modules.Academic.Entity.AcademicYear;
 import com.Smart.Erp.Modules.Academic.Entity.Department;
-import com.Smart.Erp.Modules.Academic.Entity.University;
 import com.Smart.Erp.Modules.Academic.Repo.AcademicYearRepository;
 import com.Smart.Erp.Modules.User.Enum.PermissionAction;
 import com.Smart.Erp.Modules.User.Enum.ResourceType;
@@ -111,7 +109,7 @@ public class AcademicYearService {
         }
     }
 
-    public String getPrefix(Long departmentId) {
+    public String getPostfix(Long departmentId) {
         return academicCommonService.getDepartment(departmentId).getCode();
     }
 }

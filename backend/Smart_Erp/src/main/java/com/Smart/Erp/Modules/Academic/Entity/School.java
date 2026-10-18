@@ -4,6 +4,7 @@ import com.Smart.Erp.Config.BaseAuditableEntity;
 import com.Smart.Erp.Config.CommonReference;
 import com.Smart.Erp.Modules.Academic.DTO.School.SchoolResponse;
 import com.Smart.Erp.Modules.Academic.Enum.ActiveStatus;
+import com.Smart.Erp.Modules.TimeTable.Entity.Room;
 import com.Smart.Erp.Modules.User.Enum.PermissionAction;
 import jakarta.persistence.*;
 import lombok.*;
@@ -43,6 +44,14 @@ public class School extends BaseAuditableEntity implements CommonReference {
             orphanRemoval = true
     )
     private List<Department> departments = new ArrayList<>();
+
+    @Builder.Default
+    @OneToMany(
+            mappedBy = "school",
+            cascade = CascadeType.ALL,
+            orphanRemoval = true
+    )
+    private List<Room> rooms = new ArrayList<>();
 
     public void setCodeWithPrefix(String code){
         this.code = university.getCode() + code;

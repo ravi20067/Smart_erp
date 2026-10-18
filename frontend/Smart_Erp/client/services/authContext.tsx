@@ -2,6 +2,7 @@ import React, { createContext, useContext, useEffect, useState } from "react";
 import { jwtDecode } from "jwt-decode";
 import { setLogoutHandler } from "@/services/axiosConfig";
 import type { UserProfile } from "@/types/auth";
+import { getRoleFromToken } from "./authutil";
 
 import { getProfile } from "./authService";
 
@@ -19,7 +20,7 @@ interface AuthContextType {
     login: (token: string) => void;
     logout: () => void;
     isAuthenticated: boolean;
-    getDashboardRoute: () => string;
+    getDashboardRoute: (currentRole?: string | null) => string;
     refreshProfile: () => Promise<void>;
 }
 
@@ -30,7 +31,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const [token, setToken] = useState<string | null>(
         localStorage.getItem("token")
     );
-    const [role, setRole] = useState<string | null>(null);
+    const [role, setRole] = useState<string | null>(() => getRoleFromToken());
     const [user, setUser] = useState<UserProfile | null>(null);
 
     const logout = () => {
@@ -43,11 +44,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const login = (newToken: string) => {
         localStorage.setItem("token", newToken);
         setToken(newToken);
-
-        const decoded: DecodedToken = jwtDecode(newToken);
-        setRole(decoded.role || null);
-
-
+        const resolvedRole = getRoleFromToken(newToken);
+        setRole(resolvedRole);
     };
     const loadProfile = async () => {
 
@@ -83,8 +81,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         setLogoutHandler(logout);
     }, []);
 
-    const getDashboardRoute = () => {
-        switch (role) {
+    const getDashboardRoute = (currentRole?: string | null) => {
+        const activeRole = currentRole ?? role ?? getRoleFromToken();
+        switch (activeRole) {
 
             case "STUDENT":
                 return "/student";

@@ -2,7 +2,6 @@ package com.Smart.Erp.Modules.Student.Entity;
 
 
 import com.Smart.Erp.Config.BaseAuditableEntity;
-import com.Smart.Erp.Modules.Student.DTO.Enrollment.StudentEnrollmentResponse;
 import com.Smart.Erp.Modules.Student.DTO.Student.StudentResponse;
 import com.Smart.Erp.Modules.User.Entity.User;
 import com.Smart.Erp.Modules.User.Enum.PermissionAction;
@@ -61,16 +60,11 @@ public class Student  extends BaseAuditableEntity {
         enrollment.setStudent(null);
     }
 
-    public StudentResponse mapToResponse(List<PermissionAction> permissionActions) {
+    public StudentResponse mapToResponse() {
         return StudentResponse.builder()
                 .id(this.getId())
                 .registrationNumber(this.getRegistrationNumber())
                 .basicDetailRequest(this.getUser().getBasicDetail().mapToResponse())
-                .enrollment(this.getEnrollments().stream()
-                        .map(StudentEnrollment::mapToResponse)
-                        .collect(Collectors.toList())
-                )
-                .permissionActions(permissionActions)
                 .build();
     }
 }

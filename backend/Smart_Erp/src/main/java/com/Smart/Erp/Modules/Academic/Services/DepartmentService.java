@@ -60,14 +60,14 @@ public class DepartmentService {
         Department department = academicCommonService.getDepartment(departmentRequest.getId());
 
         if (department.getActiveStatus() != departmentRequest.getActiveStatus()){
-            department = academicCommonService.handleActiveStatusUpdate(department,department.getActiveStatus());
+            department = academicCommonService.handleActiveStatusUpdate(department,departmentRequest.getActiveStatus());
         }
         department.setName(departmentRequest.getName());
         department.setCodeWithPrefix(departmentRequest.getCode());
         return departmentRepo.save(department).mapToResponse(authorizationService.getPermissionAction(ResourceType.DEPARTMENT,department.getId()));
     }
     public @Nullable String delete(Long departmentId) {
-        if (academicCommonService.getDepartment(departmentId)
+        if (!academicCommonService.getDepartment(departmentId)
                 .getAcademicYears().isEmpty()
         ) {
             throw new OperationNotAllowedException("Remove its academic Years first");

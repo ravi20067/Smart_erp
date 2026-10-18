@@ -17,7 +17,7 @@ import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
 @RestController
-@RequestMapping({"/admin/user", "/user"})
+@RequestMapping( "/{role:user|program-coordinator|head-of-department|admin|school-dean|dean|super-admin}/user")
 @AllArgsConstructor
 public class UserController {
 

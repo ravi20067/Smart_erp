@@ -16,5 +16,5 @@ public class CourseRequest {
     private String code;
 
     private ActiveStatus activeStatus;
-    private Boolean NewEnrollmentAllowed;
+    private Boolean newEnrollmentAllowed;
 }

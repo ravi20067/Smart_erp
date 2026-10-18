@@ -74,5 +74,6 @@ public class RolePermission extends BaseAuditableEntity {
     private User assignedBy;
 
     @Column(nullable = false)
+    @Builder.Default
     private Boolean active = true;
 }

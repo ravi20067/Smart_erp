@@ -1,10 +1,11 @@
 package com.Smart.Erp.Modules.User.Entity;
 
 import com.Smart.Erp.Config.BaseAuditableEntity;
+import com.Smart.Erp.Core.Common.CommonDTO;
 import com.Smart.Erp.Modules.Academic.Entity.University;
-
-import com.Smart.Erp.Modules.User.DTO.Role.RoleRequest;
+import com.Smart.Erp.Modules.User.DTO.Role.RolePermissionResponse;
 import com.Smart.Erp.Modules.User.DTO.Role.RoleResponse;
+import com.Smart.Erp.Modules.User.DTO.Role.UserRoleEnumResponse;
 import com.Smart.Erp.Modules.User.Enum.PermissionAction;
 import com.Smart.Erp.Modules.User.Enum.UserRoles;
 import jakarta.persistence.*;
@@ -110,11 +111,33 @@ public class Role extends BaseAuditableEntity {
                 .id(this.id)
                 .name(this.name)
                 .description(this.description)
-                .userRole(this.userRole)
+                .userRole(
+                        UserRoleEnumResponse.builder()
+                                .name(this.userRole.getDescription())
+                                .enumValue(this.userRole)
+                                .build()
+                )
                 .active(this.active)
                 .userCount(this.users.size())
                 .university(this.university.toCommonDTO())
-                .permissions(permissions)
+                .permissions(
+                        this.permissions.stream()
+                                .map(
+                                        rolePermission -> RolePermissionResponse.builder()
+                                                .permission(rolePermission.getPermission())
+                                                .active(rolePermission.getActive())
+                                                .assignedBy(
+                                                        CommonDTO.builder()
+                                                                .id(rolePermission.getAssignedBy().getId())
+                                                                .name(rolePermission.getAssignedBy().getName())
+                                                                .code(rolePermission.getAssignedBy().getUsername())
+                                                                .build()
+                                                )
+                                                .build()
+                                )
+                                .toList()
+                )
+                .permissionActions(permissions)
                 .build();
     }
 }

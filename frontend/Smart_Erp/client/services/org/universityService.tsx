@@ -31,14 +31,16 @@ export interface UniversityUpdateRequest {
     activeStatus: ActiveStatus;
 }
 
-const BASE_URL = getBaseUrl();
-const UNIVERSITY_URL = `${BASE_URL}/university`;
+const getUniversityUrl = (): string => {
+    const base = getBaseUrl().replace(/\/+$/, "");
+    return `${base}/university`;
+};
 
 /**
  * GET /super-admin/university
  */
 export const getUniversities = async (): Promise<UniversityResponse[]> => {
-    const response = await api.get<UniversityResponse[]>(UNIVERSITY_URL);
+    const response = await api.get<UniversityResponse[]>(getUniversityUrl());
     return response.data;
 };
 
@@ -50,7 +52,7 @@ export const createUniversity = async (
     request: UniversityCreateRequest
 ): Promise<UniversityResponse> => {
     const response = await api.post<UniversityResponse>(
-        UNIVERSITY_URL,
+        getUniversityUrl(),
         request
     );
 
@@ -66,7 +68,7 @@ export const updateUniversity = async (
     request: UniversityUpdateRequest
 ): Promise<UniversityResponse> => {
     const response = await api.put<UniversityResponse>(
-        `${UNIVERSITY_URL}/${universityId}`,
+        `${getUniversityUrl()}/${universityId}`,
         request
     );
 
@@ -81,7 +83,7 @@ export const deleteUniversity = async (
     universityId: number
 ): Promise<string> => {
     const response = await api.delete<string>(
-        `${UNIVERSITY_URL}/${universityId}`
+        `${getUniversityUrl()}/${universityId}`
     );
 
     return response.data;

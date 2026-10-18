@@ -67,7 +67,6 @@ public class UniversityService {
         if (!university.getUsers().isEmpty()){
             throw new OperationNotAllowedException("Remove its users ");
         }
-
         universityRepo.deleteById(universityId);
         authorizationService.deletePermission(ResourceType.UNIVERSITY,universityId);
     }

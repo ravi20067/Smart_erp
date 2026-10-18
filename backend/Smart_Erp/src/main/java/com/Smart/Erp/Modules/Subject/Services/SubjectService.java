@@ -1,5 +1,6 @@
 package com.Smart.Erp.Modules.Subject.Services;
 
+import com.Smart.Erp.Core.Common.CommonDTO;
 import com.Smart.Erp.Modules.Subject.DTO.Subject.SubjectRequest;
 import com.Smart.Erp.Modules.Subject.DTO.Subject.SubjectResponse;
 import com.Smart.Erp.Core.Common.CommonRequest;
@@ -11,6 +12,7 @@ import com.Smart.Erp.Modules.Academic.Services.AcademicCommonService;
 import com.Smart.Erp.Modules.Teacher.Services.TeacherCommonService;
 import com.Smart.Erp.Modules.User.Enum.PermissionAction;
 import com.Smart.Erp.Modules.User.Enum.ResourceType;
+import com.Smart.Erp.Modules.zSample.Services.CommonService;
 import com.Smart.Erp.Security.AuthorizationService;
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
@@ -31,6 +33,7 @@ public class SubjectService {
     private final TeacherCommonService teacherCommonService;
     private final SubjectCommonService subjectCommonService;
     private final AuthorizationService authorizationService;
+    private final CommonService commonService;
 
     public @Nullable List<SubjectResponse> getAll() {
         Map<Long, List<PermissionAction>> map = authorizationService.getAll(ResourceType.SUBJECT);
@@ -76,33 +79,95 @@ public class SubjectService {
         return "Deleted Successfully";
     }
 
-    private Subject handleUpdate(Subject subject, SubjectRequest subjectRequest){
+
+    private Subject handleUpdate(Subject subject, SubjectRequest subjectRequest) {
+
         subject.setName(subjectRequest.getName());
         subject.setCodeWithPrefix(subjectRequest.getCode());
-        if (subjectRequest.getActiveStatus() != subject.getActiveStatus()){
-            subject = academicCommonService.handleActiveStatusUpdate(subject,subjectRequest.getActiveStatus());
+
+        if (subjectRequest.getActiveStatus() != subject.getActiveStatus()) {
+            subject = academicCommonService.handleActiveStatusUpdate(
+                    subject,
+                    subjectRequest.getActiveStatus()
+            );
         }
 
         subject.setIsPracticalSubject(subjectRequest.getIsPracticalSubject());
         subject.setLecturesPerWeek(subjectRequest.getLecturesPerWeek());
 
+        subject.setSpecializations(
+                academicCommonService.getSpecialization(
+                        subjectRequest.getSpecializationsId()
+                )
+        );
 
-        subject.setSpecializations(academicCommonService.getSpecialization(subjectRequest.getSpecializationsId()));
+        // Question bank teacher
+        Long requestedQuestionBankTeacherId =
+                subjectRequest.getQuestionBankTeacherId();
 
-        if (subject.getQuestionBankTeacher() == null || !subject.getQuestionBankTeacher().getId().equals(subjectRequest.getQuestionBankTeacherId())){
-            subject.setQuestionBankTeacher(teacherCommonService.getTeacher(subjectRequest.getQuestionBankTeacherId()));
+        Long existingQuestionBankTeacherId =
+                subject.getQuestionBankTeacher() == null
+                        ? null
+                        : subject.getQuestionBankTeacher().getId();
+
+        if (!java.util.Objects.equals(
+                existingQuestionBankTeacherId,
+                requestedQuestionBankTeacherId
+        )) {
+            subject.setQuestionBankTeacher(
+                    requestedQuestionBankTeacherId == null
+                            ? null
+                            : teacherCommonService.getTeacher(
+                            requestedQuestionBankTeacherId
+                    )
+            );
         }
-        subject.setLastDateQuestionBankSummit(subjectRequest.getLastDateQuestionBankSummit());
 
-        if (subject.getStudyMaterialTeacher() == null || !subject.getStudyMaterialTeacher().getId().equals(subjectRequest.getStudyMaterialTeacherId())){
-            subject.setStudyMaterialTeacher(teacherCommonService.getTeacher(subjectRequest.getQuestionBankTeacherId()));
+        subject.setLastDateQuestionBankSummit(
+                subjectRequest.getLastDateQuestionBankSummit()
+        );
+
+        // Study material teacher
+        Long requestedStudyMaterialTeacherId =
+                subjectRequest.getStudyMaterialTeacherId();
+
+        Long existingStudyMaterialTeacherId =
+                subject.getStudyMaterialTeacher() == null
+                        ? null
+                        : subject.getStudyMaterialTeacher().getId();
+
+        if (!java.util.Objects.equals(
+                existingStudyMaterialTeacherId,
+                requestedStudyMaterialTeacherId
+        )) {
+            subject.setStudyMaterialTeacher(
+                    requestedStudyMaterialTeacherId == null
+                            ? null
+                            : teacherCommonService.getTeacher(
+                            requestedStudyMaterialTeacherId
+                    )
+            );
         }
-        subject.setLastDateStudyMaterialSummit(subjectRequest.getLastDateStudyMaterialSummit());
+
+        subject.setLastDateStudyMaterialSummit(
+                subjectRequest.getLastDateStudyMaterialSummit()
+        );
 
         return subject;
     }
 
     public String getPrefix(Long courseId) {
         return academicCommonService.getCourse(courseId).getCode();
+    }
+
+    public List<CommonDTO> getTeacherFilter(Long subjectId) {
+        return subjectCommonService.getSubject(subjectId)
+                .getSubjectTeachers().stream()
+                .filter(java.util.Objects::nonNull)
+                .map(teacherEnrollment ->
+                        teacherEnrollment.getTeacher() != null
+                                ? teacherEnrollment.getTeacher().toCommonDTO()
+                                : null
+                ).toList();
     }
 }

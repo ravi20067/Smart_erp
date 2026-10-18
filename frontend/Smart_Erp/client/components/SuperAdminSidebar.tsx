@@ -3,16 +3,22 @@ import { NavLink, useLocation } from "react-router-dom";
 import { AnimatePresence, motion } from "framer-motion";
 import {
     Activity,
+    BadgePercent,
+    Banknote,
     BarChart3,
+    Bookmark,
+    BookMarked,
     BookOpen,
     Building2,
     CalendarDays,
+    CalendarRange,
     ChevronDown,
     ClipboardList,
     Database,
     FileBarChart,
     FileQuestion,
     FolderOpen,
+    GitBranch,
     GraduationCap,
     History,
     Image as ImageIcon,
@@ -20,12 +26,16 @@ import {
     Mail,
     Megaphone,
     Network,
+    Presentation,
     ScanLine,
     School,
     Settings,
     ShieldCheck,
     Sparkles,
+    TrendingDown,
+    TrendingUp,
     Users,
+    Wallet,
     X,
     type LucideIcon,
 } from "lucide-react";
@@ -69,10 +79,71 @@ const menu: MenuGroup[] = [
     {
         title: "ACADEMIC MANAGEMENT",
         items: [
-            { label: "Courses", path: "/super-admin/courses", icon: BookOpen },
+            { label: "Academic Years", path: "/super-admin/academic-years", icon: CalendarRange },
+            { label: "Courses", path: "/super-admin/courses", icon: BookMarked },
+            { label: "Specialization", path: "/super-admin/specializations", icon: GitBranch },
             { label: "Subjects", path: "/super-admin/subjects", icon: BookOpen },
-            { label: "Classes", path: "/super-admin/classes", icon: GraduationCap },
-            { label: "Timetable", path: "/super-admin/timetable", icon: CalendarDays },
+            { label: "Sections", path: "/super-admin/sections", icon: Presentation },
+        ],
+    },
+    {
+        title: "TIMETABLE MANAGEMENT",
+        items: [
+            {
+                label: "Academic Calendar",
+                path: "/super-admin/academic-calendar",
+                icon: CalendarRange,
+            },
+            {
+                label: "Room Management",
+                path: "/super-admin/rooms",
+                icon: Building2,
+            },
+            {
+                label: "Base Timetable",
+                path: "/super-admin/base",
+                icon: CalendarDays,
+            },
+            {
+                label: "Timetable Builder",
+                path: "/super-admin/timetable/builder",
+                icon: LayoutDashboard,
+            },
+            {
+                label: "Lecture Allocation",
+                path: "/super-admin/lecture-allocation",
+                icon: Users,
+            },
+            {
+                label: "Room Allocation",
+                path: "/super-admin/timetable/room-allocation",
+                icon: Building2,
+            },
+            {
+                label: "Teacher Availability",
+                path: "/super-admin/timetable/teacher-availability",
+                icon: GraduationCap,
+            },
+            {
+                label: "Substitutions",
+                path: "/super-admin/timetable/substitutions",
+                icon: GitBranch,
+            },
+            {
+                label: "Conflict Detection",
+                path: "/super-admin/timetable/conflicts",
+                icon: ShieldCheck,
+            },
+            {
+                label: "Publish Timetable",
+                path: "/super-admin/timetable/publish",
+                icon: Megaphone,
+            },
+            {
+                label: "Timetable Reports",
+                path: "/super-admin/timetable/reports",
+                icon: BarChart3,
+            },
         ],
     },
     {
@@ -81,6 +152,7 @@ const menu: MenuGroup[] = [
             { label: "Students", path: "/super-admin/students", icon: GraduationCap },
             { label: "Teachers", path: "/super-admin/teachers", icon: Users },
             { label: "Devices", path: "/super-admin/devices", icon: ScanLine },
+            { label: "Roles & Permissions", path: "/super-admin/role-permissions", icon: ShieldCheck },
         ],
     },
     {
@@ -91,11 +163,51 @@ const menu: MenuGroup[] = [
                 path: "/super-admin/study-material",
                 icon: FolderOpen,
             },
-            { label: "Chapters", path: "/super-admin/chapters", icon: BookOpen },
+            { label: "Chapters", path: "/super-admin/chapters", icon: Bookmark },
             {
                 label: "Question Bank",
                 path: "/super-admin/question-bank",
                 icon: FileQuestion,
+            },
+        ],
+    },
+    {
+        title: "FINANCIAL MANAGEMENT",
+        items: [
+            {
+                label: "Fees Management",
+                path: "/super-admin/fee-structures",
+                icon: Wallet,
+            },
+            {
+                label: "Concessions",
+                path: "/super-admin/concessions",
+                icon: BadgePercent,
+            },
+            {
+                label: "Scholarships",
+                path: "/super-admin/scholarships",
+                icon: Sparkles,
+            },
+            {
+                label: "Accounts",
+                path: "/super-admin/accounts",
+                icon: Banknote,
+            },
+            {
+                label: "Income",
+                path: "/super-admin/income",
+                icon: TrendingUp,
+            },
+            {
+                label: "Expenses",
+                path: "/super-admin/expenses",
+                icon: TrendingDown,
+            },
+            {
+                label: "Financial Reports",
+                path: "/super-admin/financial-reports",
+                icon: FileBarChart,
             },
         ],
     },

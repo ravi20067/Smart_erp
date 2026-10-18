@@ -9,6 +9,7 @@ public enum ResourceType {
 
     USER(UNIVERSITY),
     ROLE(UNIVERSITY),
+    STAFF(UNIVERSITY),
 
     SCHOOL(UNIVERSITY),
 
@@ -25,10 +26,13 @@ public enum ResourceType {
     SECTION(COURSE),
     SECTION_GROUP(SECTION),
     TIMETABLE(SECTION_GROUP),
-    STUDENT(SECTION_GROUP),
+    STUDENT_ENROLLMENT(SECTION_GROUP),
 
+    SPECIALIZATION(COURSE),
 
-    SPECIALIZATION(COURSE);
+    //new added extra thing need to be added in the enum for frontend
+    FEE_STRUCTURE(COURSE),
+    SCHOLARSHIP(UNIVERSITY);
 
     private final ResourceType parent;
 

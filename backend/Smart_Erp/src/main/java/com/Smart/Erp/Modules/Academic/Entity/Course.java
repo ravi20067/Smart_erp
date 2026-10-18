@@ -5,6 +5,7 @@ import com.Smart.Erp.Config.BaseAuditableEntity;
 import com.Smart.Erp.Config.CommonReference;
 import com.Smart.Erp.Modules.Academic.DTO.Courses.CourseResponse;
 import com.Smart.Erp.Modules.Academic.Enum.ActiveStatus;
+import com.Smart.Erp.Modules.Finance.Entity.FeeStructure;
 import com.Smart.Erp.Modules.Subject.Entity.Subject;
 import com.Smart.Erp.Modules.User.Enum.PermissionAction;
 import jakarta.persistence.*;
@@ -55,6 +56,15 @@ public class Course extends BaseAuditableEntity implements CommonReference {
     )
     private List<Section> sections = new ArrayList<>();
 
+    @Builder.Default
+    @OneToMany(
+            mappedBy = "course",
+            cascade = CascadeType.ALL,
+            orphanRemoval = true
+    )
+    private List<FeeStructure> feeStructures = new ArrayList<>();
+
+    @Builder.Default
     @OneToMany(
             mappedBy = "course",
             cascade = CascadeType.ALL,

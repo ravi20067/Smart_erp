@@ -8,6 +8,7 @@ import com.Smart.Erp.Modules.Student.DTO.Enrollment.StudentEnrollmentResponse;
 import com.Smart.Erp.Modules.User.Enum.EnrollmentStatus;
 import com.Smart.Erp.Modules.Finance.Entity.Scholarship;
 import com.Smart.Erp.Modules.Finance.Entity.StudentFeeAccount;
+import com.Smart.Erp.Modules.User.Enum.PermissionAction;
 import jakarta.persistence.*;
 import lombok.*;
 
@@ -121,7 +122,7 @@ public class StudentEnrollment extends BaseAuditableEntity {
         examResult.setStudentEnrollment(null);
     }
 
-    public StudentEnrollmentResponse mapToResponse() {
+    public StudentEnrollmentResponse mapToResponse(List<PermissionAction> permissionActions) {
         Specialization specialization = sectionGroup.getSpecialization();
         Course course = specialization.getCourse();
         Department department = course.getAcademicYear().getDepartment();
@@ -151,6 +152,8 @@ public class StudentEnrollment extends BaseAuditableEntity {
                                 )
                                 .toList()
                 )
+                .permissionActions(permissionActions)
+                .student(this.student.mapToResponse())
                 .build();
     }
 }

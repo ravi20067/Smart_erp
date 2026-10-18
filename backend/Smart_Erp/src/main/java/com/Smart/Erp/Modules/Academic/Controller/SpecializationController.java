@@ -13,7 +13,7 @@ import org.springframework.web.bind.annotation.*;
 import java.util.List;
 
 @RestController
-@RequestMapping("/{role:program-coordinator|head-of-department|admin|dean|super-admin}/admin/specializations")
+@RequestMapping("/{role:program-coordinator|head-of-department|admin|dean|school-dean|super-admin}/specializations")
 @RequiredArgsConstructor
 public class SpecializationController {
     private final SpecializationService specializationService;

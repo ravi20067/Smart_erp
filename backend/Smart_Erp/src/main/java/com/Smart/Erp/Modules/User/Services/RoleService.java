@@ -1,18 +1,16 @@
 package com.Smart.Erp.Modules.User.Services;
 
 import com.Smart.Erp.Core.Exception.OperationNotAllowedException;
-import com.Smart.Erp.Modules.Academic.DTO.School.SchoolResponse;
 import com.Smart.Erp.Modules.Academic.Services.AcademicCommonService;
-import com.Smart.Erp.Modules.Academic.Services.AcademicYearService;
 import com.Smart.Erp.Modules.User.DTO.Role.RoleRequest;
 import com.Smart.Erp.Modules.User.DTO.Role.RoleResponse;
-import com.Smart.Erp.Modules.User.Entity.Role;
-import com.Smart.Erp.Modules.User.Entity.UserRole;
+import com.Smart.Erp.Modules.User.DTO.Role.UserRoleEnumResponse;
+import com.Smart.Erp.Modules.User.Entity.*;
 import com.Smart.Erp.Modules.User.Enum.PermissionAction;
 import com.Smart.Erp.Modules.User.Enum.ResourceType;
 import com.Smart.Erp.Modules.User.Enum.UserRoles;
+import com.Smart.Erp.Modules.User.Repo.PermissionRepo;
 import com.Smart.Erp.Modules.User.Repo.RoleRepo;
-import com.Smart.Erp.Modules.zSample.Services.CommonService;
 import com.Smart.Erp.Security.AuthorizationService;
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
@@ -21,6 +19,7 @@ import org.springframework.stereotype.Service;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 @Service
 @Transactional
@@ -31,14 +30,14 @@ public class RoleService {
     private final UserCommonService userCommonService;
     private final AcademicCommonService academicCommonService;
     private final AuthorizationService authorizationService;
-    private final CommonService commonService;
+    private final PermissionRepo permissionRepo;
 
     public List<RoleResponse> getRoles() {
         Map<Long, List<PermissionAction>> map = authorizationService.getAll(ResourceType.ROLE);
         List<Role> roles = roleRepo.findAllById(map.keySet());
         return roles.stream()
                 .distinct()
-                .map(role -> role.mapToResponse(authorizationService.getPermissionAction(ResourceType.STUDENT, role.getId())))
+                .map(role -> role.mapToResponse(authorizationService.getPermissionAction(ResourceType.ROLE, role.getId())))
                 .toList();
     }
 
@@ -49,9 +48,9 @@ public class RoleService {
                         .description(request.getDescription())
                         .userRole(request.getUserRole())
                         .university(academicCommonService.getUniversity(universityId))
+                        .active(request.getActive())
                         .build()
         );
-
         authorizationService.createPermission(
                 saved.getId(),
                 ResourceType.ROLE,
@@ -87,9 +86,52 @@ public class RoleService {
         }
     }
 
-    public List<String> getRolesEnum() {
+    public List<UserRoleEnumResponse> getRolesEnum() {
         return Arrays.stream(UserRoles.values())
-                .map(UserRoles::name)
+                .map(
+                        role -> UserRoleEnumResponse.builder()
+                                .name(role.getDescription())
+                                .enumValue(role)
+                                .build()
+                )
                 .toList();
+    }
+
+    @Transactional
+    public RoleResponse updateRolePermissions(Long roleId, List<Long> permissionIds) {
+
+        User user = authorizationService.getCurrentUser();
+        List<Permission> permissionsAllowed = authorizationService.getRoleBasePermissions();
+        Role role = userCommonService.getRole(roleId);
+        Set<Permission> newPermissions = permissionRepo.findByIdIn((permissionIds));
+
+        for (RolePermission rolePermission : role.getPermissions()) {
+            if (!newPermissions.contains(rolePermission.getPermission())) {
+                rolePermission.setActive(false);
+            } else {
+                if (Boolean.FALSE.equals(rolePermission.getActive())) {
+                    rolePermission.setActive(true);
+                    rolePermission.setAssignedBy(user);
+                }
+                newPermissions.remove(rolePermission.getPermission());
+            }
+        }
+
+        for (Permission permission : newPermissions) {
+            if (!permissionsAllowed.contains(permission)) {
+                throw new OperationNotAllowedException("Permission " + permission.getName() + " is not allowed to be assigned to role");
+            }
+            RolePermission rolePermission = new RolePermission();
+            rolePermission.setRole(role);
+            rolePermission.setPermission(permission);
+            rolePermission.setAssignedBy(user);
+            role.getPermissions().add(rolePermission);
+        }
+
+        return roleRepo.save(role).mapToResponse(authorizationService.getPermissionAction(ResourceType.ROLE, role.getId()));
+    }
+
+    public List<Permission> getRoleBasePermissions() {
+        return authorizationService.getRoleBasePermissions();
     }
 }

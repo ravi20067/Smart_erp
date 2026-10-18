@@ -5,7 +5,14 @@ import lombok.Builder;
 
 import java.math.BigDecimal;
 
+import lombok.Data;
+import lombok.AllArgsConstructor;
+import lombok.NoArgsConstructor;
+
+@Data
 @Builder
+@AllArgsConstructor
+@NoArgsConstructor
 public class FeeComponentResponse {
     private long id;
     private FeeCategoryType feeCategoryType;
@@ -14,3 +21,4 @@ public class FeeComponentResponse {
     private Boolean isMandatory;
     private Boolean isRefundable;
 }
+

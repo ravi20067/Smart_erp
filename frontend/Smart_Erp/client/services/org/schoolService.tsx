@@ -49,8 +49,10 @@ export interface UpdateSchoolRequest {
     activeStatus: ActiveStatus;
 }
 
-const BASE_URL = getBaseUrl();
-const SCHOOL_URL = `${BASE_URL}/school`;
+const getSchoolUrl = (): string => {
+    const base = getBaseUrl().replace(/\/+$/, "");
+    return `${base}/school`;
+};
 
 /* -------------------------------------------------------------------------- */
 /* Error handling                                                             */
@@ -157,7 +159,7 @@ export function extractErrorMessage(error: unknown): string {
 /* -------------------------------------------------------------------------- */
 
 export async function getSchools(): Promise<SchoolResponse[]> {
-    const response = await api.get<SchoolResponse[]>(SCHOOL_URL);
+    const response = await api.get<SchoolResponse[]>(getSchoolUrl());
 
     if (!Array.isArray(response.data)) {
         throw new Error("The server returned an invalid school list.");
@@ -210,7 +212,7 @@ export async function getSchoolPrefix(
         params.schoolId = schoolId;
     }
 
-    const response = await api.get<string>(`${SCHOOL_URL}/prefix`, {
+    const response = await api.get<string>(`${getSchoolUrl()}/prefix`, {
         params,
         responseType: "text",
     });
@@ -236,7 +238,7 @@ export async function createSchool(
         throw new Error("Please select a university before creating a school.");
     }
 
-    const response = await api.post<SchoolResponse>(SCHOOL_URL, request, {
+    const response = await api.post<SchoolResponse>(getSchoolUrl(), request, {
         params: { universityId },
     });
 
@@ -260,7 +262,7 @@ export async function updateSchool(
         throw new Error("A valid school ID is required.");
     }
 
-    const response = await api.put<SchoolResponse>(SCHOOL_URL, request);
+    const response = await api.put<SchoolResponse>(getSchoolUrl(), request);
 
     if (!response.data || typeof response.data.id !== "number") {
         throw new Error("The server did not return the updated school.");
@@ -279,7 +281,7 @@ export async function deleteSchool(schoolId: number): Promise<string> {
         throw new Error("A valid school ID is required.");
     }
 
-    const response = await api.delete<string>(SCHOOL_URL, {
+    const response = await api.delete<string>(getSchoolUrl(), {
         params: { schoolId },
     });
 

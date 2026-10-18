@@ -11,7 +11,7 @@ import org.springframework.web.bind.annotation.*;
 import java.util.List;
 
 @RestController
-@RequestMapping("/{role:program-coordinator|head-of-department|admin|dean|super-admin}/admin/sections")
+@RequestMapping("/{role:program-coordinator|head-of-department|admin|dean|school-dean|super-admin}/sections")
 @RequiredArgsConstructor
 public class SectionController {
 

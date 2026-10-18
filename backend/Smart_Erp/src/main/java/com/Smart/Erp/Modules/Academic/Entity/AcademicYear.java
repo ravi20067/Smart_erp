@@ -16,12 +16,7 @@ import java.util.List;
 import java.util.Optional;
 
 @Entity
-@Table(
-        name = "academic_years",
-        uniqueConstraints = {
-                @UniqueConstraint(columnNames = "name")
-        }
-)
+@Table(name = "academic_years")
 @Getter
 @Setter
 @NoArgsConstructor
@@ -33,7 +28,6 @@ public class AcademicYear extends BaseAuditableEntity implements CommonReference
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Column(nullable = false, unique = true)
     private String name;
 
     private String code;
@@ -80,7 +74,7 @@ public class AcademicYear extends BaseAuditableEntity implements CommonReference
 
     @Override
     public void setCodeWithPrefix(String code) {
-        this.code = code + "-" +  department.getCode();
+        this.code = code +  department.getCode();
     }
 
     public AcademicYearResponse mapToResponse(List<PermissionAction> permissionActions) {

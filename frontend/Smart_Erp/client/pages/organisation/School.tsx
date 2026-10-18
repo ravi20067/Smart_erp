@@ -152,8 +152,8 @@ function StatusBadge({ status }: { status: ActiveStatus }) {
     return (
         <span
             className={`inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-xs font-semibold ${active
-                    ? "border-emerald-400/30 bg-emerald-500/10 text-emerald-300"
-                    : "border-amber-400/30 bg-amber-500/10 text-amber-300"
+                ? "border-emerald-400/30 bg-emerald-500/10 text-emerald-300"
+                : "border-amber-400/30 bg-amber-500/10 text-amber-300"
                 }`}
         >
             <span
@@ -631,8 +631,8 @@ function SchoolDialog({
                                     maxLength={150}
                                     placeholder="e.g. School of Computer Science"
                                     className={`w-full rounded-xl border bg-slate-950/60 px-4 py-3 text-sm text-white outline-none transition placeholder:text-slate-500 ${fieldErrors.name
-                                            ? "border-rose-500/60 focus:border-rose-400"
-                                            : "border-white/10 focus:border-cyan-400/60"
+                                        ? "border-rose-500/60 focus:border-rose-400"
+                                        : "border-white/10 focus:border-cyan-400/60"
                                         } read-only:opacity-75`}
                                 />
 
@@ -684,40 +684,42 @@ function SchoolDialog({
                                 </p>
                             </div>
 
-                            <div>
-                                <label
-                                    htmlFor="school-status"
-                                    className="mb-2 block text-sm font-medium text-slate-300"
-                                >
-                                    Active Status
-                                </label>
-
-                                <div className="relative">
-                                    <select
-                                        id="school-status"
-                                        value={form.activeStatus}
-                                        onChange={(event) =>
-                                            changeField(
-                                                "activeStatus",
-                                                event.target.value as ActiveStatus
-                                            )
-                                        }
-                                        disabled={readOnly || busy}
-                                        className="w-full appearance-none rounded-xl border border-white/10 bg-slate-950/60 px-4 py-3 pr-10 text-sm text-white outline-none transition focus:border-cyan-400/60 disabled:opacity-70"
+                            {!isCreate && (
+                                <div>
+                                    <label
+                                        htmlFor="school-status"
+                                        className="mb-2 block text-sm font-medium text-slate-300"
                                     >
-                                        <option value="ENABLE">
-                                            Active (Enable)
-                                        </option>
-                                        <option value="DISABLE">
-                                            Inactive (Disable)
-                                        </option>
-                                    </select>
-                                    <ChevronDown
-                                        size={16}
-                                        className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-slate-400"
-                                    />
+                                        Active Status
+                                    </label>
+
+                                    <div className="relative">
+                                        <select
+                                            id="school-status"
+                                            value={form.activeStatus}
+                                            onChange={(event) =>
+                                                changeField(
+                                                    "activeStatus",
+                                                    event.target.value as ActiveStatus
+                                                )
+                                            }
+                                            disabled={readOnly || busy}
+                                            className="w-full appearance-none rounded-xl border border-white/10 bg-slate-950/60 px-4 py-3 pr-10 text-sm text-white outline-none transition focus:border-cyan-400/60 disabled:opacity-70"
+                                        >
+                                            <option value="ENABLE">
+                                                Active (Enable)
+                                            </option>
+                                            <option value="DISABLE">
+                                                Inactive (Disable)
+                                            </option>
+                                        </select>
+                                        <ChevronDown
+                                            size={16}
+                                            className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-slate-400"
+                                        />
+                                    </div>
                                 </div>
-                            </div>
+                            )}
 
                             {isView && school && (
                                 <div className="space-y-3">
@@ -822,8 +824,8 @@ function SchoolDialog({
                                     (isCreate && universities.length === 0)
                                 }
                                 className={`inline-flex items-center justify-center gap-2 rounded-xl px-5 py-2.5 text-sm font-semibold text-white shadow-lg transition hover:-translate-y-0.5 hover:brightness-110 active:translate-y-0 disabled:cursor-not-allowed disabled:opacity-50 ${isDelete
-                                        ? "bg-gradient-to-r from-red-600 to-rose-500 shadow-red-500/20"
-                                        : "bg-gradient-to-r from-violet-600 via-blue-600 to-cyan-500 shadow-blue-500/20"
+                                    ? "bg-gradient-to-r from-red-600 to-rose-500 shadow-red-500/20"
+                                    : "bg-gradient-to-r from-violet-600 via-blue-600 to-cyan-500 shadow-blue-500/20"
                                     }`}
                             >
                                 {busy || prefixLoading ? (
@@ -1214,7 +1216,7 @@ export default function Schools() {
             {/* Page heading */}
             <section>
                 <div className="mb-4 flex items-center gap-2 text-sm text-slate-400">
-                    <span>Dashboard</span>
+                    <span>Organisation</span>
                     <ChevronRight size={15} />
                     <span className="text-cyan-300">Schools</span>
                 </div>
@@ -1282,10 +1284,10 @@ export default function Schools() {
                         animate={{ opacity: 1, y: 0 }}
                         exit={{ opacity: 0, y: -8 }}
                         className={`flex items-start justify-between gap-4 rounded-xl border p-4 text-sm ${pageError
-                                ? "border-rose-400/30 bg-rose-500/10 text-rose-200"
-                                : universityFilterError
-                                    ? "border-amber-400/30 bg-amber-500/10 text-amber-200"
-                                    : "border-emerald-400/30 bg-emerald-500/10 text-emerald-200"
+                            ? "border-rose-400/30 bg-rose-500/10 text-rose-200"
+                            : universityFilterError
+                                ? "border-amber-400/30 bg-amber-500/10 text-amber-200"
+                                : "border-emerald-400/30 bg-emerald-500/10 text-emerald-200"
                             }`}
                     >
                         <div className="flex min-w-0 items-start gap-3">
@@ -1890,8 +1892,8 @@ export default function Schools() {
                                                 : undefined
                                         }
                                         className={`min-w-9 rounded-lg border px-3 py-2 text-sm transition ${currentPage === number
-                                                ? "border-cyan-300/40 bg-gradient-to-r from-violet-600 to-blue-500 font-semibold text-white shadow-md shadow-blue-500/20"
-                                                : "border-white/10 bg-white/[0.035] text-slate-300 hover:bg-white/10"
+                                            ? "border-cyan-300/40 bg-gradient-to-r from-violet-600 to-blue-500 font-semibold text-white shadow-md shadow-blue-500/20"
+                                            : "border-white/10 bg-white/[0.035] text-slate-300 hover:bg-white/10"
                                             }`}
                                     >
                                         {number}

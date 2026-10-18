@@ -12,7 +12,7 @@ import org.springframework.web.bind.annotation.*;
 import java.util.List;
 
 @RestController
-@RequestMapping("/{role:head-of-department|admin|dean|super-admin}/courses")
+@RequestMapping("/{role:head-of-department|admin|dean|school-dean|super-admin}/courses")
 @RequiredArgsConstructor
 public class CoursesController {
     private final CoursesService coursesService;

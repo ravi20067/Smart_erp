@@ -1,11 +1,8 @@
 package com.Smart.Erp.Modules.User.Controller;
 
-
-import com.Smart.Erp.Core.Common.CommonRequest;
-import com.Smart.Erp.Modules.Academic.DTO.School.SchoolRequest;
-import com.Smart.Erp.Modules.Academic.DTO.School.SchoolResponse;
 import com.Smart.Erp.Modules.User.DTO.Role.RoleRequest;
 import com.Smart.Erp.Modules.User.DTO.Role.RoleResponse;
+import com.Smart.Erp.Modules.User.DTO.Role.UserRoleEnumResponse;
 import com.Smart.Erp.Modules.User.Services.RoleService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
@@ -15,7 +12,7 @@ import org.springframework.web.bind.annotation.*;
 import java.util.List;
 
 @RestController
-@RequestMapping("/{role:head-of-department|admin|dean|super-admin}/user/role")
+@RequestMapping("/{role:head-of-department|admin|school-dean|dean|super-admin}/user/role")
 @RequiredArgsConstructor
 public class RoleController {
 
@@ -70,7 +67,7 @@ public class RoleController {
             "T(com.Smart.Erp.Modules.User.Enum.ResourceType).UNIVERSITY, " +
             "#universityId)")
     @GetMapping("/enums")
-    public ResponseEntity<List<String>> getRolesEnum(
+    public ResponseEntity<List<UserRoleEnumResponse>> getRolesEnum(
             @RequestParam Long universityId
     ) {
         return ResponseEntity.ok(roleService.getRolesEnum());

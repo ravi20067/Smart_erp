@@ -3,7 +3,9 @@ package com.Smart.Erp.Modules.Student.DTO.Enrollment;
 import com.Smart.Erp.Core.Common.CommonDTO;
 import com.Smart.Erp.Modules.Finance.DTO.Student.FeeResponse;
 import com.Smart.Erp.Modules.Finance.Enum.FeeFrequency;
+import com.Smart.Erp.Modules.Student.DTO.Student.StudentResponse;
 import com.Smart.Erp.Modules.User.Enum.EnrollmentStatus;
+import com.Smart.Erp.Modules.User.Enum.PermissionAction;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -28,4 +30,6 @@ public class StudentEnrollmentResponse {
     private CommonDTO sectionGroup;
     private CommonDTO specialization;
     private FeeFrequency frequency;
+    private StudentResponse student;
+    private List<PermissionAction> permissionActions;
 }

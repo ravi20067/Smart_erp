@@ -13,7 +13,7 @@ import java.util.List;
 @RequiredArgsConstructor
 @RequestMapping({
         "/super-admin/academic-year",
-        "/{role:head-of-department|admin|dean|super-admin}/academic-year"
+        "/{role:head-of-department|admin|dean|school-dean|super-admin}/academic-year"
 })
 public class AcademicYearController {
     private final AcademicYearService academicYearService;
@@ -83,11 +83,11 @@ public class AcademicYearController {
                     "T(com.Smart.Erp.Modules.User.Enum.ResourceType).ACADEMIC_YEAR, " +
                     "#academicYearId))"
     )
-    @GetMapping("/prefix")
-    public ResponseEntity<String> getPrefix(
+    @GetMapping("/postfix")
+    public ResponseEntity<String> getPostfix(
             @RequestParam(required = false) Long academicYearId,
             @RequestParam Long departmentId
     ) {
-        return ResponseEntity.ok(academicYearService.getPrefix(departmentId));
+        return ResponseEntity.ok(academicYearService.getPostfix(departmentId));
     }
 }

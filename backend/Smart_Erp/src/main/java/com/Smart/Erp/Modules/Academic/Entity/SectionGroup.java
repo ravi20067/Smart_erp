@@ -2,8 +2,10 @@ package com.Smart.Erp.Modules.Academic.Entity;
 
 import com.Smart.Erp.Config.BaseAuditableEntity;
 import com.Smart.Erp.Config.CommonReference;
+import com.Smart.Erp.Core.Common.DTO;
 import com.Smart.Erp.Modules.Academic.DTO.Sections.SectionGroupResponse;
 import com.Smart.Erp.Modules.Academic.Enum.ActiveStatus;
+import com.Smart.Erp.Modules.Student.DTO.SectionGroupFilter;
 import com.Smart.Erp.Modules.Student.Entity.StudentEnrollment;
 import jakarta.persistence.*;
 import lombok.*;
@@ -22,9 +24,12 @@ public class SectionGroup  extends BaseAuditableEntity implements CommonReferenc
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
     private String name;
-    private ActiveStatus activeStatus = ActiveStatus.DISABLE;
     @Transient
     private String code;
+
+    @Builder.Default
+    private ActiveStatus activeStatus = ActiveStatus.DISABLE;
+
     @ManyToOne
     @JoinColumn(name = "section_id")
     private Section section;
@@ -38,7 +43,7 @@ public class SectionGroup  extends BaseAuditableEntity implements CommonReferenc
 
 
     public void setCodeWithPrefix(String code){
-        this.code = merge(specialization.getCode() , section.getCode()) + code;
+        this.code = mergeForCode(specialization.getCode() , section.getCode()) + code;
     }
 
     public String getStudentRollPrefix() {
@@ -59,23 +64,18 @@ public class SectionGroup  extends BaseAuditableEntity implements CommonReferenc
     public SectionGroupResponse mapToResponse(SectionGroup this){
         return SectionGroupResponse.builder()
                 .id(this.getId())
-                .activeStatus(this.getActiveStatus())
                 .name(this.getName())
                 .code(this.getCode())
                 .specialization(this.getSpecialization().toCommonDTO())
                 .build();
     }
 
-    public String merge(String sectionCode, String specializationCode) {
-        int i = 0;
-
-        while (i < sectionCode.length()
-                && i < specializationCode.length()
-                && sectionCode.charAt(i) == specializationCode.charAt(i)) {
-            i++;
-        }
-
-        return sectionCode + specializationCode.substring(i);
+    public SectionGroupFilter toSectionGroupFilter() {
+        return SectionGroupFilter.builder()
+                .sectionGroup(this.toCommonDTO())
+                .specialization(this.getSpecialization().toCommonDTO())
+                .courses(this.specialization.getCourse().toCommonDTO())
+                .build();
     }
 
     public static String mergeForCode(String sectionCode, String specializationCode) {
@@ -88,5 +88,9 @@ public class SectionGroup  extends BaseAuditableEntity implements CommonReferenc
         }
 
         return sectionCode + specializationCode.substring(i);
+    }
+
+    public University getUniversity() {
+        return specialization.getCourse().getAcademicYear().getDepartment().getSchool().getUniversity();
     }
 }

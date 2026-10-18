@@ -29,9 +29,10 @@ public class Section  extends BaseAuditableEntity implements CommonReference {
     private String name;
 
     private String code;
+    @Builder.Default
+    private Integer capacity = 0;
 
-    private Integer capacity;
-
+    @Builder.Default
     private ActiveStatus activeStatus = ActiveStatus.DISABLE;
 
 
@@ -43,6 +44,7 @@ public class Section  extends BaseAuditableEntity implements CommonReference {
     )
     private List<SectionGroup> sectionGroups = new ArrayList<>();
 
+    @ToString.Exclude
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "course_id")
     private Course course;
@@ -71,7 +73,7 @@ public class Section  extends BaseAuditableEntity implements CommonReference {
         University university = school.getUniversity();
 
         return SectionResponse.builder()
-                .id(this.getName())
+                .id(this.getId())
                 .code(this.getCode())
                 .name(this.getName())
                 .capacity(this.getCapacity())

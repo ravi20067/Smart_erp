@@ -29,6 +29,7 @@ public class Department extends BaseAuditableEntity implements CommonReference {
     @Column(unique = true)
     private String code;
 
+    @Builder.Default
     private ActiveStatus activeStatus = ActiveStatus.DISABLE;
 
     @ManyToOne(fetch = FetchType.LAZY)

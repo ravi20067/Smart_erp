@@ -28,7 +28,7 @@ import StudentDashboard from "./pages/student/Dashboard";
 import TeacherDashboard from "./pages/teacher/Dashboard";
 import LibraryDashboard from "./pages/library/Dashboard";
 import AdmissionDashboard from "./pages/admission/Dashboard";
-import ExaminationDeptDashboard from "./pages/examination_department/Dashboard";
+import ExaminationDeptDashboard from "./pages/examination/Dashboard";
 import FinanceDashboard from "./pages/finance/Dashboard";
 import SuperAdminDashboard from "./pages/super-admin/Dashboard";
 import SuperAdminLayout from "./pages/super-admin/Layout";
@@ -42,6 +42,16 @@ import Blog from "./pages/Blog";
 import BookDemo from "./pages/BookDemo";
 import University from "./pages/organisation/University";
 import School from "./pages/organisation/School";
+import Departments from "./pages/organisation/Departments";
+import AcademicYears from "./pages/academicManagement/AcademicYears";
+import Courses from "./pages/academicManagement/Courses";
+import Specializations from "./pages/academicManagement/Specializations";
+import Sections from "./pages/academicManagement/Sections";
+import Subjects from "./pages/academicManagement/Subjects";
+import RolePermission from "./pages/userMangement/RolePermission";
+import FeeStructure from "./pages/financial/FeeStructure";
+import Scholarship from "./pages/financial/Scholarship";
+import Rooms from "./pages/timeTable/Room";
 
 const queryClient = new QueryClient();
 
@@ -99,7 +109,7 @@ const App = () => (
             <Route path="/test" element={<SuperAdminDashboard />} />
             {/* TEMPORARY UI TEST ROUTE — remove after testing */}
             <Route path="/test-admin" element={<SuperAdminLayout />}>
-              <Route index element={<School />} />
+              <Route index element={<FeeStructure />} />
             </Route>
 
             {/* Protected Routes */}
@@ -118,9 +128,16 @@ const App = () => (
               {/* Organization */}
               <Route path="universities" element={<University />} />
               <Route path="schools" element={<School />} />
-              {/* <Route path="departments" element={<Department />} /> */}
-
-              {/* Add your other existing admin routes here */}
+              <Route path="departments" element={<Departments />} />
+              <Route path="academic-years" element={<AcademicYears />} />
+              <Route path="courses" element={<Courses />} />
+              <Route path="specializations" element={<Specializations />} />
+              <Route path="sections" element={<Sections />} />
+              <Route path="subjects" element={<Subjects />} />
+              <Route path="role-permissions" element={<RolePermission />} />
+              <Route path="fee-structures" element={<FeeStructure />} />
+              <Route path="scholarships" element={<Scholarship />} />
+              <Route path="rooms" element={<Rooms />} />
             </Route>
 
             <Route
@@ -133,6 +150,7 @@ const App = () => (
             >
               {/* Dashboard: /admin */}
               <Route index element={<SuperAdminDashboard />} />
+              <Route path="fees" element={<FeeStructure />} />
 
               {/* Organization */}
               {/* <Route path="universities" element={<University />} />

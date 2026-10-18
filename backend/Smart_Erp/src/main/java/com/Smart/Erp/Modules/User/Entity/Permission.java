@@ -4,6 +4,7 @@ import com.Smart.Erp.Config.BaseAuditableEntity;
 import com.Smart.Erp.Modules.User.Enum.PermissionAction;
 import com.Smart.Erp.Modules.User.Enum.ResourceType;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import jakarta.persistence.*;
 import lombok.*;
 
@@ -62,6 +63,7 @@ public class Permission extends BaseAuditableEntity {
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "parent_id")
     @ToString.Exclude
+    @JsonIgnore
     private Permission parent;
 
     @OneToMany(
@@ -76,5 +78,9 @@ public class Permission extends BaseAuditableEntity {
     public void addChildren(Permission permission){
         permission.setParent(this);
         children.add(permission);
+    }
+
+    public String getName() {
+        return resourceType + "_" + action;
     }
 }

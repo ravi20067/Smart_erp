@@ -1,5 +1,6 @@
 package com.Smart.Erp.Modules.User.Entity;
 import com.Smart.Erp.Config.BaseAuditableEntity;
+import com.Smart.Erp.Core.Common.CommonDTO;
 import com.Smart.Erp.Modules.Student.Entity.Student;
 import com.Smart.Erp.Modules.Teacher.Entity.Teacher;
 import com.Smart.Erp.Modules.User.Enum.UserRoles;
@@ -90,5 +91,12 @@ public class User  extends BaseAuditableEntity {
 
     public String getName() {
         return this.getBasicDetail().getFirstName() + " " + this.getBasicDetail().getLastName();
+    }
+
+    public CommonDTO toCommonDTO() {
+        return CommonDTO.builder()
+                .id(this.getId())
+                .name(this.getName())
+                .build();
     }
 }

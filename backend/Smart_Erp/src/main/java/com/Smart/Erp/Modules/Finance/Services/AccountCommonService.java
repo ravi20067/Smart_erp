@@ -1,22 +1,17 @@
 package com.Smart.Erp.Modules.Finance.Services;
 
 import com.Smart.Erp.Core.Exception.ResourceNotFoundException;
+import com.Smart.Erp.Modules.Academic.Entity.University;
 import com.Smart.Erp.Modules.Finance.Entity.FeeComponent;
 import com.Smart.Erp.Modules.Finance.Entity.FeeStructure;
 import com.Smart.Erp.Modules.Finance.Entity.Scholarship;
-import com.Smart.Erp.Modules.Finance.Entity.StudentFeeAccount;
-import com.Smart.Erp.Modules.Finance.Enum.FeeAccountStatus;
 import com.Smart.Erp.Modules.Finance.Repo.FeeComponentRepo;
 import com.Smart.Erp.Modules.Finance.Repo.FeeStructureRepo;
 import com.Smart.Erp.Modules.Finance.Repo.ScholarshipRepo;
-import com.Smart.Erp.Modules.Student.Entity.StudentEnrollment;
 import lombok.AllArgsConstructor;
 import org.springframework.stereotype.Service;
 
-import java.math.BigDecimal;
-import java.time.LocalDate;
 import java.util.List;
-import java.util.Objects;
 import java.util.Set;
 
 @Service
@@ -36,8 +31,8 @@ public class AccountCommonService {
         );
     }
 
-    public Set<Scholarship> getScholarship(List<Long> scholarshipIds){
-        return scholarshipRepo.findByIdIn(scholarshipIds);
+    public Set<Scholarship> getScholarship(List<Long> scholarshipIds, University university){
+        return scholarshipRepo.findByIdInAndUniversity(scholarshipIds,university);
     }
 
     public FeeStructure getFeeStructure(Long feeStructureId){

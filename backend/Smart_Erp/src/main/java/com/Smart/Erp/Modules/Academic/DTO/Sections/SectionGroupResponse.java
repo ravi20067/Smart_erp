@@ -12,7 +12,6 @@ public class SectionGroupResponse {
     private Long id;
     private String name;
     private String code;
-    private ActiveStatus activeStatus;
     private CommonDTO specialization;
     private Integer studentCount;
 }

@@ -7,6 +7,7 @@ import com.Smart.Erp.Core.Exception.ResourceNotFoundException;
 import com.Smart.Erp.Modules.Academic.Entity.*;
 import com.Smart.Erp.Modules.Academic.Enum.ActiveStatus;
 import com.Smart.Erp.Modules.Academic.Repo.*;
+import com.Smart.Erp.Modules.Student.DTO.SectionGroupFilter;
 import com.Smart.Erp.Modules.Student.Entity.StudentEnrollment;
 import com.Smart.Erp.Modules.Student.Repo.StudentEnrollmentRepo;
 import com.Smart.Erp.Modules.Subject.Entity.Subject;
@@ -235,6 +236,21 @@ public class AcademicCommonService {
                 .toList();
     }
 
+    public List<SectionGroupFilter> filterSectionGroup() {
+        Map<Long, List<PermissionAction>> map = authorizationService.getAll(ResourceType.SECTION_GROUP);
+        List<SectionGroup> sectionGroups = sectionGroupRepo.findAllById(filterHelper(map));
+
+        if (sectionGroups.isEmpty()) {
+            return Collections.emptyList();
+        }
+
+        return sectionGroups.stream()
+                .filter(Objects::nonNull)
+                .filter(sectionGroup -> sectionGroup.getSpecialization().getCourse().getNewEnrollmentAllowed())
+                .map(SectionGroup::toSectionGroupFilter)
+                .toList();
+    }
+
     // =========================================================
     // ENTITY FETCH METHODS
     // =========================================================
@@ -395,8 +411,8 @@ public class AcademicCommonService {
         if (department == null || activeStatus == null) {
             return department;
         }
-
         department.setActiveStatus(activeStatus);
+
 
         if (activeStatus == ActiveStatus.ENABLE) {
             return department;
@@ -480,10 +496,6 @@ public class AcademicCommonService {
         }
 
         section.setActiveStatus(activeStatus);
-
-        if (activeStatus == ActiveStatus.ENABLE) {
-            return section;
-        }
 
         if (section.getSectionGroups() != null) {
             section.getSectionGroups().stream()

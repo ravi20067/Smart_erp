@@ -17,7 +17,7 @@ import java.util.*;
 
 @Service("authVerifier")
 @RequiredArgsConstructor
-@Transactional(readOnly = true)
+@Transactional
 public class AuthorizationService {
 
     private final UserRepo userRepository;
@@ -204,16 +204,15 @@ public class AuthorizationService {
             ResourceType resourceType,
             Long resourceId
     ) {
-        Permission permission = permissionRepository
+        List<Permission> permission = permissionRepository
                 .findByResourceTypeAndResourceId(resourceType, resourceId)
                 .stream()
-                .findFirst()
-                .orElse(null);
+                .toList();
 
-        if (permission == null) {
+        if (permission.isEmpty()) {
             return;
         }
-        permissionRepository.delete(permission);
+        permissionRepository.deleteAll(permission);
     }
 
     public List<PermissionAction> getPermissionAction(
@@ -312,5 +311,55 @@ public class AuthorizationService {
     ){
         deletePermission(childResourceType, childResourceId);
         createPermission(childResourceId, childResourceType, parentResourceId, parentResourceType);
+    }
+
+    public List<Permission> getRoleBasePermissions() {
+        Authentication authentication =
+                SecurityContextHolder.getContext().getAuthentication();
+
+        if (authentication == null || !authentication.isAuthenticated()) {
+            return Collections.emptyList();
+        }
+
+        String username = authentication.getName();
+
+        if (username == null || username.isBlank()) {
+            return Collections.emptyList();
+        }
+
+        User user = userRepository.findByUsername(username).orElse(null);
+
+        if (user == null
+                || !Boolean.TRUE.equals(user.getEnabled())
+                || user.getUserRole() == null) {
+            return Collections.emptyList();
+        }
+
+        // SUPER ADMIN has every action
+        if (user.getUserRole() == UserRoles.SUPER_ADMIN) {
+            return permissionRepository.findByResourceType(ResourceType.UNIVERSITY);
+        }
+
+        return user.getRoles().stream()
+                .filter(UserRole::getActive)
+                .map(UserRole::getRole)
+                .filter(Role::getActive)
+                .flatMap(role -> role.getPermissions().stream())
+                .filter(RolePermission::getActive)
+                .map(RolePermission::getPermission)
+                .filter(Objects::nonNull)
+                .distinct()
+                .toList();
+    }
+
+    public User getCurrentUser() {
+        Authentication authentication =
+                SecurityContextHolder.getContext().getAuthentication();
+
+        if (authentication == null || !authentication.isAuthenticated()) {
+            return null;
+        }
+
+        return userRepository.findByUsername(authentication.getName()).orElse(null);
     }
 }
