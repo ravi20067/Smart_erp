@@ -27,9 +27,7 @@ public class SectionGroup  extends BaseAuditableEntity implements CommonReferenc
     @Transient
     private String code;
 
-    @Builder.Default
-    private ActiveStatus activeStatus = ActiveStatus.DISABLE;
-
+    @ToString.Exclude
     @ManyToOne
     @JoinColumn(name = "section_id")
     private Section section;

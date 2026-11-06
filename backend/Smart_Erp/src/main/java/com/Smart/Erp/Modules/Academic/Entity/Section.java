@@ -36,6 +36,7 @@ public class Section  extends BaseAuditableEntity implements CommonReference {
     private ActiveStatus activeStatus = ActiveStatus.DISABLE;
 
 
+    @ToString.Exclude
     @Builder.Default
     @OneToMany(
             mappedBy = "section",

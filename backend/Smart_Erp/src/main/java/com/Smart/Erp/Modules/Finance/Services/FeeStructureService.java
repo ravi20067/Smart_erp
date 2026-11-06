@@ -13,6 +13,8 @@ import com.Smart.Erp.Modules.Finance.Entity.FeeComponent;
 import com.Smart.Erp.Modules.Finance.Entity.FeeStructure;
 import com.Smart.Erp.Modules.Finance.Repo.FeeComponentRepo;
 import com.Smart.Erp.Modules.Finance.Repo.FeeStructureRepo;
+import com.Smart.Erp.Modules.Student.Entity.StudentEnrollment;
+import com.Smart.Erp.Modules.Student.Services.StudentCommonService;
 import com.Smart.Erp.Modules.User.Entity.User;
 import com.Smart.Erp.Modules.User.Enum.PermissionAction;
 import com.Smart.Erp.Modules.User.Enum.ResourceType;
@@ -23,6 +25,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
 
+import java.math.BigDecimal;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -37,6 +40,7 @@ public class FeeStructureService {
     private final AcademicCommonService academicCommonService;
     private final AccountCommonService accountCommonService;
     private final FeeComponentRepo feeComponentRepo;
+    private final StudentCommonService studentCommonService;
 
     public List<FeeStructureResponse> getFeeStructures() {
         Map<Long, List<PermissionAction>> map = authorizationService.getAll(ResourceType.FEE_STRUCTURE);
@@ -52,6 +56,17 @@ public class FeeStructureService {
         List<Specialization> specializations = academicCommonService.getSpecialization(request.getSpecializationId());
         FeeStructure feeStructure = FeeStructure.createFromRequest(request, course, specializations, authorizationService.getCurrentUser());
         feeStructure = repository.save(feeStructure);
+
+        List<StudentEnrollment> studentEnrollments = feeStructure.getSpecializations().stream()
+                .flatMap(specialization ->
+                        specialization.getSectionGroups().stream().flatMap(
+                                sectionGroup -> sectionGroup.getStudentEnrollments().stream()
+                        )
+                )
+                .toList();
+
+        studentCommonService.adjustFeeStructureChange(studentEnrollments, feeStructure);
+
         authorizationService.createPermission(feeStructure.getId(), ResourceType.FEE_STRUCTURE,courseId,ResourceType.COURSE);
 
         return feeStructure.mapToResponse(authorizationService.getPermissionAction(ResourceType.FEE_STRUCTURE, feeStructure.getId()));
@@ -65,6 +80,9 @@ public class FeeStructureService {
         // 1. Load the existing fee structure.
         FeeStructure feeStructure =
                 accountCommonService.getFeeStructure(id);
+
+        BigDecimal oldTotalAmount = feeStructure.getTotalAmount();
+
 
         // 2. Resolve the requested specializations.
         List<Specialization> specializations =
@@ -105,20 +123,6 @@ public class FeeStructureService {
             throw new OperationNotAllowedException("One or more fee components do not exist");
         }
 
-        // 4. Ensure every component belongs to this fee structure.
-        for (FeeComponent component : componentsToRemove) {
-            if (component.getFeeStructure() == null
-                    || !id.equals(
-                    component.getFeeStructure().getId()
-            )) {
-                throw new OperationNotAllowedException(
-                        "Fee component " + component.getId()
-                                + " does not belong to fee structure "
-                                + id
-                );
-            }
-        }
-
         // 5. Update the entity and its relationships.
         User currentUser = authorizationService.getCurrentUser();
 
@@ -133,6 +137,17 @@ public class FeeStructureService {
         FeeStructure updatedFeeStructure =
                 repository.save(feeStructure);
 
+        if (oldTotalAmount.compareTo(updatedFeeStructure.getTotalAmount()) != 0) {
+            List<StudentEnrollment> studentEnrollments = updatedFeeStructure.getSpecializations().stream()
+                    .flatMap(specialization ->
+                            specialization.getSectionGroups().stream().flatMap(
+                                    sectionGroup -> sectionGroup.getStudentEnrollments().stream()
+                            )
+                    )
+                    .toList();
+
+            studentCommonService.adjustFeeStructureChange(studentEnrollments, feeStructure);
+        }
         // 7. Return the updated response with permissions.
         return updatedFeeStructure.mapToResponse(
                 authorizationService.getPermissionAction(
@@ -143,13 +158,20 @@ public class FeeStructureService {
     }
 
     public void deleteFeeStructure(Long id) {
-        repository.deleteById(id);
-        authorizationService.deletePermission(ResourceType.FEE_STRUCTURE,id);
+        if (accountCommonService.getFeeStructure(id).getSpecializations().isEmpty()) {
+            repository.deleteById(id);
+            authorizationService.deletePermission(ResourceType.FEE_STRUCTURE, id);
+        } else {
+            throw new OperationNotAllowedException("Cannot delete fee structure with active specializations");
+        }
     }
 
     public List<CommonDTO> getSpecializationFilter(Long courseId) {
-        return academicCommonService.getCourse(courseId).getSpecializations().stream()
-                .map(CommonReference::toCommonDTO)
+        List<Specialization> specializations = academicCommonService.getCourse(courseId).getSpecializations();
+        repository.findByCourse_Id(courseId).ifPresent(fee -> fee.getSpecializations().forEach(specializations::remove));
+
+        return specializations.stream()
+                .map(Specialization::toCommonDTO)
                 .toList();
     }
 }

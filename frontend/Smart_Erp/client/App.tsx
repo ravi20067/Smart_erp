@@ -52,6 +52,7 @@ import RolePermission from "./pages/userMangement/RolePermission";
 import FeeStructure from "./pages/financial/FeeStructure";
 import Scholarship from "./pages/financial/Scholarship";
 import Rooms from "./pages/timeTable/Room";
+import Student from "./pages/userMangement/Student";
 
 const queryClient = new QueryClient();
 
@@ -138,6 +139,7 @@ const App = () => (
               <Route path="fee-structures" element={<FeeStructure />} />
               <Route path="scholarships" element={<Scholarship />} />
               <Route path="rooms" element={<Rooms />} />
+              <Route path="students" element={<Student />} />
             </Route>
 
             <Route

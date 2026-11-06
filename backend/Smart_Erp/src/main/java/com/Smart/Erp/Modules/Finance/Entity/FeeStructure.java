@@ -1,10 +1,12 @@
 package com.Smart.Erp.Modules.Finance.Entity;
 
 import com.Smart.Erp.Config.BaseAuditableEntity;
+import com.Smart.Erp.Core.Exception.OperationNotAllowedException;
 import com.Smart.Erp.Modules.Academic.Entity.*;
 import com.Smart.Erp.Modules.Finance.DTO.Fee.FeeStructureRequest;
 import com.Smart.Erp.Modules.Finance.DTO.Fee.FeeStructureResponse;
 import com.Smart.Erp.Modules.Finance.DTO.Fee.FeeStructureUpdateRequest;
+import com.Smart.Erp.Modules.Finance.Enum.FeeCategoryType;
 import com.Smart.Erp.Modules.Finance.Enum.FeeFrequency;
 import com.Smart.Erp.Modules.User.Entity.User;
 import com.Smart.Erp.Modules.User.Enum.PermissionAction;
@@ -16,6 +18,7 @@ import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
+import java.util.Set;
 
 @Entity
 @Table(
@@ -161,28 +164,47 @@ public class FeeStructure extends BaseAuditableEntity {
         // Remove existing components requested for deletion.
         for (FeeComponent component :
                 new ArrayList<>(componentsToRemove)) {
+            if (component.getFeeStructure().getId() == null || !component.getFeeStructure().getId().equals(this.getId())) {
+                throw new OperationNotAllowedException(
+                        "Fee component " + component.getId()
+                                + " does not belong to fee structure "
+                                + this.getId()
+                );
+            }
             removeComponent(component);
         }
 
         // Add new components.
+        // Add new components only if the category does not already exist.
         if (request.getComponentToAdd() != null) {
-            for (var componentRequest :
-                    request.getComponentToAdd()) {
+
+            Set<FeeCategoryType> existingCategories = this.components.stream()
+                    .map(FeeComponent::getCategoryType)
+                    .collect(java.util.stream.Collectors.toSet());
+
+            for (var componentRequest : request.getComponentToAdd()) {
+
+                FeeCategoryType category = componentRequest.getFeeCategoryType();
+
+                if (category == null) {
+                    throw new IllegalArgumentException(
+                            "Fee component category cannot be null"
+                    );
+                }
+
+                if (!existingCategories.add(category)) {
+                    throw new OperationNotAllowedException(
+                            "Fee component category " + category
+                                    + " already exists in this fee structure"
+                    );
+                }
 
                 FeeComponent component = FeeComponent.builder()
-                        .categoryType(
-                                componentRequest.getFeeCategoryType()
-                        )
-                        .componentName(
-                                componentRequest.getComponentName()
-                        )
+                        .categoryType(category)
+                        .componentName(componentRequest.getComponentName())
                         .amount(componentRequest.getAmount())
-                        .isMandatory(
-                                componentRequest.getIsMandatory()
-                        )
-                        .isRefundable(
-                                componentRequest.getIsRefundable()
-                        )
+                        .isMandatory(componentRequest.getIsMandatory())
+                        .isRefundable(componentRequest.getIsRefundable())
                         .feeStructure(this)
                         .build();
 
@@ -264,6 +286,7 @@ public class FeeStructure extends BaseAuditableEntity {
                 .courses(this.getCourse().toCommonDTO())
                 .department(department.toCommonDTO())
                 .school(school.toCommonDTO())
+                .university(school.getUniversity().toCommonDTO())
                 .academicYear(academicYear.toCommonDTO())
                 .lastModifiedBy(this.getLastModifiedBy() != null ? this.getLastModifiedBy().toCommonDTO() : null)
                 .permissionActions(permissionActions)

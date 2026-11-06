@@ -14,8 +14,10 @@ import java.util.stream.Collectors;
 
 @Entity
 @Table(name = "students")
-@Data
-@EqualsAndHashCode(callSuper = true)
+@Getter
+@Setter
+@EqualsAndHashCode(onlyExplicitlyIncluded = true, callSuper = false)
+
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
@@ -23,6 +25,7 @@ public class Student  extends BaseAuditableEntity {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
+    @EqualsAndHashCode.Include
     private Long id;
 
     @Column(
@@ -33,6 +36,7 @@ public class Student  extends BaseAuditableEntity {
     )
     private String registrationNumber;
 
+    @EqualsAndHashCode.Exclude
     @ToString.Exclude
     @OneToOne(fetch = FetchType.LAZY)
     @JoinColumn(
@@ -43,6 +47,7 @@ public class Student  extends BaseAuditableEntity {
     private User user;
 
     @ToString.Exclude
+    @Builder.Default
     @OneToMany(
             mappedBy = "student",
             cascade = CascadeType.ALL,

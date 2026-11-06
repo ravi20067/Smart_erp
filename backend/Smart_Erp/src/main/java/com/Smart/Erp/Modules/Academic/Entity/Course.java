@@ -34,9 +34,10 @@ public class Course extends BaseAuditableEntity implements CommonReference {
     @JoinColumn(name = "academic_year_id")
     private AcademicYear academicYear;
 
+    @Builder.Default
     private ActiveStatus activeStatus = ActiveStatus.DISABLE;
 
-    private Boolean NewEnrollmentAllowed = false;
+    private Boolean newEnrollmentAllowed = false;
     // Course → Subject
     @Builder.Default
     @OneToMany(

@@ -65,9 +65,7 @@ public class AcademicYear extends BaseAuditableEntity implements CommonReference
     private List<TeacherEnrollment> teacherEnrollments = new ArrayList<>();
 
     public String getStudentPostfix(){
-        long studentCount = Optional.ofNullable(this.getStudentEnrollments())
-                .map(List::size)
-                .orElse(0);
+        long studentCount = studentEnrollments.size();
 
         return String.format("%06d", studentCount + 1);
     }

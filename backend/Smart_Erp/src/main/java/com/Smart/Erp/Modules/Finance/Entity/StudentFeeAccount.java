@@ -229,7 +229,12 @@ public class StudentFeeAccount extends BaseAuditableEntity {
     public FeeResponse mapToResponseForStudent(){
         return FeeResponse.builder()
                 .id(this.getId())
-                .netPayableAmount(this.getNetPayableAmount())
+                .totalAmount(this.getBaseAmount())
+                .paidAmount(this.getPaidAmount())
+                .balance(this.getDueBalance())
+                .frequency(this.getFeeStructure().getFrequency())
+                .status(this.getStatus())
+                .payableAmount(this.getNetPayableAmount())
                 .dueDate(this.getDueDate())
                 .build();
     }

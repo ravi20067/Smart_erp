@@ -48,6 +48,17 @@ public class UserCommonService {
         return userRepo.findByUsername(username).orElseThrow();
     }
 
+    public String getAvailableUsername(String prefix, int start) {
+        int index = Math.max(start, 1);
+        String username;
+
+        do {
+            username = prefix + String.format("%04d", index++);
+        } while (userRepo.findByUsername(username).isPresent());
+
+        return username;
+    }
+
     public void updateRole(User user, UserRoles userRole) {
         user.setUserRole(userRole);
         user.setUsername(user.getUsername().replace(user.getUserRole().getCode(), userRole.getCode()));

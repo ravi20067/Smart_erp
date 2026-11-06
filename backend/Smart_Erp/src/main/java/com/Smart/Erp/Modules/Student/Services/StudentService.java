@@ -1,5 +1,6 @@
 package com.Smart.Erp.Modules.Student.Services;
 
+import com.Smart.Erp.Core.Common.CommonDTO;
 import com.Smart.Erp.Core.Common.DTO;
 import com.Smart.Erp.Core.Exception.OperationNotAllowedException;
 import com.Smart.Erp.Modules.Academic.Entity.*;
@@ -76,8 +77,11 @@ public class StudentService {
                 .mapToInt(group -> group.getStudentEnrollments().size())
                 .sum();
 
-        String userName =  sectionGroup.getSpecialization().getCode() + String.format("%04d", studentCount + 1);
-        String registrationNo = academicYear.getStudentPostfix() + 1;
+        String userName = userService.getAvailableUsername(
+                sectionGroup.getSpecialization().getCode(),
+                studentCount + 1
+        );
+        String registrationNo = academicYear.getStudentPostfix();
         LocalDate dob = studentRequest.getBasicDetailRequest().getDob();
         String formattedDob = dob != null ? dob.format(DateTimeFormatter.ISO_LOCAL_DATE) : "";
 
@@ -99,10 +103,11 @@ public class StudentService {
         student.addEnrollment(studentEnrollment);
         student = studentRepo.save(student);
 
-        academicCommonService.handleStudentChange(sectionGroup);
+        academicCommonService.handleStudentChange(sectionGroup,null);
+        academicCommonService.handleStudentChange(sectionGroup.getSpecialization(),null);
         student = commonService.getStudent(student.getId());
 
-        authorizationService.createPermission(student.getId(), ResourceType.STUDENT_ENROLLMENT, sectionGroup.getId(), ResourceType.SECTION_GROUP);
+        authorizationService.createPermission(studentEnrollment.getId(), ResourceType.STUDENT_ENROLLMENT, sectionGroup.getId(), ResourceType.SECTION_GROUP);
 
         studentEnrollment = student.getEnrollments().stream().findFirst().orElseThrow(
                 () -> new OperationNotAllowedException("Student enrollment not found")
@@ -142,9 +147,9 @@ public class StudentService {
         }
 
         studentEnrollment.setSectionGroup(newSectionGroup);
+        studentEnrollment.setAcademicYear(newSectionGroup.getSpecialization().getCourse().getAcademicYear());
         studentEnrollment = studentEnrollmentRepo.save(studentEnrollment);
-        academicCommonService.handleStudentChange(oldSectionGroup);
-        academicCommonService.handleStudentChange(newSectionGroup);
+        academicCommonService.handleStudentChange(newSectionGroup, oldSectionGroup);
         return commonService.getStudentEnrollment(studentEnrollment.getId()).mapToResponse(authorizationService.getPermissionAction(ResourceType.STUDENT_ENROLLMENT, studentEnrollment.getId()));
     }
     public StudentEnrollmentResponse changeCourse(Long enrollmentId, Long sectionGroupId) {
@@ -162,6 +167,7 @@ public class StudentService {
         }
 
         studentEnrollment.setSectionGroup(newSectionGroup);
+        studentEnrollment.setAcademicYear(newSectionGroup.getSpecialization().getCourse().getAcademicYear());
 
         FeeStructure feeStructure = newSectionGroup.getSpecialization().getFeeStructure();
 
@@ -169,13 +175,11 @@ public class StudentService {
 
         studentEnrollment = studentEnrollmentRepo.save(studentEnrollment);
 
-        academicCommonService.handleStudentChange(oldSpecialization);
-
-        academicCommonService.handleStudentChange(oldSectionGroup);
-        academicCommonService.handleStudentChange(newSectionGroup);
+        academicCommonService.handleStudentChange(newSectionGroup.getSpecialization(),oldSpecialization);
+        academicCommonService.handleStudentChange(newSectionGroup,oldSectionGroup);
 
         authorizationService.changeParent(
-                studentEnrollment.getStudent().getId(),
+                studentEnrollment.getId(),
                 ResourceType.STUDENT_ENROLLMENT,
                 newSectionGroup.getId(),
                 ResourceType.SECTION_GROUP
@@ -209,10 +213,8 @@ public class StudentService {
         userService.changeEnable(studentEnrollment.getStudent().getUser(), enable);
     }
     public List<SectionGroupFilter> filterSectionGroup() {
-
-        return academicCommonService.filterSectionGroup();
+        return academicCommonService.filterSectionGroupForStudentPage();
     }
-
     public List<DTO> listScholarships(Long sectionGroupId) {
         SectionGroup sectionGroup = academicCommonService.getSectionGroup(sectionGroupId);
         return sectionGroup.getUniversity().getScholarships().stream()
@@ -222,5 +224,10 @@ public class StudentService {
                         .name(scholarship.getName())
                         .build())
                 .toList();
+    }
+
+    public List<CommonDTO> filterSection(Long enrollmentId) {
+        StudentEnrollment studentEnrollment = commonService.getStudentEnrollment(enrollmentId);
+        return academicCommonService.filterSectionForStudentPage(studentEnrollment.getSectionGroup().getSpecialization());
     }
 }

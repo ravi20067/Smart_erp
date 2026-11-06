@@ -11,16 +11,7 @@ import java.math.BigDecimal;
 
 @Entity
 @Table(
-        name = "fee_components",
-        uniqueConstraints = {
-                @UniqueConstraint(
-                        name = "uk_fee_structure_component",
-                        columnNames = {"fee_structure_id", "category_type"}
-                )
-        },
-        indexes = {
-                @Index(name = "idx_fee_component_structure", columnList = "fee_structure_id")
-        }
+        name = "fee_components"
 )
 @Getter
 @Setter

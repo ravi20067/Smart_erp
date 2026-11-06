@@ -25,6 +25,7 @@ public class FeeStructureResponse {
     private CommonDTO courses;
     private CommonDTO department;
     private CommonDTO school;
+    private CommonDTO university;
     private CommonDTO academicYear;
     private CommonDTO lastModifiedBy;
     private List<PermissionAction> permissionActions;

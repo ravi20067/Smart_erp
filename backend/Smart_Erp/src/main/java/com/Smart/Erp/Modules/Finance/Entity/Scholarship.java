@@ -85,6 +85,7 @@ public class Scholarship  extends BaseAuditableEntity implements CommonReference
                 .number(this.getNumber())
                 .amountType(this.getAmountType())
                 .status(this.getStatus())
+                .university(this.getUniversity().toCommonDTO())
                 .scholarshipType(this.getScholarshipType())
                 .permissionActions(permissionActions)
                 .build();

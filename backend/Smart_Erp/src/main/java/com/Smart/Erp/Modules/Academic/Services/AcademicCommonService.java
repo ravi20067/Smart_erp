@@ -20,6 +20,9 @@ import com.Smart.Erp.Modules.User.Enum.PermissionAction;
 import com.Smart.Erp.Modules.User.Enum.ResourceType;
 import com.Smart.Erp.Modules.User.Services.UserCommonService;
 import com.Smart.Erp.Security.AuthorizationService;
+import jakarta.persistence.EntityManager;
+import jakarta.persistence.PersistenceContext;
+import jakarta.transaction.Transactional;
 import lombok.AllArgsConstructor;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
@@ -44,6 +47,8 @@ public class AcademicCommonService {
     private final UserCommonService userService;
     private final AuthorizationService authorizationService;
     private final SubjectRepo subjectRepo;
+    @PersistenceContext
+    private EntityManager entityManager;
 
     // =========================================================
     // FILTER METHODS
@@ -248,6 +253,51 @@ public class AcademicCommonService {
                 .filter(Objects::nonNull)
                 .filter(sectionGroup -> sectionGroup.getSpecialization().getCourse().getNewEnrollmentAllowed())
                 .map(SectionGroup::toSectionGroupFilter)
+                .toList();
+    }
+
+    public List<SectionGroupFilter> filterSectionGroupForStudentPage() {
+        Map<Long, List<PermissionAction>> map = authorizationService.getAll(ResourceType.SECTION_GROUP);
+        List<SectionGroup> sectionGroups = sectionGroupRepo.findAllById(filterHelper(map));
+
+        if (sectionGroups.isEmpty()) {
+            return Collections.emptyList();
+        }
+
+        return sectionGroups.stream()
+                .filter(Objects::nonNull)
+                .filter(
+                        sectionGroup ->
+                        {
+                            Course course = sectionGroup.getSpecialization().getCourse();
+                            return course.getNewEnrollmentAllowed() && course.getActiveStatus() == ActiveStatus.ENABLE
+                                    && sectionGroup.getSection().getActiveStatus() == ActiveStatus.ENABLE && sectionGroup.getSpecialization().getFeeStructure() != null;
+                        }
+                )
+                .map(SectionGroup::toSectionGroupFilter)
+                .toList();
+    }
+
+    public List<CommonDTO> filterSectionForStudentPage(Specialization specialization) {
+        Map<Long, List<PermissionAction>> map = authorizationService.getAll(ResourceType.SECTION);
+        List<Section> sections = sectionRepo.findAllById(filterHelper(map));
+
+        if (sections.isEmpty()) {
+            return Collections.emptyList();
+        }
+
+        return sections.stream()
+                .filter(Objects::nonNull)
+                .filter(section -> section.getActiveStatus() == ActiveStatus.ENABLE)
+                .filter(section ->
+                        section.getSectionGroups().stream()
+                                .anyMatch(
+                                        sectionGroup ->
+                                                sectionGroup.getSpecialization().equals(specialization)
+                                )
+                )
+                .map(Section::toCommonDTO)
+                .filter(Objects::nonNull)
                 .toList();
     }
 
@@ -516,9 +566,6 @@ public class AcademicCommonService {
         if (sectionGroup == null || activeStatus == null) {
             return;
         }
-
-        sectionGroup.setActiveStatus(activeStatus);
-
         if (activeStatus == ActiveStatus.ENABLE) {
             return;
         }
@@ -562,8 +609,6 @@ public class AcademicCommonService {
         if (sectionGroup == null || activeStatus == null) {
             return;
         }
-
-        sectionGroup.setActiveStatus(activeStatus);
 
         if (activeStatus == ActiveStatus.DISABLE) {
             handleActiveStatusUpdate(
@@ -665,16 +710,104 @@ public class AcademicCommonService {
     // STUDENT ROLL NUMBER MANAGEMENT
     // =========================================================
 
-    public void handleStudentChange(SectionGroup sectionGroup) {
+    public void handleStudentChange(
+            SectionGroup sectionGroup,
+            SectionGroup oldSectionGroup) {
+        List<StudentEnrollment> studentEnrollments =
+                new ArrayList<>(handleStudentChange(sectionGroup));
+        studentEnrollments.addAll(handleStudentChange(oldSectionGroup));
 
+        studentEnrollmentRepo.saveAll(studentEnrollments);
+    }
+
+    @Transactional
+    public void handleStudentChange(
+            Specialization specialization,
+            Specialization oldSpecialization
+    ) {
+        Map<User, String> finalUsernames = new LinkedHashMap<>();
+
+        addDesiredUsernames(finalUsernames, oldSpecialization);
+        addDesiredUsernames(finalUsernames, specialization);
+
+        if (finalUsernames.isEmpty()) {
+            return;
+        }
+
+        // Phase 1: Assign temporary unique usernames.
+        for (User user : finalUsernames.keySet()) {
+            user.setUsername(
+                    "__TMP__" + user.getId() + "_" + UUID.randomUUID()
+            );
+        }
+
+        userService.saveAll(new ArrayList<>(finalUsernames.keySet()));
+
+        // Ensure temporary usernames reach the database first.
+        entityManager.flush();
+
+        // Phase 2: Assign the final usernames.
+        for (Map.Entry<User, String> entry : finalUsernames.entrySet()) {
+            entry.getKey().setUsername(entry.getValue());
+        }
+
+        userService.saveAll(new ArrayList<>(finalUsernames.keySet()));
+
+        // Execute final updates while still inside the transaction.
+        entityManager.flush();
+    }
+
+    private void addDesiredUsernames(
+            Map<User, String> finalUsernames,
+            Specialization specialization
+    ) {
+        if (specialization == null
+                || specialization.getSectionGroups() == null
+                || specialization.getSectionGroups().isEmpty()) {
+            return;
+        }
+
+        List<User> users = getList(specialization);
+
+        if (users.isEmpty()) {
+            return;
+        }
+
+        users = users.stream()
+                .filter(Objects::nonNull)
+                .sorted(
+                        Comparator.comparing(
+                                User::getCreatedAt,
+                                Comparator.nullsLast(
+                                        Comparator.naturalOrder()
+                                )
+                        )
+                )
+                .toList();
+
+        String prefix = specialization.getCode() == null
+                ? ""
+                : specialization.getCode();
+
+        int index = 1;
+
+        for (User user : users) {
+            finalUsernames.put(
+                    user,
+                    prefix + String.format("%04d", index++)
+            );
+        }
+    }
+    private static List<StudentEnrollment> handleStudentChange(SectionGroup sectionGroup) {
         if (sectionGroup == null
                 || sectionGroup.getStudentEnrollments() == null
                 || sectionGroup.getStudentEnrollments().isEmpty()) {
-            return;
+            return new ArrayList<>();
         }
 
         List<StudentEnrollment> studentEnrollments =
                 sectionGroup.getStudentEnrollments();
+
 
         studentEnrollments.removeIf(Objects::isNull);
 
@@ -708,45 +841,7 @@ public class AcademicCommonService {
             enrollment.setRollNumber(prefix + i++);
         }
 
-        studentEnrollmentRepo.saveAll(studentEnrollments);
-    }
-
-    public void handleStudentChange(
-            Specialization specialization) {
-
-        if (specialization == null
-                || specialization.getSectionGroups() == null
-                || specialization.getSectionGroups().isEmpty()) {
-            return;
-        }
-
-        List<User> users = getList(specialization);
-
-        users.removeIf(Objects::isNull);
-
-        users.sort(
-                Comparator.comparing(
-                        User::getCreatedAt,
-                        Comparator.nullsLast(Comparator.naturalOrder())
-                )
-        );
-
-        String prefix = specialization.getCode();
-
-        if (prefix == null) {
-            prefix = "";
-        }
-
-        int i = 1;
-
-        for (User user : users) {
-            user.setUsername(prefix + String.format("%04d", i++));
-            // Send notification or email here if required.
-        }
-
-        if (!users.isEmpty()) {
-            userService.saveAll(users);
-        }
+        return studentEnrollments;
     }
 
     private static @NonNull List<User> getList(Specialization specialization) {
@@ -779,4 +874,6 @@ public class AcademicCommonService {
         }
         return users;
     }
+
+
 }

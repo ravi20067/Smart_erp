@@ -1,5 +1,6 @@
 package com.Smart.Erp.Modules.Finance.DTO.Scholarship;
 
+import com.Smart.Erp.Core.Common.CommonDTO;
 import com.Smart.Erp.Modules.Finance.Enum.AmountType;
 import com.Smart.Erp.Modules.Finance.Enum.ScholarshipType;
 import com.Smart.Erp.Modules.User.Enum.PermissionAction;
@@ -20,5 +21,6 @@ public class ScholarshipResponse {
     private AmountType amountType;
     private ScholarshipType scholarshipType;
     private Boolean status;
+    private CommonDTO university;
     private List<PermissionAction> permissionActions;
 }

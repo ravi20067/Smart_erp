@@ -16,7 +16,9 @@ import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.*;
 
-@Data
+@Getter
+@Setter
+@EqualsAndHashCode(onlyExplicitlyIncluded = true, callSuper = false)
 @Builder
 @Entity
 @Table(
@@ -33,9 +35,10 @@ public class StudentEnrollment extends BaseAuditableEntity {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
+    @EqualsAndHashCode.Include
     private Long id;
 
-    @Column(name = "roll_number", nullable = false)
+    @Column(name = "roll_number")
     private String rollNumber;
 
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
@@ -71,12 +74,16 @@ public class StudentEnrollment extends BaseAuditableEntity {
     @Builder.Default
     private List<StudentFeeAccount> feeAccounts = new ArrayList<>();
 
-    @OneToOne(fetch = FetchType.LAZY, cascade = CascadeType.ALL)
+    @OneToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "first_fee_account_id")
+    @ToString.Exclude
+    @EqualsAndHashCode.Exclude
     private StudentFeeAccount firstFeeAccount;
 
-    @OneToOne(fetch = FetchType.LAZY, cascade = CascadeType.ALL)
+    @OneToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "current_fee_account_id")
+    @ToString.Exclude
+    @EqualsAndHashCode.Exclude
     private StudentFeeAccount currentFeeAccount;
 
     public static StudentEnrollment enrollNewStudent(Student student, Set<Scholarship> scholarships, SectionGroup sectionGroup, AcademicYear academicYear, LocalDate dueDate){
@@ -85,7 +92,9 @@ public class StudentEnrollment extends BaseAuditableEntity {
                 .sectionGroup(sectionGroup)
                 .student(student)
                 .build();
-        studentEnrollment.addFeeAccount(StudentFeeAccount.initializeFeeAccount(sectionGroup,scholarships,dueDate));
+        StudentFeeAccount studentFeeAccount = StudentFeeAccount.initializeFeeAccount(sectionGroup, scholarships, dueDate);
+        studentFeeAccount.recalculateTotals();
+        studentEnrollment.addFeeAccount(studentFeeAccount);
         return studentEnrollment;
     }
 
@@ -135,12 +144,17 @@ public class StudentEnrollment extends BaseAuditableEntity {
                 .school(school.toCommonDTO())
                 .department(department.toCommonDTO())
                 .course(course.toCommonDTO())
+                .specialization(sectionGroup.getSpecialization().toCommonDTO())
+                .section(sectionGroup.getSection().toCommonDTO())
                 .sectionGroup(sectionGroup.toCommonDTO())
                 .status(this.getStatus())
                 .scholarships(
                         this.getCurrentFeeAccount().getScholarships().stream()
                                 .map(CommonReference::toCommonDTO)
                                 .toList()
+                )
+                .university(
+                        school.getUniversity().toCommonDTO()
                 )
                 .frequency(
                         this.getCurrentFeeAccount().getFeeStructure().getFrequency()

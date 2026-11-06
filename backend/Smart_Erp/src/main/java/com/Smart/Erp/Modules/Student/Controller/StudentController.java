@@ -1,5 +1,6 @@
 package com.Smart.Erp.Modules.Student.Controller;
 
+import com.Smart.Erp.Core.Common.CommonDTO;
 import com.Smart.Erp.Core.Common.DTO;
 import com.Smart.Erp.Modules.File.DTO.FileResponse;
 import com.Smart.Erp.Modules.File.Entity.FileMetadata;
@@ -101,7 +102,11 @@ public class StudentController{
             "@authVerifier.can(" +
                     "T(com.Smart.Erp.Modules.User.Enum.PermissionAction).UPDATE, " +
                     "T(com.Smart.Erp.Modules.User.Enum.ResourceType).STUDENT_ENROLLMENT, " +
-                    "#enrollmentId)")
+                    "#enrollmentId) && " +
+                    "@authVerifier.can(" +
+                    "T(com.Smart.Erp.Modules.User.Enum.PermissionAction).CREATE_CHILD, " +
+                    "T(com.Smart.Erp.Modules.User.Enum.ResourceType).SECTION_GROUP, " +
+                    "#sectionGroupId)")
     @PutMapping("/update/course")
     public ResponseEntity<StudentEnrollmentResponse> changeCourse(
             @RequestParam Long enrollmentId,
@@ -120,7 +125,11 @@ public class StudentController{
             "@authVerifier.can(" +
                     "T(com.Smart.Erp.Modules.User.Enum.PermissionAction).UPDATE, " +
                     "T(com.Smart.Erp.Modules.User.Enum.ResourceType).STUDENT_ENROLLMENT, " +
-                    "#enrollmentId)")
+                    "#enrollmentId) && " +
+                    "@authVerifier.can(" +
+                    "T(com.Smart.Erp.Modules.User.Enum.PermissionAction).CREATE_CHILD, " +
+                    "T(com.Smart.Erp.Modules.User.Enum.ResourceType).SECTION, " +
+                    "#sectionId)")
     @PutMapping("/update/section")
     public ResponseEntity<StudentEnrollmentResponse> changeSection(
             @RequestParam Long enrollmentId,
@@ -219,6 +228,16 @@ public class StudentController{
     @GetMapping("/filter/section-groups")
     public ResponseEntity<List<SectionGroupFilter>> filterSectionGroup() {
         return ResponseEntity.ok(studentService.filterSectionGroup());
+    }
+
+    @PreAuthorize(
+            "@authVerifier.can(" +
+                    "T(com.Smart.Erp.Modules.User.Enum.PermissionAction).UPDATE, " +
+                    "T(com.Smart.Erp.Modules.User.Enum.ResourceType).STUDENT_ENROLLMENT, " +
+                    "#enrollmentId)")
+    @GetMapping("/filter/section")
+    public ResponseEntity<List<CommonDTO>> filterSection(@RequestParam Long enrollmentId) {
+        return ResponseEntity.ok(studentService.filterSection(enrollmentId));
     }
 
     @GetMapping("/list/scholarships")
