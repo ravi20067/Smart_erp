@@ -82,26 +82,50 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }, []);
 
     const getDashboardRoute = (currentRole?: string | null) => {
-        const activeRole = currentRole ?? role ?? getRoleFromToken();
+        const activeRole = (currentRole ?? role ?? getRoleFromToken() ?? "").replace(/^ROLE_/, "").toUpperCase();
         switch (activeRole) {
-
             case "STUDENT":
                 return "/student";
 
             case "TEACHER":
                 return "/teacher";
 
+            case "SECURITY_GUARD":
+                return "/security-guard";
+
+            case "DEAN":
+            case "SCHOOL_DEAN":
+                return "/dean";
+
+            case "HEAD_OF_DEPARTMENT":
+                return "/head-of-department";
+
+            case "PROGRAM_COORDINATOR":
+                return "/program-coordinator";
+
+            case "MENTOR":
+                return "/mentor";
+
+            case "LIBRARIAN":
             case "LIBRARY":
                 return "/library";
 
             case "ADMISSION":
                 return "/admission";
 
+            case "EXAM_CONTROLLER":
             case "EXAMINATION":
                 return "/examination-dept";
 
+            case "ACCOUNTANT":
             case "FINANCE":
                 return "/finance";
+
+            case "HR":
+                return "/hr";
+
+            case "COUNSELOR":
+                return "/counselor";
 
             case "ADMIN":
                 return "/admin";
