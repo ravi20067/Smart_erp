@@ -22,7 +22,6 @@ import java.util.List;
                         name = "uk_calendar_section_year",
                         columnNames = {
                                 "section_id",
-                                "academic_year_id"
                         }
                 )
         },

@@ -40,8 +40,12 @@ public class OverrideResponse {
         private Long id;
         private Long basePeriodId;
         private Long subjectId;
+        private String subjectName;
         private Long teacherEnrollmentId;
+        private Long teacherId;
+        private String teacherName;
         private Long roomId;
+        private String roomNumber;
         private TimetableEntryType entryType;
         private String remarks;
     }

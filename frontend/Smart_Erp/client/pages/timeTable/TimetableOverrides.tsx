@@ -594,7 +594,7 @@ export default function TimetableOverridesPage() {
                                                 {slot.teacher && (
                                                     <div className="flex items-center gap-1.5 text-slate-400">
                                                         <UserCheck size={14} className="text-emerald-400" />
-                                                        <span>Faculty ID: {slot.teacher}</span>
+                                                        <span>Faculty: {slot.teacher}</span>
                                                     </div>
                                                 )}
                                                 {slot.room && (
@@ -798,7 +798,7 @@ export default function TimetableOverridesPage() {
                                                         <option value="">Select Faculty...</option>
                                                         {teachers.map((t) => (
                                                             <option key={t.id} value={t.id}>
-                                                                {t.name}
+                                                                {t.name} {t.code ? `(${t.code})` : ""}
                                                             </option>
                                                         ))}
                                                     </select>

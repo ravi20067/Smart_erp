@@ -78,8 +78,12 @@ export interface EntryResponse {
     id?: number;
     basePeriodId: number;
     subjectId: number;
+    subjectName?: string | null;
     teacherEnrollmentId: number;
+    teacherId?: number | null;
+    teacherName?: string | null;
     roomId?: number | null;
+    roomNumber?: string | null;
     dayOfWeek: WeekDay;
     entryType: TimetableEntryType;
     remarks?: string | null;
@@ -131,8 +135,12 @@ export interface OverrideDetailResponse {
     id?: number;
     basePeriodId?: number | null;
     subjectId?: number | null;
+    subjectName?: string | null;
     teacherEnrollmentId?: number | null;
+    teacherId?: number | null;
+    teacherName?: string | null;
     roomId?: number | null;
+    roomNumber?: string | null;
     entryType?: TimetableEntryType | null;
     remarks?: string | null;
 }
@@ -279,8 +287,12 @@ export function normalizeEntryResponse(value: unknown): EntryResponse {
         id: Number(item.id) || undefined,
         basePeriodId: Number(item.basePeriodId) || 0,
         subjectId: Number(item.subjectId) || 0,
+        subjectName: typeof item.subjectName === "string" ? item.subjectName : null,
         teacherEnrollmentId: Number(item.teacherEnrollmentId) || 0,
+        teacherId: item.teacherId != null ? Number(item.teacherId) : null,
+        teacherName: typeof item.teacherName === "string" ? item.teacherName : null,
         roomId: item.roomId != null ? Number(item.roomId) : null,
+        roomNumber: typeof item.roomNumber === "string" ? item.roomNumber : null,
         dayOfWeek: (String(item.dayOfWeek ?? "MONDAY").toUpperCase() as WeekDay) || "MONDAY",
         entryType: (String(item.entryType ?? "THEORY").toUpperCase() as TimetableEntryType) || "THEORY",
         remarks: typeof item.remarks === "string" ? item.remarks : null,
@@ -331,8 +343,12 @@ export function normalizeOverride(value: unknown): OverrideResponse {
                 id: Number(detailObj.id) || undefined,
                 basePeriodId: detailObj.basePeriodId != null ? Number(detailObj.basePeriodId) : null,
                 subjectId: detailObj.subjectId != null ? Number(detailObj.subjectId) : null,
+                subjectName: typeof detailObj.subjectName === "string" ? detailObj.subjectName : null,
                 teacherEnrollmentId: detailObj.teacherEnrollmentId != null ? Number(detailObj.teacherEnrollmentId) : null,
+                teacherId: detailObj.teacherId != null ? Number(detailObj.teacherId) : null,
+                teacherName: typeof detailObj.teacherName === "string" ? detailObj.teacherName : null,
                 roomId: detailObj.roomId != null ? Number(detailObj.roomId) : null,
+                roomNumber: typeof detailObj.roomNumber === "string" ? detailObj.roomNumber : null,
                 entryType: detailObj.entryType ? (String(detailObj.entryType).toUpperCase() as TimetableEntryType) : null,
                 remarks: typeof detailObj.remarks === "string" ? detailObj.remarks : null,
             }

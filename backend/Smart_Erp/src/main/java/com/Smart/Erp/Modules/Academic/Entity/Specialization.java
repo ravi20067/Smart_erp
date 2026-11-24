@@ -17,7 +17,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 @Entity
-@Table(name = "specializations")
+@Table(name = "specialization")
 @Getter
 @Setter
 @ToString

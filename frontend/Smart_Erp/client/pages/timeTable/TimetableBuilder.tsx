@@ -428,7 +428,7 @@ export default function TimetableBuilderPage() {
         if (existing) {
             setSlotAssignment({
                 subjectId: existing.subjectId,
-                teacherEnrollmentId: existing.teacherEnrollmentId,
+                teacherEnrollmentId: existing.teacherId || existing.teacherEnrollmentId,
                 roomId: existing.roomId || "",
                 entryType: existing.entryType,
                 remarks: existing.remarks || "",
@@ -451,7 +451,7 @@ export default function TimetableBuilderPage() {
             return;
         }
         if (!slotAssignment.teacherEnrollmentId) {
-            toast.error("Please select a teacher enrollment.");
+            toast.error("Please select a faculty teacher.");
             return;
         }
 
@@ -856,7 +856,7 @@ export default function TimetableBuilderPage() {
                                                                     <div className="flex items-center gap-1 text-slate-400">
                                                                         <UserCheck size={12} className="shrink-0 text-emerald-400" />
                                                                         <span className="truncate">
-                                                                            {teacherMap.get(entry.teacherEnrollmentId) || `Enrollment #${entry.teacherEnrollmentId}`}
+                                                                            {entry.teacherName || (entry.teacherId ? teacherMap.get(entry.teacherId) : null) || teacherMap.get(entry.teacherEnrollmentId) || `Faculty #${entry.teacherEnrollmentId}`}
                                                                         </span>
                                                                     </div>
 
@@ -864,7 +864,7 @@ export default function TimetableBuilderPage() {
                                                                         <div className="flex items-center gap-1 text-slate-400">
                                                                             <DoorOpen size={12} className="shrink-0 text-purple-400" />
                                                                             <span className="truncate">
-                                                                                {roomMap.get(entry.roomId) || `Room #${entry.roomId}`}
+                                                                                {entry.roomNumber || roomMap.get(entry.roomId) || `Room #${entry.roomId}`}
                                                                             </span>
                                                                         </div>
                                                                     )}
@@ -1113,10 +1113,10 @@ export default function TimetableBuilderPage() {
                                                                                 {entry ? (
                                                                                     <div className="rounded-lg border border-sky-400/30 bg-sky-500/10 p-1.5">
                                                                                         <p className="font-semibold text-white truncate">
-                                                                                            {subjectMap.get(entry.subjectId) || `#${entry.subjectId}`}
+                                                                                            {entry.subjectName || subjectMap.get(entry.subjectId) || `#${entry.subjectId}`}
                                                                                         </p>
                                                                                         <p className="text-[10px] text-slate-400 truncate">
-                                                                                            {teacherMap.get(entry.teacherEnrollmentId) || `#${entry.teacherEnrollmentId}`}
+                                                                                            {entry.teacherName || (entry.teacherId ? teacherMap.get(entry.teacherId) : null) || teacherMap.get(entry.teacherEnrollmentId) || `#${entry.teacherEnrollmentId}`}
                                                                                         </p>
                                                                                     </div>
                                                                                 ) : (
@@ -1242,10 +1242,15 @@ export default function TimetableBuilderPage() {
                                         <option value="">Select Teacher...</option>
                                         {teachers.map((t) => (
                                             <option key={t.id} value={t.id}>
-                                                {t.name}
+                                                {t.name} {t.code ? `(${t.code})` : ""}
                                             </option>
                                         ))}
                                     </select>
+                                    {teachers.length === 0 && (
+                                        <p className="mt-1 text-[11px] text-amber-400">
+                                            No faculty members found. Ensure teachers exist in the system.
+                                        </p>
+                                    )}
                                 </div>
 
                                 <div className="grid grid-cols-2 gap-2">

@@ -17,7 +17,6 @@ import org.jspecify.annotations.Nullable;
 import org.springframework.stereotype.Service;
 
 import java.util.*;
-import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -142,10 +141,43 @@ public class SectionService {
 
         List<SectionGroup> sectionGroups = section.getSectionGroups();
         Set<Long> requestedIds = new HashSet<>(request.getSpecializationId());
+        List<Specialization> requestedSpecializations =
+                academicCommonService.getSpecialization(new ArrayList<>(requestedIds));
 
-        Set<Long> existingIds = sectionGroups.stream()
-                .map(group -> group.getSpecialization().getId())
-                .collect(Collectors.toSet());
+        Set<Long> existingIds = new HashSet<>();
+        for (SectionGroup group : sectionGroups) {
+            Specialization specialization = group.getSpecialization();
+            if (specialization == null) {
+                List<Specialization> matches = requestedSpecializations.stream()
+                        .filter(candidate ->
+                                group.getName() != null
+                                        && group.getName().endsWith("-" + candidate.getName())
+                        )
+                        .toList();
+                if (matches.size() != 1) {
+                    throw new OperationNotAllowedException(
+                            "Section group with id "
+                                    + group.getId()
+                                    + " has no specialization and cannot be matched uniquely "
+                                    + "to the requested specializations"
+                    );
+                }
+
+                specialization = matches.getFirst();
+                if (!Objects.equals(
+                        specialization.getCourse().getId(),
+                        section.getCourse().getId()
+                )) {
+                    throw new OperationNotAllowedException(
+                            "Specialization with id "
+                                    + specialization.getId()
+                                    + " does not belong to this section's course"
+                    );
+                }
+                group.setSpecialization(specialization);
+            }
+            existingIds.add(specialization.getId());
+        }
 
         if (!nameChanged && existingIds.equals(requestedIds)) {
             return Collections.emptyList();

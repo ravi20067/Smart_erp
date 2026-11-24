@@ -6,7 +6,9 @@ import com.Smart.Erp.Modules.Academic.Entity.School;
 import com.Smart.Erp.Modules.Academic.Entity.Section;
 import com.Smart.Erp.Modules.Academic.Entity.SectionGroup;
 import com.Smart.Erp.Modules.Academic.Services.AcademicCommonService;
+import com.Smart.Erp.Modules.Subject.Entity.Subject;
 import com.Smart.Erp.Modules.Subject.Services.SubjectCommonService;
+import com.Smart.Erp.Modules.Teacher.Entity.TeacherEnrollment;
 import com.Smart.Erp.Modules.Teacher.Services.TeacherCommonService;
 import com.Smart.Erp.Modules.TimeTable.DTO.*;
 import com.Smart.Erp.Modules.TimeTable.Entity.*;
@@ -204,11 +206,15 @@ public class TimetableManagementService {
         }
 
         BaseTimeTable base = require(baseRepo.findById(r.getBaseTimeTableId()), "Base timetable", r.getBaseTimeTableId());
-        int next = r.getScope() == TimetableScope.SECTION
-                ? versionRepo.findBySectionIdOrderByVersionNumberDesc(section.getId()).stream()
-                    .filter(v -> v.getScope() == TimetableScope.SECTION).mapToInt(SectionTimetableVersion::getVersionNumber).max().orElse(0) + 1
-                : versionRepo.findBySectionGroupIdOrderByVersionNumberDesc(group.getId()).stream()
-                    .mapToInt(SectionTimetableVersion::getVersionNumber).max().orElse(0) + 1;
+        int next;
+        if (r.getScope() == TimetableScope.SECTION) {
+            next = versionRepo.findBySectionIdOrderByVersionNumberDesc(section.getId()).stream()
+                .filter(v -> v.getScope() == TimetableScope.SECTION).mapToInt(SectionTimetableVersion::getVersionNumber).max().orElse(0) + 1;
+        } else {
+            assert group != null;
+            next = versionRepo.findBySectionGroupIdOrderByVersionNumberDesc(group.getId()).stream()
+                .mapToInt(SectionTimetableVersion::getVersionNumber).max().orElse(0) + 1;
+        }
         SectionTimetableVersion version = SectionTimetableVersion.builder()
                 .scope(r.getScope()).section(section)
                 .sectionGroup(group).baseTimeTable(base).versionNumber(next)
@@ -219,9 +225,11 @@ public class TimetableManagementService {
             BaseTimeTablePeriod period = require(basePeriod(e.getBasePeriodId()), "Base period", e.getBasePeriodId());
             if (!Objects.equals(period.getBaseTimeTable().getId(), base.getId()))
                 throw new IllegalArgumentException("Entry period must belong to the selected base timetable.");
+            Subject subject = subjects.getSubject(e.getSubjectId());
+            TeacherEnrollment enrollment = teachers.resolveTeacherEnrollment(e.getTeacherEnrollmentId(), subject);
             version.addEntry(SectionTimetableEntry.builder().dayOfWeek(e.getDayOfWeek())
-                    .basePeriod(period).subject(subjects.getSubject(e.getSubjectId()))
-                    .teacherEnrollment(teachers.getTeacherEnrollment(e.getTeacherEnrollmentId()))
+                    .basePeriod(period).subject(subject)
+                    .teacherEnrollment(enrollment)
                     .room(e.getRoomId() == null ? null : timeTableCommon.getRoom(e.getRoomId()))
                     .entryType(e.getEntryType()).remarks(e.getRemarks()).active(true).build());
         }
@@ -385,10 +393,12 @@ public class TimetableManagementService {
         if (r.getAction() != OverrideAction.CANCEL) {
             if (r.getBasePeriodId() == null || r.getSubjectId() == null || r.getTeacherEnrollmentId() == null || r.getEntryType() == null)
                 throw new IllegalArgumentException("ADD/REPLACE requires period, subject, teacher enrollment and entry type.");
+            Subject subject = subjects.getSubject(r.getSubjectId());
+            TeacherEnrollment enrollment = teachers.resolveTeacherEnrollment(r.getTeacherEnrollmentId(), subject);
             DailyTimetableOverrideDetail detail = DailyTimetableOverrideDetail.builder()
                     .basePeriod(require(basePeriod(r.getBasePeriodId()), "Base period", r.getBasePeriodId()))
-                    .subject(subjects.getSubject(r.getSubjectId()))
-                    .teacherEnrollment(teachers.getTeacherEnrollment(r.getTeacherEnrollmentId()))
+                    .subject(subject)
+                    .teacherEnrollment(enrollment)
                     .room(r.getRoomId() == null ? null : timeTableCommon.getRoom(r.getRoomId()))
                     .entryType(r.getEntryType()).remarks(r.getRemarks()).build();
             override.setDetail(detail);
@@ -464,12 +474,15 @@ public class TimetableManagementService {
         List<TimetableView.Slot> slots = new ArrayList<>();
         for (SectionTimetableEntry e : entries) {
             if (cancelledOrReplaced.contains(e.getId())) continue;
+            String teacherName = (e.getTeacherEnrollment() != null && e.getTeacherEnrollment().getTeacher() != null)
+                    ? e.getTeacherEnrollment().getTeacher().getName()
+                    : (e.getTeacherEnrollment() != null ? "Teacher #" + e.getTeacherEnrollment().getId() : "Staff");
             slots.add(TimetableView.Slot.builder().entryId(e.getId())
                     .sequenceNumber(e.getBasePeriod().getSequenceNumber())
                     .periodNumber(e.getBasePeriod().getPeriodNumber())
                     .periodLabel(e.getBasePeriod().getLabel())
                     .startTime(e.getBasePeriod().getStartTime()).endTime(e.getBasePeriod().getEndTime())
-                    .subject(e.getSubject().getName()).teacher(String.valueOf(e.getTeacherEnrollment().getId()))
+                    .subject(e.getSubject().getName()).teacher(teacherName)
                     .room(e.getRoom() == null ? null : e.getRoom().getRoomNumber())
                     .entryType(e.getEntryType()).note(e.getRemarks()).overridden(false).build());
         }
@@ -477,10 +490,13 @@ public class TimetableManagementService {
             if (o.getAction() == OverrideAction.CANCEL || o.getDetail() == null) continue;
             DailyTimetableOverrideDetail d = o.getDetail();
             BaseTimeTablePeriod p = d.getBasePeriod();
+            String teacherName = (d.getTeacherEnrollment() != null && d.getTeacherEnrollment().getTeacher() != null)
+                    ? d.getTeacherEnrollment().getTeacher().getName()
+                    : (d.getTeacherEnrollment() != null ? "Teacher #" + d.getTeacherEnrollment().getId() : "Staff");
             slots.add(TimetableView.Slot.builder().entryId(o.getId())
                     .sequenceNumber(p.getSequenceNumber()).periodNumber(p.getPeriodNumber())
                     .periodLabel(p.getLabel()).startTime(p.getStartTime()).endTime(p.getEndTime())
-                    .subject(d.getSubject().getName()).teacher(String.valueOf(d.getTeacherEnrollment().getId()))
+                    .subject(d.getSubject().getName()).teacher(teacherName)
                     .room(d.getRoom() == null ? null : d.getRoom().getRoomNumber())
                     .entryType(d.getEntryType()).note(d.getRemarks()).overridden(true).build());
         }

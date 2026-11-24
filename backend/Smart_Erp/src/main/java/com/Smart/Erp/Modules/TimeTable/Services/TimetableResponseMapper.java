@@ -103,23 +103,41 @@ public class TimetableResponseMapper {
                 .effectiveUntil(e.getEffectiveUntil())
                 .publishedAt(e.getPublishedAt())
                 .entries(e.getEntries().stream()
-                        .map(entry -> TimetableVersionResponse.EntryResponse.builder()
-                                .id(entry.getId())
-                                .basePeriodId(entry.getBasePeriod().getId())
-                                .subjectId(entry.getSubject().getId())
-                                .teacherEnrollmentId(entry.getTeacherEnrollment().getId())
-                                .roomId(entry.getRoom() == null ? null : entry.getRoom().getId())
-                                .dayOfWeek(entry.getDayOfWeek())
-                                .entryType(entry.getEntryType())
-                                .remarks(entry.getRemarks())
-                                .active(entry.getActive())
-                                .build())
+                        .map(entry -> {
+                            String teacherName = null;
+                            Long teacherId = null;
+                            if (entry.getTeacherEnrollment() != null && entry.getTeacherEnrollment().getTeacher() != null) {
+                                teacherName = entry.getTeacherEnrollment().getTeacher().getName();
+                                teacherId = entry.getTeacherEnrollment().getTeacher().getId();
+                            }
+                            return TimetableVersionResponse.EntryResponse.builder()
+                                    .id(entry.getId())
+                                    .basePeriodId(entry.getBasePeriod().getId())
+                                    .subjectId(entry.getSubject().getId())
+                                    .subjectName(entry.getSubject() != null ? entry.getSubject().getName() : null)
+                                    .teacherEnrollmentId(entry.getTeacherEnrollment() != null ? entry.getTeacherEnrollment().getId() : null)
+                                    .teacherId(teacherId)
+                                    .teacherName(teacherName)
+                                    .roomId(entry.getRoom() == null ? null : entry.getRoom().getId())
+                                    .roomNumber(entry.getRoom() == null ? null : entry.getRoom().getRoomNumber())
+                                    .dayOfWeek(entry.getDayOfWeek())
+                                    .entryType(entry.getEntryType())
+                                    .remarks(entry.getRemarks())
+                                    .active(entry.getActive())
+                                    .build();
+                        })
                         .toList())
                 .build();
     }
 
     public OverrideResponse override(DailyTimetableOverride e) {
         DailyTimetableOverrideDetail detail = e.getDetail();
+        String teacherName = null;
+        Long teacherId = null;
+        if (detail != null && detail.getTeacherEnrollment() != null && detail.getTeacherEnrollment().getTeacher() != null) {
+            teacherName = detail.getTeacherEnrollment().getTeacher().getName();
+            teacherId = detail.getTeacherEnrollment().getTeacher().getId();
+        }
         return OverrideResponse.builder()
                 .id(e.getId())
                 .sectionId(e.getSection().getId())
@@ -142,12 +160,16 @@ public class TimetableResponseMapper {
                                 .id(detail.getId())
                                 .basePeriodId(detail.getBasePeriod() == null ? null : detail.getBasePeriod().getId())
                                 .subjectId(detail.getSubject() == null ? null : detail.getSubject().getId())
+                                .subjectName(detail.getSubject() != null ? detail.getSubject().getName() : null)
                                 .teacherEnrollmentId(
                                         detail.getTeacherEnrollment() == null
                                                 ? null
                                                 : detail.getTeacherEnrollment().getId()
                                 )
+                                .teacherId(teacherId)
+                                .teacherName(teacherName)
                                 .roomId(detail.getRoom() == null ? null : detail.getRoom().getId())
+                                .roomNumber(detail.getRoom() != null ? detail.getRoom().getRoomNumber() : null)
                                 .entryType(detail.getEntryType())
                                 .remarks(detail.getRemarks())
                                 .build())

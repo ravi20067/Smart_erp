@@ -17,6 +17,7 @@ import com.Smart.Erp.Modules.User.Entity.User;
 import com.Smart.Erp.Modules.User.Enum.EnrollmentStatus;
 import com.Smart.Erp.Modules.User.Enum.PermissionAction;
 import com.Smart.Erp.Modules.User.Enum.ResourceType;
+import com.Smart.Erp.Modules.User.Enum.UserRoles;
 import com.Smart.Erp.Modules.User.Services.UserCommonService;
 import com.Smart.Erp.Security.AuthorizationService;
 import jakarta.persistence.EntityManager;
@@ -58,6 +59,14 @@ public class AcademicCommonService {
                 authorizationService.getAll(ResourceType.TEACHER);
 
         if (map == null || map.isEmpty()) {
+            User user = authorizationService.getCurrentUser();
+            if (user != null && user.getUserRole() == UserRoles.SUPER_ADMIN) {
+                return teacherRepo.findAll().stream()
+                        .filter(Objects::nonNull)
+                        .map(Teacher::toCommonDTO)
+                        .filter(Objects::nonNull)
+                        .toList();
+            }
             return Collections.emptyList();
         }
 
@@ -65,6 +74,14 @@ public class AcademicCommonService {
                 teacherRepo.findAllById(map.keySet());
 
         if (teachers.isEmpty()) {
+            User user = authorizationService.getCurrentUser();
+            if (user != null && user.getUserRole() == UserRoles.SUPER_ADMIN) {
+                return teacherRepo.findAll().stream()
+                        .filter(Objects::nonNull)
+                        .map(Teacher::toCommonDTO)
+                        .filter(Objects::nonNull)
+                        .toList();
+            }
             return Collections.emptyList();
         }
 
