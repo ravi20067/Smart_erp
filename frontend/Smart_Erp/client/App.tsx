@@ -51,6 +51,10 @@ import RolePermission from "./pages/userMangement/RolePermission";
 import FeeStructure from "./pages/financial/FeeStructure";
 import Scholarship from "./pages/financial/Scholarship";
 import Rooms from "./pages/timeTable/Room";
+import BaseTimeTable from "./pages/timeTable/BaseTimeTable";
+import AcademicCalendar from "./pages/timeTable/AcademicCalendar";
+import TimetableBuilder from "./pages/timeTable/TimetableBuilder";
+import TimetableOverrides from "./pages/timeTable/TimetableOverrides";
 import Student from "./pages/userMangement/Student";
 import Teacher from "./pages/userMangement/Teacher";
 import TeacherEnrollment from "./pages/userMangement/TeacherEnrollment";
@@ -141,6 +145,22 @@ const App = () => (
               <Route path="fee-structures" element={<FeeStructure />} />
               <Route path="scholarships" element={<Scholarship />} />
               <Route path="rooms" element={<Rooms />} />
+
+              {/* Timetable Management */}
+              <Route path="base" element={<BaseTimeTable />} />
+              <Route path="base-timetable" element={<BaseTimeTable />} />
+              <Route path="academic-calendar" element={<AcademicCalendar />} />
+              <Route path="timetable/builder" element={<TimetableBuilder />} />
+              <Route path="timetable" element={<TimetableBuilder />} />
+              <Route path="timetable/substitutions" element={<TimetableOverrides />} />
+              <Route path="timetable/daily" element={<TimetableOverrides />} />
+              <Route path="timetable/publish" element={<TimetableBuilder />} />
+              <Route path="timetable/conflicts" element={<TimetableBuilder />} />
+              <Route path="timetable/reports" element={<TimetableBuilder />} />
+              <Route path="timetable/room-allocation" element={<Rooms />} />
+              <Route path="timetable/teacher-availability" element={<Teacher />} />
+              <Route path="lecture-allocation" element={<TeacherEnrollment />} />
+
               <Route path="students" element={<Student />} />
               <Route path="teachers" element={<Teacher />} />
               <Route path="teachers/assign-role" element={<TeacherAssignRole />} />
