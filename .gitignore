@@ -1,1 +1,18 @@
 /.vscode
+
+
+# Python virtual environments
+smart-erp-face-ai/.venv/
+smart-erp-face-ai/venv/
+smart-erp-face-ai/env/
+
+# Python cache
+__pycache__/
+*.py[cod]
+.pytest_cache/
+
+
+# IDE and generated files
+.idea/
+.vscode/
+*.log
