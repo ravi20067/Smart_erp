@@ -1,4 +1,7 @@
 # Python virtual environments
+.venv/
+venv/
+env/
 smart-erp-face-ai/.venv/
 smart-erp-face-ai/venv/
 smart-erp-face-ai/env/
@@ -11,8 +14,12 @@ __pycache__/
 # Environment variables
 .env
 .env.*
+!.env.example
 
 # IDE and generated files
 .idea/
 .vscode/
 *.log
+
+# Notes and help files
+help.txt

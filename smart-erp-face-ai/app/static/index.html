@@ -1,0 +1,1270 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Smart ERP Face AI — Interactive Testing & Verification Studio</title>
+  <style>
+    :root {
+      --bg: #0b0f19;
+      --card-bg: #111827;
+      --card-border: #1f2937;
+      --primary: #3b82f6;
+      --primary-hover: #2563eb;
+      --success: #10b981;
+      --warning: #f59e0b;
+      --danger: #ef4444;
+      --text: #f9fafb;
+      --text-muted: #9ca3af;
+      --font: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background-color: var(--bg);
+      color: var(--text);
+      font-family: var(--font);
+      line-height: 1.5;
+      padding: 16px;
+    }
+
+    header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding-bottom: 16px;
+      border-bottom: 1px solid var(--card-border);
+      margin-bottom: 20px;
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .brand-icon {
+      width: 36px;
+      height: 36px;
+      background: linear-gradient(135deg, var(--primary), #8b5cf6);
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: bold;
+      font-size: 18px;
+    }
+
+    h1 { font-size: 20px; font-weight: 700; }
+    .subtitle { font-size: 13px; color: var(--text-muted); }
+
+    .status-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 6px 12px;
+      border-radius: 9999px;
+      font-size: 12px;
+      font-weight: 600;
+      background-color: rgba(16, 185, 129, 0.15);
+      color: var(--success);
+      border: 1px solid rgba(16, 185, 129, 0.3);
+    }
+    .status-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background-color: var(--success);
+      animation: pulse 2s infinite;
+    }
+
+    @keyframes pulse {
+      0% { opacity: 1; }
+      50% { opacity: 0.4; }
+      100% { opacity: 1; }
+    }
+
+    .main-grid {
+      display: grid;
+      grid-template-columns: 1.15fr 1fr;
+      gap: 20px;
+    }
+
+    @media (max-width: 1024px) {
+      .main-grid { grid-template-columns: 1fr; }
+    }
+
+    .card {
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: 12px;
+      padding: 16px;
+      margin-bottom: 16px;
+    }
+
+    .card-title {
+      font-size: 15px;
+      font-weight: 600;
+      margin-bottom: 12px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    /* Video Feed Container */
+    .video-container {
+      position: relative;
+      width: 100%;
+      height: 420px;
+      background: #000;
+      border-radius: 10px;
+      overflow: hidden;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border: 2px solid var(--card-border);
+    }
+
+    video {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      transform: scaleX(-1); /* mirror preview */
+    }
+
+    /* Biometric Oval Guide Overlay */
+    .face-guide-oval {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      width: 230px;
+      height: 310px;
+      border: 3px dashed rgba(59, 130, 246, 0.6);
+      border-radius: 50% 50% 50% 50% / 60% 60% 40% 40%;
+      pointer-events: none;
+      transition: all 0.3s ease;
+      box-shadow: 0 0 25px rgba(59, 130, 246, 0.2);
+    }
+    .face-guide-oval.active-verified {
+      border-color: var(--success);
+      box-shadow: 0 0 30px rgba(16, 185, 129, 0.5);
+    }
+    .face-guide-oval.active-warning {
+      border-color: var(--warning);
+      box-shadow: 0 0 30px rgba(245, 158, 11, 0.5);
+    }
+
+    /* Camera Directional Overlay Banner */
+    .camera-action-overlay {
+      position: absolute;
+      bottom: 20px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: rgba(17, 24, 39, 0.90);
+      backdrop-filter: blur(8px);
+      border: 1px solid rgba(59, 130, 246, 0.6);
+      border-radius: 30px;
+      padding: 10px 24px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      color: #fff;
+      font-weight: 700;
+      font-size: 15px;
+      pointer-events: none;
+      box-shadow: 0 10px 25px rgba(0, 0, 0, 0.5);
+      z-index: 10;
+      transition: all 0.3s ease;
+    }
+
+    /* In-Camera Pulsating Directional Guide Arrows */
+    .cam-guide-indicator {
+      position: absolute;
+      font-size: 56px;
+      font-weight: 900;
+      color: #38bdf8;
+      text-shadow: 0 0 20px rgba(56, 189, 248, 1), 0 0 40px rgba(59, 130, 246, 0.8);
+      pointer-events: none;
+      z-index: 15;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .guide-left {
+      left: 20px;
+      top: 50%;
+      transform: translateY(-50%);
+      animation: pulseGuideLeft 0.8s infinite alternate ease-in-out;
+    }
+    .guide-right {
+      right: 20px;
+      top: 50%;
+      transform: translateY(-50%);
+      animation: pulseGuideRight 0.8s infinite alternate ease-in-out;
+    }
+    .guide-up {
+      top: 20px;
+      left: 50%;
+      transform: translateX(-50%);
+      animation: pulseGuideUp 0.8s infinite alternate ease-in-out;
+    }
+    .guide-down {
+      bottom: 70px;
+      left: 50%;
+      transform: translateX(-50%);
+      animation: pulseGuideDown 0.8s infinite alternate ease-in-out;
+    }
+    @keyframes pulseGuideLeft {
+      0% { opacity: 0.3; transform: translateY(-50%) translateX(0); }
+      100% { opacity: 1.0; transform: translateY(-50%) translateX(-12px); }
+    }
+    @keyframes pulseGuideRight {
+      0% { opacity: 0.3; transform: translateY(-50%) translateX(0); }
+      100% { opacity: 1.0; transform: translateY(-50%) translateX(12px); }
+    }
+    @keyframes pulseGuideUp {
+      0% { opacity: 0.3; transform: translateX(-50%) translateY(0); }
+      100% { opacity: 1.0; transform: translateX(-50%) translateY(-10px); }
+    }
+    @keyframes pulseGuideDown {
+      0% { opacity: 0.3; transform: translateX(-50%) translateY(0); }
+      100% { opacity: 1.0; transform: translateX(-50%) translateY(10px); }
+    }
+
+    .camera-placeholder {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 10px;
+      color: var(--text-muted);
+      font-size: 14px;
+    }
+
+    .controls-row {
+      display: flex;
+      gap: 10px;
+      margin-top: 12px;
+      flex-wrap: wrap;
+    }
+
+    button {
+      background: var(--primary);
+      color: #fff;
+      border: none;
+      padding: 8px 16px;
+      border-radius: 6px;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      transition: background 0.15s ease;
+    }
+    button:hover { background: var(--primary-hover); }
+    button:disabled { opacity: 0.5; cursor: not-allowed; }
+    button.btn-secondary { background: #374151; }
+    button.btn-secondary:hover { background: #4b5563; }
+    button.btn-success { background: var(--success); }
+    button.btn-danger { background: var(--danger); }
+
+    /* Tabs */
+    .tabs {
+      display: flex;
+      gap: 8px;
+      border-bottom: 1px solid var(--card-border);
+      margin-bottom: 16px;
+      padding-bottom: 8px;
+    }
+
+    .tab-btn {
+      background: transparent;
+      color: var(--text-muted);
+      border: none;
+      padding: 6px 12px;
+      border-radius: 6px;
+      font-size: 13px;
+      cursor: pointer;
+    }
+    .tab-btn.active {
+      background: #1f2937;
+      color: var(--text);
+    }
+
+    .tab-content { display: none; }
+    .tab-content.active { display: block; }
+
+    /* Interactive Instruction & Visual Movement Showcase */
+    .instruction-banner {
+      background: linear-gradient(135deg, #172554, #1e1b4b);
+      border: 1.5px solid #3b82f6;
+      border-radius: 12px;
+      padding: 18px;
+      text-align: center;
+      margin-bottom: 16px;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .instruction-step {
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+      color: #93c5fd;
+    }
+
+    .instruction-action {
+      font-size: 24px;
+      font-weight: 800;
+      color: #60a5fa;
+      margin: 6px 0;
+    }
+
+    .instruction-subtext {
+      font-size: 13px;
+      color: #bfdbfe;
+    }
+
+    /* Movement Visualizer Graphics */
+    .movement-animation-box {
+      width: 140px;
+      height: 140px;
+      margin: 12px auto;
+      background: rgba(17, 24, 39, 0.7);
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border: 2px solid rgba(96, 165, 250, 0.4);
+      position: relative;
+    }
+
+    /* Head Turn Animation */
+    .animated-avatar {
+      width: 72px;
+      height: 72px;
+      position: relative;
+      transition: transform 0.5s ease;
+    }
+
+    @keyframes turnHeadLeft {
+      0%, 100% { transform: rotateY(0deg) translateX(0); }
+      50% { transform: rotateY(-35deg) translateX(-14px); }
+    }
+    @keyframes turnHeadRight {
+      0%, 100% { transform: rotateY(0deg) translateX(0); }
+      50% { transform: rotateY(35deg) translateX(14px); }
+    }
+    @keyframes lookUpHead {
+      0%, 100% { transform: rotateX(0deg) translateY(0); }
+      50% { transform: rotateX(25deg) translateY(-12px); }
+    }
+    @keyframes lookDownHead {
+      0%, 100% { transform: rotateX(0deg) translateY(0); }
+      50% { transform: rotateX(-25deg) translateY(12px); }
+    }
+    @keyframes blinkCycle {
+      0%, 35%, 55%, 100% { transform: scaleY(1); }
+      45%, 65% { transform: scaleY(0.1); }
+    }
+
+    .anim-turn-left { animation: turnHeadLeft 1.8s infinite ease-in-out; }
+    .anim-turn-right { animation: turnHeadRight 1.8s infinite ease-in-out; }
+    .anim-look-up { animation: lookUpHead 1.8s infinite ease-in-out; }
+    .anim-look-down { animation: lookDownHead 1.8s infinite ease-in-out; }
+    .anim-blink { animation: blinkCycle 1.6s infinite ease-in-out; }
+
+    /* Animated Directional Arrows */
+    .motion-arrow {
+      position: absolute;
+      font-size: 28px;
+      font-weight: 900;
+      color: #60a5fa;
+    }
+    @keyframes arrowLeft {
+      0%, 100% { transform: translateX(0); opacity: 0.4; }
+      50% { transform: translateX(-18px); opacity: 1; }
+    }
+    @keyframes arrowRight {
+      0%, 100% { transform: translateX(0); opacity: 0.4; }
+      50% { transform: translateX(18px); opacity: 1; }
+    }
+    @keyframes arrowUp {
+      0%, 100% { transform: translateY(0); opacity: 0.4; }
+      50% { transform: translateY(-16px); opacity: 1; }
+    }
+    @keyframes arrowDown {
+      0%, 100% { transform: translateY(0); opacity: 0.4; }
+      50% { transform: translateY(16px); opacity: 1; }
+    }
+
+    .arrow-left { left: 4px; animation: arrowLeft 1.2s infinite ease-in-out; }
+    .arrow-right { right: 4px; animation: arrowRight 1.2s infinite ease-in-out; }
+    .arrow-up { top: 4px; animation: arrowUp 1.2s infinite ease-in-out; }
+    .arrow-down { bottom: 4px; animation: arrowDown 1.2s infinite ease-in-out; }
+
+    /* Live Target Gauge */
+    .movement-feedback-gauge {
+      margin-top: 10px;
+      padding: 8px 14px;
+      background: rgba(31, 41, 55, 0.9);
+      border-radius: 6px;
+      font-size: 13px;
+      font-weight: 600;
+      color: #e5e7eb;
+      display: inline-block;
+      min-width: 240px;
+      border: 1px solid #374151;
+    }
+
+    /* Observations Grid */
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 10px;
+      margin-bottom: 16px;
+    }
+
+    .stat-box {
+      background: #1f2937;
+      padding: 10px;
+      border-radius: 6px;
+      border: 1px solid #374151;
+    }
+    .stat-label { font-size: 11px; color: var(--text-muted); text-transform: uppercase; }
+    .stat-value { font-size: 15px; font-weight: 700; margin-top: 2px; }
+
+    /* Progress bar */
+    .progress-bar {
+      width: 100%;
+      height: 8px;
+      background: #374151;
+      border-radius: 4px;
+      overflow: hidden;
+      margin-bottom: 12px;
+    }
+    .progress-fill {
+      height: 100%;
+      background: var(--success);
+      width: 0%;
+      transition: width 0.3s ease;
+    }
+
+    /* Log Box */
+    .log-box {
+      background: #030712;
+      border: 1px solid var(--card-border);
+      border-radius: 6px;
+      padding: 10px;
+      font-family: monospace;
+      font-size: 12px;
+      height: 160px;
+      overflow-y: auto;
+      color: #a7f3d0;
+      white-space: pre-wrap;
+    }
+
+    .badge-pill {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 4px;
+      font-size: 11px;
+      font-weight: bold;
+    }
+    .badge-success { background: rgba(16, 185, 129, 0.2); color: #34d399; }
+    .badge-danger { background: rgba(239, 68, 68, 0.2); color: #f87171; }
+    .badge-warning { background: rgba(245, 158, 11, 0.2); color: #fbbf24; }
+  </style>
+</head>
+<body>
+
+  <header>
+    <div class="brand">
+      <div class="brand-icon">AI</div>
+      <div>
+        <h1>Smart ERP Face AI — Test & Verification Studio</h1>
+        <div class="subtitle">YuNet Detection • SFace Recognition • MiniFASNet Spoof • MediaPipe 478 3D Landmarks</div>
+      </div>
+    </div>
+    <div style="display:flex; gap:10px; align-items:center;">
+      <button id="btnVoiceToggle" class="btn-secondary" style="font-size:12px; padding:4px 10px;" onclick="toggleVoice()">
+        🔊 Voice: ON
+      </button>
+      <div id="serviceStatus" class="status-badge">
+        <div class="status-dot"></div>
+        <span id="serviceStatusText">Backend Online (CPU)</span>
+      </div>
+    </div>
+  </header>
+
+  <div class="main-grid">
+    <!-- Left Column: Camera and Live Visuals -->
+    <div>
+      <div class="card">
+        <div class="card-title">
+          <span>Live Camera Feed & Viewfinder</span>
+          <span id="cameraFpsBadge" class="badge-pill badge-warning" style="display:none;">0 FPS</span>
+        </div>
+
+        <div class="video-container">
+          <div id="cameraPlaceholder" class="camera-placeholder">
+            <svg width="48" height="48" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z"></path>
+            </svg>
+            <span>Camera is currently stopped. Click "Start Camera" below.</span>
+          </div>
+          <video id="webcam" playsinline autoplay muted style="display:none;"></video>
+          
+          <!-- In-Camera Directional Indicators -->
+          <div id="camGuideLeft" class="cam-guide-indicator guide-left" style="display:none;">◀</div>
+          <div id="camGuideRight" class="cam-guide-indicator guide-right" style="display:none;">▶</div>
+          <div id="camGuideUp" class="cam-guide-indicator guide-up" style="display:none;">▲</div>
+          <div id="camGuideDown" class="cam-guide-indicator guide-down" style="display:none;">▼</div>
+
+          <!-- Biometric Face Oval Guide -->
+          <div id="faceOvalGuide" class="face-guide-oval" style="display:none;"></div>
+          
+          <!-- On-Screen Action Cue Badge -->
+          <div id="cameraActionOverlay" class="camera-action-overlay" style="display:none;">
+            <span id="cameraActionIcon">👁️</span>
+            <span id="cameraActionText">Center your face in the oval</span>
+          </div>
+
+          <canvas id="captureCanvas" style="display:none;"></canvas>
+        </div>
+
+        <div class="controls-row">
+          <button id="btnStartCam" onclick="startCamera()">📷 Start Camera</button>
+          <button id="btnStopCam" class="btn-secondary" onclick="stopCamera()" disabled>⏹️ Stop Camera</button>
+          <button id="btnDiagnostic" class="btn-secondary" onclick="runDiagnostic()" disabled>🔍 Quick Scan</button>
+        </div>
+      </div>
+
+      <!-- Live Observations Card -->
+      <div class="card">
+        <div class="card-title">Live Computer Vision Observations</div>
+        <div class="stats-grid">
+          <div class="stat-box">
+            <div class="stat-label">Face Count</div>
+            <div id="obsFaceCount" class="stat-value">-</div>
+          </div>
+          <div class="stat-box">
+            <div class="stat-label">Orientation</div>
+            <div id="obsOrientation" class="stat-value">-</div>
+          </div>
+          <div class="stat-box">
+            <div class="stat-label">Blink Count</div>
+            <div id="obsBlinkCount" class="stat-value">-</div>
+          </div>
+          <div class="stat-box">
+            <div class="stat-label">Head Yaw / Pitch</div>
+            <div id="obsYawPitch" class="stat-value">-</div>
+          </div>
+          <div class="stat-box">
+            <div class="stat-label">Eye Aspect Ratio</div>
+            <div id="obsEar" class="stat-value">-</div>
+          </div>
+          <div class="stat-box">
+            <div class="stat-label">Live Spoof Score</div>
+            <div id="obsSpoof" class="stat-value">-</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Right Column: Verification Workflow & Testing -->
+    <div>
+      <div class="card">
+        <div class="tabs">
+          <button class="tab-btn active" onclick="switchTab('tab-challenge')">Randomized Liveness</button>
+          <button class="tab-btn" onclick="switchTab('tab-enrollment')">Face Enrollment & 1:1 Match</button>
+          <button class="tab-btn" onclick="switchTab('tab-models')">Models & System</button>
+        </div>
+
+        <!-- TAB 1: CHALLENGE WORKFLOW -->
+        <div id="tab-challenge" class="tab-content active">
+          <p style="font-size: 13px; color: var(--text-muted); margin-bottom: 12px;">
+            Continuous, real-time randomized challenge verification with visual motion guides. You have up to 10 seconds per movement to perform the action.
+          </p>
+
+          <div class="progress-bar">
+            <div id="challengeProgress" class="progress-fill"></div>
+          </div>
+
+          <!-- Enhanced Visual Movement Instruction Showcase -->
+          <div id="instructionCard" class="instruction-banner" style="display:none;">
+            <div id="instructionStep" class="instruction-step">CHALLENGE 1 OF 3</div>
+            <div id="instructionAction" class="instruction-action">Please Look Straight</div>
+            <div id="instructionSubtext" class="instruction-subtext">Hold your head steady and look directly at the lens.</div>
+
+            <!-- Animated Motion Visualizer Graphic -->
+            <div id="movementAnimationBox" class="movement-animation-box">
+              <!-- Dynamically populated animated SVG / arrow graphic -->
+            </div>
+
+            <!-- Dynamic Live Target Feedback Gauge -->
+            <div id="movementFeedbackGauge" class="movement-feedback-gauge">
+              Status: Preparing challenge...
+            </div>
+          </div>
+
+          <div style="display: flex; gap: 10px; margin-bottom: 16px;">
+            <button id="btnStartChallenge" class="btn-success" onclick="startRandomizedChallengeWorkflow()">
+              ▶️ Start Randomized Challenge Flow
+            </button>
+            <button id="btnCancelChallenge" class="btn-danger" onclick="cancelChallenge()" style="display:none;">
+              Cancel
+            </button>
+          </div>
+
+          <div id="challengeResultBadge" style="margin-bottom: 12px;"></div>
+        </div>
+
+        <!-- TAB 2: ENROLLMENT & MATCHING -->
+        <div id="tab-enrollment" class="tab-content">
+          <p style="font-size: 13px; color: var(--text-muted); margin-bottom: 12px;">
+            1. Enroll current face to generate a 128-D normalized biometric template.<br>
+            2. Re-capture anytime to compare cosine similarity (Spring Boot attendance verification).
+          </p>
+
+          <div style="display: flex; gap: 10px; margin-bottom: 16px;">
+            <button onclick="enrollCurrentFace()">📥 1. Enroll Face Embedding</button>
+            <button id="btnCompare" class="btn-secondary" onclick="compareCurrentFace()" disabled>
+              🔍 2. Verify Attendance (Compare)
+            </button>
+          </div>
+
+          <div id="enrollmentStatus" style="font-size: 13px; margin-bottom: 12px;">
+            Status: <span class="badge-pill badge-warning">No Face Enrolled</span>
+          </div>
+
+          <div id="comparisonResultBox" style="display:none; padding: 12px; border-radius: 6px; background: #1f2937; margin-bottom: 12px;">
+            <div style="font-size: 12px; color: var(--text-muted);">Biometric Cosine Similarity</div>
+            <div id="similarityValue" style="font-size: 24px; font-weight: bold; color: #60a5fa;">0.00%</div>
+            <div id="matchDecision" style="margin-top: 4px;"></div>
+          </div>
+        </div>
+
+        <!-- TAB 3: MODELS & SYSTEM -->
+        <div id="tab-models" class="tab-content">
+          <div style="font-size: 13px; margin-bottom: 12px;">
+            <button class="btn-secondary" onclick="refreshModelStatus()">🔄 Refresh Model Readiness</button>
+          </div>
+          <div id="modelDetailsList" style="font-size: 13px; display: flex; flex-direction: column; gap: 8px;">
+            Loading model details...
+          </div>
+        </div>
+
+        <!-- Live JSON API Log -->
+        <div class="card-title" style="margin-top: 16px;">
+          <span>API Telemetry Log</span>
+          <button class="btn-secondary" style="padding: 2px 8px; font-size: 11px;" onclick="clearLogs()">Clear</button>
+        </div>
+        <div id="logConsole" class="log-box">Initialized Smart ERP Face AI Studio. Ready.</div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const API_BASE = window.location.origin + "/internal/v1/face";
+    let videoStream = null;
+    let enrolledEmbedding = null;
+    let currentSessionId = null;
+    let challengeActive = false;
+    let voiceEnabled = true;
+
+    const video = document.getElementById("webcam");
+    const captureCanvas = document.getElementById("captureCanvas");
+    const faceOvalGuide = document.getElementById("faceOvalGuide");
+    const cameraActionOverlay = document.getElementById("cameraActionOverlay");
+    const cameraActionIcon = document.getElementById("cameraActionIcon");
+    const cameraActionText = document.getElementById("cameraActionText");
+
+    function log(msg) {
+      const consoleEl = document.getElementById("logConsole");
+      const time = new Date().toLocaleTimeString();
+      consoleEl.textContent = `[${time}] ${msg}\n` + consoleEl.textContent;
+    }
+
+    function clearLogs() {
+      document.getElementById("logConsole").textContent = "";
+    }
+
+    function toggleVoice() {
+      voiceEnabled = !voiceEnabled;
+      const btn = document.getElementById("btnVoiceToggle");
+      btn.textContent = voiceEnabled ? "🔊 Voice: ON" : "🔇 Voice: OFF";
+      btn.classList.toggle("btn-secondary", !voiceEnabled);
+    }
+
+    function speakInstruction(text) {
+      if (!voiceEnabled || !('speechSynthesis' in window)) return;
+      window.speechSynthesis.cancel();
+      const utterance = new SpeechSynthesisUtterance(text);
+      utterance.rate = 1.0;
+      utterance.pitch = 1.0;
+      window.speechSynthesis.speak(utterance);
+    }
+
+    function setCameraGuideIndicator(actionKey) {
+      const leftEl = document.getElementById("camGuideLeft");
+      const rightEl = document.getElementById("camGuideRight");
+      const upEl = document.getElementById("camGuideUp");
+      const downEl = document.getElementById("camGuideDown");
+      if (leftEl) leftEl.style.display = actionKey === "TURN_LEFT" ? "flex" : "none";
+      if (rightEl) rightEl.style.display = actionKey === "TURN_RIGHT" ? "flex" : "none";
+      if (upEl) upEl.style.display = actionKey === "LOOK_UP" ? "flex" : "none";
+      if (downEl) downEl.style.display = actionKey === "LOOK_DOWN" ? "flex" : "none";
+    }
+
+    function switchTab(tabId) {
+      document.querySelectorAll(".tab-btn").forEach(b => b.classList.remove("active"));
+      document.querySelectorAll(".tab-content").forEach(c => c.classList.remove("active"));
+      event.target.classList.add("active");
+      document.getElementById(tabId).classList.add("active");
+    }
+
+    // 1. Camera Control
+    async function startCamera() {
+      try {
+        videoStream = await navigator.mediaDevices.getUserMedia({
+          video: { width: { ideal: 640 }, height: { ideal: 480 }, facingMode: "user" },
+          audio: false
+        });
+        video.srcObject = videoStream;
+        video.style.display = "block";
+        faceOvalGuide.style.display = "block";
+        document.getElementById("cameraPlaceholder").style.display = "none";
+        document.getElementById("btnStartCam").disabled = true;
+        document.getElementById("btnStopCam").disabled = false;
+        document.getElementById("btnDiagnostic").disabled = false;
+        log("Camera stream started successfully (640x480).");
+      } catch (err) {
+        log("Camera error: " + err.message);
+        alert("Could not access webcam: " + err.message);
+      }
+    }
+
+    function stopCamera() {
+      if (videoStream) {
+        videoStream.getTracks().forEach(t => t.stop());
+        videoStream = null;
+      }
+      video.style.display = "none";
+      faceOvalGuide.style.display = "none";
+      cameraActionOverlay.style.display = "none";
+      document.getElementById("cameraPlaceholder").style.display = "flex";
+      document.getElementById("btnStartCam").disabled = false;
+      document.getElementById("btnStopCam").disabled = true;
+      document.getElementById("btnDiagnostic").disabled = true;
+      log("Camera stopped.");
+    }
+
+    // Capture single frame as Blob
+    function captureFrameBlob() {
+      return new Promise((resolve, reject) => {
+        if (!videoStream) return reject(new Error("Camera not running"));
+        captureCanvas.width = video.videoWidth || 640;
+        captureCanvas.height = video.videoHeight || 480;
+        const ctx = captureCanvas.getContext("2d");
+        ctx.drawImage(video, 0, 0, captureCanvas.width, captureCanvas.height);
+        captureCanvas.toBlob(blob => {
+          if (blob) resolve(blob);
+          else reject(new Error("Frame capture failed"));
+        }, "image/jpeg", 0.90);
+      });
+    }
+
+    // Capture burst of frames
+    async function captureBurstFrames(count = 3, intervalMs = 70) {
+      const frames = [];
+      for (let i = 0; i < count; i++) {
+        const blob = await captureFrameBlob();
+        frames.push(blob);
+        if (i < count - 1) {
+          await new Promise(r => setTimeout(r, intervalMs));
+        }
+      }
+      return frames;
+    }
+
+    // 2. Randomized Challenge Definitions with Graphic Animations
+    // Designed so turning to screen-left is TURN_LEFT and screen-right is TURN_RIGHT
+    const CHALLENGE_CATALOG = {
+      "LOOK_STRAIGHT": {
+        title: "Look Straight Ahead 👁️",
+        subtext: "Center your face in the oval and look directly at your screen.",
+        voice: "Please look straight at the camera.",
+        icon: "👁️",
+        renderGraphic: () => `
+          <svg class="animated-avatar" viewBox="0 0 100 100" fill="none">
+            <circle cx="50" cy="50" r="42" stroke="#60a5fa" stroke-width="4" fill="rgba(59,130,246,0.1)"/>
+            <circle cx="36" cy="45" r="5" fill="#93c5fd"/>
+            <circle cx="64" cy="45" r="5" fill="#93c5fd"/>
+            <path d="M42 66 Q50 74 58 66" stroke="#93c5fd" stroke-width="4" stroke-linecap="round"/>
+          </svg>
+        `
+      },
+      "BLINK_TWICE": {
+        title: "Blink Twice 😉",
+        subtext: "Close and reopen your eyes twice at a natural pace.",
+        voice: "Please blink twice.",
+        icon: "😉",
+        renderGraphic: () => `
+          <div class="anim-blink" style="display:flex; gap:16px; align-items:center;">
+            <svg width="40" height="26" viewBox="0 0 40 26" fill="none">
+              <path d="M2 13 Q20 2 38 13 Q20 24 2 13" stroke="#60a5fa" stroke-width="3" fill="rgba(59,130,246,0.15)"/>
+              <circle cx="20" cy="13" r="6" fill="#93c5fd"/>
+            </svg>
+            <svg width="40" height="26" viewBox="0 0 40 26" fill="none">
+              <path d="M2 13 Q20 2 38 13 Q20 24 2 13" stroke="#60a5fa" stroke-width="3" fill="rgba(59,130,246,0.15)"/>
+              <circle cx="20" cy="13" r="6" fill="#93c5fd"/>
+            </svg>
+          </div>
+        `
+      },
+      "BLINK_ONCE": {
+        title: "Blink Once 👁️",
+        subtext: "Close your eyes and reopen them once.",
+        voice: "Please blink once.",
+        icon: "👁️",
+        renderGraphic: () => `
+          <div class="anim-blink" style="display:flex; justify-content:center;">
+            <svg width="60" height="38" viewBox="0 0 40 26" fill="none">
+              <path d="M2 13 Q20 2 38 13 Q20 24 2 13" stroke="#60a5fa" stroke-width="3" fill="rgba(59,130,246,0.15)"/>
+              <circle cx="20" cy="13" r="6" fill="#93c5fd"/>
+            </svg>
+          </div>
+        `
+      },
+      "TURN_LEFT": {
+        title: "Turn Head Left 👈",
+        subtext: "Turn your face to the LEFT (follow the arrow ◀ on screen).",
+        voice: "Please turn your head to the left.",
+        icon: "👈",
+        renderGraphic: () => `
+          <div class="motion-arrow arrow-left">◀</div>
+          <svg class="animated-avatar anim-turn-left" viewBox="0 0 100 100" fill="none">
+            <circle cx="50" cy="50" r="42" stroke="#60a5fa" stroke-width="4" fill="rgba(59,130,246,0.1)"/>
+            <circle cx="30" cy="45" r="5" fill="#93c5fd"/>
+            <circle cx="52" cy="45" r="5" fill="#93c5fd"/>
+            <path d="M34 66 Q42 72 48 66" stroke="#93c5fd" stroke-width="4" stroke-linecap="round"/>
+          </svg>
+        `
+      },
+      "TURN_RIGHT": {
+        title: "Turn Head Right 👉",
+        subtext: "Turn your face to the RIGHT (follow the arrow ▶ on screen).",
+        voice: "Please turn your head to the right.",
+        icon: "👉",
+        renderGraphic: () => `
+          <svg class="animated-avatar anim-turn-right" viewBox="0 0 100 100" fill="none">
+            <circle cx="50" cy="50" r="42" stroke="#60a5fa" stroke-width="4" fill="rgba(59,130,246,0.1)"/>
+            <circle cx="48" cy="45" r="5" fill="#93c5fd"/>
+            <circle cx="70" cy="45" r="5" fill="#93c5fd"/>
+            <path d="M52 66 Q58 72 66 66" stroke="#93c5fd" stroke-width="4" stroke-linecap="round"/>
+          </svg>
+          <div class="motion-arrow arrow-right">▶</div>
+        `
+      },
+      "LOOK_UP": {
+        title: "Tilt Head Up 👆",
+        subtext: "Gently tilt your chin upwards towards the ceiling.",
+        voice: "Please tilt your head up.",
+        icon: "👆",
+        renderGraphic: () => `
+          <div class="motion-arrow arrow-up">▲</div>
+          <svg class="animated-avatar anim-look-up" viewBox="0 0 100 100" fill="none">
+            <circle cx="50" cy="50" r="42" stroke="#60a5fa" stroke-width="4" fill="rgba(59,130,246,0.1)"/>
+            <circle cx="36" cy="38" r="5" fill="#93c5fd"/>
+            <circle cx="64" cy="38" r="5" fill="#93c5fd"/>
+            <path d="M42 58 Q50 64 58 58" stroke="#93c5fd" stroke-width="4" stroke-linecap="round"/>
+          </svg>
+        `
+      },
+      "LOOK_DOWN": {
+        title: "Tilt Head Down 👇",
+        subtext: "Gently tilt your chin downwards towards your chest.",
+        voice: "Please tilt your head down.",
+        icon: "👇",
+        renderGraphic: () => `
+          <svg class="animated-avatar anim-look-down" viewBox="0 0 100 100" fill="none">
+            <circle cx="50" cy="50" r="42" stroke="#60a5fa" stroke-width="4" fill="rgba(59,130,246,0.1)"/>
+            <circle cx="36" cy="52" r="5" fill="#93c5fd"/>
+            <circle cx="64" cy="52" r="5" fill="#93c5fd"/>
+            <path d="M42 72 Q50 78 58 72" stroke="#93c5fd" stroke-width="4" stroke-linecap="round"/>
+          </svg>
+          <div class="motion-arrow arrow-down">▼</div>
+        `
+      }
+    };
+
+    async function startRandomizedChallengeWorkflow() {
+      if (!videoStream) {
+        alert("Please start the camera first.");
+        return;
+      }
+
+      challengeActive = true;
+      document.getElementById("btnStartChallenge").style.display = "none";
+      document.getElementById("btnCancelChallenge").style.display = "inline-flex";
+      document.getElementById("instructionCard").style.display = "block";
+      cameraActionOverlay.style.display = "flex";
+      document.getElementById("challengeResultBadge").innerHTML = "";
+
+      // Step 1: Create isolated processing session
+      currentSessionId = "VERIFY-" + Math.floor(1000 + Math.random() * 9000);
+      log(`[Spring Boot Simulation] Initializing verification session: ${currentSessionId}`);
+
+      try {
+        const initResp = await fetch(`${API_BASE}/sessions`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ session_id: currentSessionId, expires_in_seconds: 120 })
+        });
+        if (!initResp.ok) throw new Error("Failed to initialize session");
+        log(`Session created in Python microservice: ${currentSessionId}`);
+
+        // Generate 3 randomized challenges: LOOK_STRAIGHT + 2 random actions
+        const otherActions = ["BLINK_TWICE", "TURN_LEFT", "TURN_RIGHT", "LOOK_UP", "LOOK_DOWN"]
+          .sort(() => 0.5 - Math.random());
+        const challengeKeys = ["LOOK_STRAIGHT", otherActions[0], otherActions[1]];
+
+        let passedAll = true;
+
+        for (let idx = 0; idx < challengeKeys.length; idx++) {
+          if (!challengeActive) break;
+
+          const actionKey = challengeKeys[idx];
+          const info = CHALLENGE_CATALOG[actionKey] || CHALLENGE_CATALOG["LOOK_STRAIGHT"];
+
+          // Update Progress Bar
+          const progressPct = Math.round((idx / challengeKeys.length) * 100);
+          document.getElementById("challengeProgress").style.width = `${progressPct}%`;
+
+          // Update Instruction Card with Animated Movement Demonstration
+          document.getElementById("instructionStep").textContent = `CHALLENGE ${idx + 1} OF ${challengeKeys.length}`;
+          document.getElementById("instructionAction").textContent = info.title;
+          document.getElementById("instructionSubtext").textContent = info.subtext;
+          document.getElementById("movementAnimationBox").innerHTML = info.renderGraphic();
+          document.getElementById("movementFeedbackGauge").innerHTML = `<span>⏳ Preparing: ${info.title}</span>`;
+
+          // Update On-Screen Camera Overlay
+          cameraActionIcon.textContent = info.icon;
+          cameraActionText.textContent = info.title;
+          faceOvalGuide.className = "face-guide-oval active-warning";
+          setCameraGuideIndicator(actionKey);
+
+          // Audio prompt
+          speakInstruction(info.voice);
+          log(`[Spring Boot] Challenge ${idx + 1} started: "${actionKey}"`);
+
+          // Short 400ms pause to let user hear and prepare
+          await new Promise(r => setTimeout(r, 400));
+          if (!challengeActive) {
+            setCameraGuideIndicator(null);
+            break;
+          }
+
+          // Continuous detection loop for up to 10 seconds per challenge!
+          let challengePassed = false;
+          const maxDurationMs = 10000;
+          const startTime = Date.now();
+          let attempt = 0;
+
+          while (challengeActive && !challengePassed && (Date.now() - startTime < maxDurationMs)) {
+            attempt++;
+            const timeLeftSec = Math.max(0, Math.ceil((maxDurationMs - (Date.now() - startTime)) / 1000));
+
+            // Fast burst of 3 frames (~180ms)
+            const frameBlobs = await captureBurstFrames(3, 60);
+
+            const formData = new FormData();
+            formData.append("action", actionKey);
+            formData.append("sequence_number", attempt.toString());
+            formData.append("challenge_id", `CH-${idx + 1}`);
+            frameBlobs.forEach((blob, i) => formData.append("frames", blob, `f_${i}.jpg`));
+
+            try {
+              const evalResp = await fetch(`${API_BASE}/sessions/${currentSessionId}/frames`, {
+                method: "POST",
+                body: formData
+              });
+              const result = await evalResp.json();
+              updateObservations(result.observations);
+
+              if (result.accepted) {
+                challengePassed = true;
+                setCameraGuideIndicator(null);
+                faceOvalGuide.className = "face-guide-oval active-verified";
+                document.getElementById("movementFeedbackGauge").innerHTML = `<span style="color:#34d399; font-size:15px; font-weight:bold;">✅ Movement Confirmed!</span>`;
+                speakInstruction("Action verified.");
+                log(`[Python Response] ${actionKey} => Accepted: true (Attempt ${attempt})`);
+                await new Promise(r => setTimeout(r, 700));
+                break;
+              } else {
+                // Real-time live movement feedback
+                let liveFeedback = "";
+                const obs = result.observations || {};
+                const curOrientation = obs.head_orientation || "LOOK_STRAIGHT";
+                const yaw = obs.yaw_degrees !== undefined ? obs.yaw_degrees : 0;
+                const pitch = obs.pitch_degrees !== undefined ? obs.pitch_degrees : 0;
+
+                if (actionKey === "LOOK_STRAIGHT") {
+                  liveFeedback = `Look towards camera... (yaw: ${yaw}°, pitch: ${pitch}°) • ${timeLeftSec}s remaining`;
+                } else if (actionKey === "TURN_LEFT") {
+                  liveFeedback = `👈 Turn towards screen left (current: ${yaw > 0 ? '+' : ''}${yaw}°) • ${timeLeftSec}s remaining`;
+                } else if (actionKey === "TURN_RIGHT") {
+                  liveFeedback = `👉 Turn towards screen right (current: ${yaw > 0 ? '+' : ''}${yaw}°) • ${timeLeftSec}s remaining`;
+                } else if (actionKey === "LOOK_UP") {
+                  liveFeedback = `👆 Tilt chin up (pitch: ${pitch > 0 ? '+' : ''}${pitch}°) • ${timeLeftSec}s remaining`;
+                } else if (actionKey === "LOOK_DOWN") {
+                  liveFeedback = `👇 Tilt chin down (pitch: ${pitch > 0 ? '+' : ''}${pitch}°) • ${timeLeftSec}s remaining`;
+                } else if (actionKey === "BLINK_TWICE") {
+                  const bCount = obs.blink_count || 0;
+                  liveFeedback = `😉 Blink twice naturally (detected: ${bCount} of 2) • ${timeLeftSec}s remaining`;
+                } else if (actionKey === "BLINK_ONCE") {
+                  liveFeedback = `👁️ Blink eyes once • ${timeLeftSec}s remaining`;
+                }
+
+                document.getElementById("movementFeedbackGauge").innerHTML = `<span style="color:#fbbf24">${liveFeedback}</span>`;
+              }
+            } catch (err) {
+              log(`Detection error: ${err.message}`);
+            }
+
+            // Brief pause before next sampling batch (100ms)
+            await new Promise(r => setTimeout(r, 100));
+          }
+
+          if (!challengePassed) {
+            passedAll = false;
+            setCameraGuideIndicator(null);
+            faceOvalGuide.className = "face-guide-oval active-warning";
+            document.getElementById("movementFeedbackGauge").innerHTML = `<span style="color:#f87171">❌ Timed out waiting for ${info.title}</span>`;
+            speakInstruction("Action timed out. Please try again.");
+            log(`[Spring Boot] Challenge ${actionKey} timed out after 10 seconds.`);
+            break;
+          }
+        }
+
+        document.getElementById("challengeProgress").style.width = passedAll ? "100%" : "0%";
+
+        if (passedAll) {
+          // Finalize session
+          await fetch(`${API_BASE}/sessions/${currentSessionId}/complete`, { method: "POST" });
+          document.getElementById("instructionAction").textContent = "🎉 Liveness Verified!";
+          document.getElementById("instructionSubtext").textContent = "All randomized movements completed and confirmed. Ready for attendance face recognition.";
+          document.getElementById("movementAnimationBox").innerHTML = `
+            <div style="font-size: 54px;">✅</div>
+          `;
+          document.getElementById("movementFeedbackGauge").innerHTML = `<span style="color:#34d399">Ready for Face Matching</span>`;
+          document.getElementById("challengeResultBadge").innerHTML = `
+            <span class="badge-pill badge-success" style="font-size:14px; padding:6px 14px;">
+              LIVENESS PASSED (3/3 Movements Accepted)
+            </span>
+          `;
+          speakInstruction("Liveness verified successfully. You may now confirm attendance.");
+          log("[Spring Boot] Verification Stage Complete. Moving to Face Recognition.");
+        } else {
+          document.getElementById("challengeResultBadge").innerHTML = `
+            <span class="badge-pill badge-danger" style="font-size:14px; padding:6px 14px;">
+              VERIFICATION INCOMPLETE (Movement Not Confirmed)
+            </span>
+          `;
+        }
+
+        // Cleanup temporary session
+        await fetch(`${API_BASE}/sessions/${currentSessionId}`, { method: "DELETE" });
+        log(`Session ${currentSessionId} cleaned up from Python memory.`);
+
+      } catch (err) {
+        log("Challenge workflow error: " + err.message);
+      } finally {
+        challengeActive = false;
+        setCameraGuideIndicator(null);
+        faceOvalGuide.className = "face-guide-oval";
+        cameraActionOverlay.style.display = "none";
+        document.getElementById("btnStartChallenge").style.display = "inline-flex";
+        document.getElementById("btnCancelChallenge").style.display = "none";
+      }
+    }
+
+    function cancelChallenge() {
+      challengeActive = false;
+      window.speechSynthesis.cancel();
+      setCameraGuideIndicator(null);
+      document.getElementById("instructionCard").style.display = "none";
+      cameraActionOverlay.style.display = "none";
+      faceOvalGuide.className = "face-guide-oval";
+      document.getElementById("btnStartChallenge").style.display = "inline-flex";
+      document.getElementById("btnCancelChallenge").style.display = "none";
+      log("Challenge cancelled by user.");
+    }
+
+    // 3. Face Enrollment & Matching
+    async function enrollCurrentFace() {
+      if (!videoStream) return alert("Please start camera first.");
+      try {
+        log("Capturing approved enrollment frame...");
+        const blob = await captureFrameBlob();
+        const formData = new FormData();
+        formData.append("images", blob, "enroll.jpg");
+
+        const resp = await fetch(`${API_BASE}/enrollments/extract`, {
+          method: "POST",
+          body: formData
+        });
+
+        const data = await resp.json();
+        if (!resp.ok) throw new Error(data.detail || "Enrollment failed");
+
+        enrolledEmbedding = data.embedding;
+        document.getElementById("btnCompare").disabled = false;
+        document.getElementById("enrollmentStatus").innerHTML = `
+          Status: <span class="badge-pill badge-success">Face Enrolled (128-D Template Ready)</span>
+        `;
+        speakInstruction("Face enrolled successfully.");
+        log(`Face enrolled successfully! 128-dimensional embedding extracted.`);
+        updateObservations(data.quality_details);
+      } catch (err) {
+        log("Enrollment error: " + err.message);
+        alert("Enrollment error: " + err.message);
+      }
+    }
+
+    async function compareCurrentFace() {
+      if (!enrolledEmbedding) return alert("Enroll a face first.");
+      if (!videoStream) return alert("Start camera first.");
+
+      try {
+        log("Capturing live comparison frame...");
+        const blob = await captureFrameBlob();
+        const formData = new FormData();
+        formData.append("images", blob, "compare.jpg");
+
+        // Extract embedding for captured frame
+        const extResp = await fetch(`${API_BASE}/enrollments/extract`, {
+          method: "POST",
+          body: formData
+        });
+        const extData = await extResp.json();
+        if (!extResp.ok) throw new Error(extData.detail || "Failed to extract captured face");
+
+        const capturedEmbedding = extData.embedding;
+
+        // Compare embeddings
+        const compResp = await fetch(`${API_BASE}/compare`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            enrolled_embedding: enrolledEmbedding,
+            captured_embedding: capturedEmbedding,
+            session_id: "UI-VERIFY"
+          })
+        });
+
+        const compData = await compResp.json();
+        const simPct = (compData.similarity * 100).toFixed(1);
+
+        document.getElementById("comparisonResultBox").style.display = "block";
+        document.getElementById("similarityValue").textContent = `${simPct}%`;
+
+        const isMatch = compData.similarity >= 0.60;
+        document.getElementById("matchDecision").innerHTML = isMatch
+          ? `<span class="badge-pill badge-success">MATCH CONFIRMED (Similarity >= 60%) — Attendance Saved</span>`
+          : `<span class="badge-pill badge-danger">MISMATCH (Similarity < 60%) — Attendance Rejected</span>`;
+
+        speakInstruction(isMatch ? "Attendance confirmed. Face match." : "Face mismatch.");
+        log(`Biometric comparison completed. Cosine similarity: ${compData.similarity} (${isMatch ? "MATCH" : "NO_MATCH"})`);
+      } catch (err) {
+        log("Comparison error: " + err.message);
+        alert("Comparison error: " + err.message);
+      }
+    }
+
+    // 4. Quick Scan Diagnostic
+    async function runDiagnostic() {
+      if (!videoStream) return;
+      try {
+        log("Running single-frame AI diagnostic...");
+        const blob = await captureFrameBlob();
+        const formData = new FormData();
+        formData.append("image", blob, "diag.jpg");
+
+        const t0 = performance.now();
+        const resp = await fetch(`${API_BASE}/analyze`, { method: "POST", body: formData });
+        const data = await resp.json();
+        const latency = (performance.now() - t0).toFixed(0);
+
+        log(`Diagnostic scan complete in ${latency}ms. Face: ${data.face_detected}, Live Score: ${data.anti_spoof?.scores?.live?.toFixed(3)}`);
+        updateObservations({
+          face_count: data.face_count,
+          head_orientation: "LOOK_STRAIGHT",
+          anti_spoof_live_score: data.anti_spoof?.scores?.live,
+          ear: data.ear
+        });
+      } catch (err) {
+        log("Diagnostic error: " + err.message);
+      }
+    }
+
+    function updateObservations(obs) {
+      if (!obs) return;
+      if (obs.face_count !== undefined) document.getElementById("obsFaceCount").textContent = obs.face_count;
+      if (obs.head_orientation) document.getElementById("obsOrientation").textContent = obs.head_orientation;
+      if (obs.blink_count !== undefined) document.getElementById("obsBlinkCount").textContent = obs.blink_count;
+      if (obs.yaw_degrees !== undefined && obs.pitch_degrees !== undefined) {
+        document.getElementById("obsYawPitch").textContent = `${obs.yaw_degrees}° / ${obs.pitch_degrees}°`;
+      }
+      if (obs.ear !== undefined && obs.ear !== null) {
+        document.getElementById("obsEar").textContent = Number(obs.ear).toFixed(3);
+      }
+      if (obs.anti_spoof_live_score !== undefined) {
+        const pct = (obs.anti_spoof_live_score * 100).toFixed(1);
+        document.getElementById("obsSpoof").textContent = `${pct}% Live`;
+      }
+    }
+
+    // 5. System & Model Status
+    async function refreshModelStatus() {
+      try {
+        const resp = await fetch(`${API_BASE}/models/status`);
+        const data = await resp.json();
+        const listEl = document.getElementById("modelDetailsList");
+        listEl.innerHTML = "";
+        for (const [key, detail] of Object.entries(data.details)) {
+          const div = document.createElement("div");
+          div.style.background = "#1f2937";
+          div.style.padding = "8px 12px";
+          div.style.borderRadius = "6px";
+          div.innerHTML = `
+            <div style="font-weight:600; display:flex; justify-content:space-between;">
+              <span>${detail.name}</span>
+              <span class="badge-pill badge-success">${detail.status}</span>
+            </div>
+            <div style="font-size:11px; color:#9ca3af; margin-top:2px;">${detail.provider} • ${detail.path}</div>
+          `;
+          listEl.appendChild(div);
+        }
+      } catch (err) {
+        log("Failed to fetch model status: " + err.message);
+      }
+    }
+
+    // Check service health on page load
+    window.addEventListener("DOMContentLoaded", async () => {
+      try {
+        const health = await fetch("/health").then(r => r.json());
+        document.getElementById("serviceStatusText").textContent = `${health.application} v${health.version} Online (CPU)`;
+        refreshModelStatus();
+      } catch (e) {
+        document.getElementById("serviceStatusText").textContent = "Service Offline";
+        document.getElementById("serviceStatus").style.color = "var(--danger)";
+      }
+    });
+  </script>
+</body>
+</html>
