@@ -164,4 +164,21 @@ public class UserCommonService {
         user.setPassword(passwordEncoder.encode(formattedDob));
         userRepo.save(user);
     }
+
+    public void adjustRoleChange(User user, Role role) {
+        if (user.getUserRole().getValue() < role.getUserRole().getValue()) {
+            user.setUserRole(role.getUserRole());
+            userRepo.save(user);
+        }
+    }
+
+    public void adjustRoleChange(User user) {
+        int value = user.getRoles().stream()
+                .filter(UserRole::getActive)
+                .mapToInt(userRole -> userRole.getRole().getUserRole().getValue())
+                .max()
+                .orElse(user.getUserRole().getValue());
+        user.setUserRole(UserRoles.fromValue(value));
+        userRepo.save(user);
+    }
 }

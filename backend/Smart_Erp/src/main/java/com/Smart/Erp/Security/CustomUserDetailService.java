@@ -51,7 +51,8 @@ public class CustomUserDetailService implements UserDetailsService {
                 true, // credentialsNonExpired
                 true, // accountNonLocked
                 Collections.singletonList(authority),
-                universityId // <-- Pass the universityId here
+                universityId,
+                user.getId()
         );
     }
 }

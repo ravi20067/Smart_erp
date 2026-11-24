@@ -100,59 +100,6 @@ public class SubjectService {
                         subjectRequest.getSpecializationsId()
                 )
         );
-
-        // Question bank teacher
-        Long requestedQuestionBankTeacherId =
-                subjectRequest.getQuestionBankTeacherId();
-
-        Long existingQuestionBankTeacherId =
-                subject.getQuestionBankTeacher() == null
-                        ? null
-                        : subject.getQuestionBankTeacher().getId();
-
-        if (!java.util.Objects.equals(
-                existingQuestionBankTeacherId,
-                requestedQuestionBankTeacherId
-        )) {
-            subject.setQuestionBankTeacher(
-                    requestedQuestionBankTeacherId == null
-                            ? null
-                            : teacherCommonService.getTeacher(
-                            requestedQuestionBankTeacherId
-                    )
-            );
-        }
-
-        subject.setLastDateQuestionBankSummit(
-                subjectRequest.getLastDateQuestionBankSummit()
-        );
-
-        // Study material teacher
-        Long requestedStudyMaterialTeacherId =
-                subjectRequest.getStudyMaterialTeacherId();
-
-        Long existingStudyMaterialTeacherId =
-                subject.getStudyMaterialTeacher() == null
-                        ? null
-                        : subject.getStudyMaterialTeacher().getId();
-
-        if (!java.util.Objects.equals(
-                existingStudyMaterialTeacherId,
-                requestedStudyMaterialTeacherId
-        )) {
-            subject.setStudyMaterialTeacher(
-                    requestedStudyMaterialTeacherId == null
-                            ? null
-                            : teacherCommonService.getTeacher(
-                            requestedStudyMaterialTeacherId
-                    )
-            );
-        }
-
-        subject.setLastDateStudyMaterialSummit(
-                subjectRequest.getLastDateStudyMaterialSummit()
-        );
-
         return subject;
     }
 

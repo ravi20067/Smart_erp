@@ -1,16 +1,19 @@
 package com.Smart.Erp.Modules.Academic.DTO.Specialization;
 
+import com.Smart.Erp.Core.Common.BaseDTO;
 import com.Smart.Erp.Core.Common.CommonDTO;
 import com.Smart.Erp.Modules.Academic.Enum.ActiveStatus;
 import com.Smart.Erp.Modules.User.Enum.PermissionAction;
 import lombok.Builder;
 import lombok.Data;
+import lombok.Getter;
+import lombok.experimental.SuperBuilder;
 
 import java.util.List;
 
-@Builder
-@Data
-public class SpecializationResponse {
+@SuperBuilder
+@Getter
+public class SpecializationResponse extends BaseDTO {
     private Long id;
 
     private String name;
@@ -22,8 +25,6 @@ public class SpecializationResponse {
     private List<CommonDTO> sectionGroups;
 
     private CommonDTO course;
-
-    private CommonDTO academicYear;
 
     private CommonDTO department;
 

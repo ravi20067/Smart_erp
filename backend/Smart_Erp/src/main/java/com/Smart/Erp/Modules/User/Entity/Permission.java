@@ -13,13 +13,7 @@ import java.util.List;
 
 @Entity
 @Table(
-        name = "permissions",
-        uniqueConstraints = {
-                @UniqueConstraint(
-                        name = "uk_permission_code",
-                        columnNames = "code"
-                )
-        }
+        name = "permissions"
 )
 @Getter
 @Setter

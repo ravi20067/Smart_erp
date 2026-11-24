@@ -1,3 +1,4 @@
+// src/pages/academicManagement/Courses.tsx
 
 import {
     useCallback,
@@ -5,33 +6,41 @@ import {
     useMemo,
     useState,
     type FormEvent,
+    type ReactNode,
 } from "react";
-
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { toast } from "sonner";
-
 import {
     AlertCircle,
     AlertTriangle,
     ArrowDownUp,
     BookOpen,
     Building2,
+    CalendarDays,
+    Check,
     CheckCircle2,
     ChevronDown,
     ChevronLeft,
     ChevronRight,
     ChevronsLeft,
     ChevronsRight,
+    Clock,
     Eye,
     GraduationCap,
+    Info,
+    Layers,
+    Library,
     LoaderCircle,
     Pencil,
     Plus,
     RefreshCw,
     RotateCcw,
     Search,
+    ShieldAlert,
     ShieldCheck,
     Trash2,
+    UserCheck,
+    Users,
     X,
 } from "lucide-react";
 
@@ -39,9 +48,10 @@ import {
     createCourse,
     deleteCourse,
     extractErrorMessage,
-    getAcademicYearFilter,
+    formatAuditActor,
     getAllCourses,
     getCoursePrefix,
+    getDepartmentFilter,
     hasCoursePermission,
     normalizeSearch,
     uniqueDTOs,
@@ -51,6 +61,7 @@ import {
     type CourseCreateRequest,
     type CourseRequest,
     type CourseResponse,
+    type PermissionAction,
 } from "@/services/academic/courseService";
 
 /* -------------------------------------------------------------------------- */
@@ -59,6 +70,7 @@ import {
 
 type DialogMode = "CREATE" | "EDIT" | "VIEW" | "DELETE";
 type StatusFilter = "ALL" | ActiveStatus;
+type EnrollmentFilter = "ALL" | "ALLOWED" | "CLOSED";
 type SortOption =
     | "NEWEST"
     | "NAME_ASC"
@@ -67,7 +79,7 @@ type SortOption =
     | "CODE_DESC";
 
 interface CourseForm {
-    academicYearId: number | "";
+    departmentId: number | "";
     name: string;
     code: string;
     activeStatus: ActiveStatus;
@@ -75,7 +87,7 @@ interface CourseForm {
 }
 
 interface FieldErrors {
-    academicYearId?: string;
+    departmentId?: string;
     name?: string;
     code?: string;
 }
@@ -83,11 +95,13 @@ interface FieldErrors {
 interface CourseDialogProps {
     mode: DialogMode;
     course: CourseResponse | null;
-    academicYears: CommonDTO[];
+    defaultDepartmentId?: number | "";
+    departments: CommonDTO[];
+    departmentsLoading: boolean;
     busy: boolean;
     onClose: () => void;
     onCreate: (
-        academicYearId: number,
+        departmentId: number,
         request: CourseCreateRequest
     ) => Promise<void>;
     onUpdate: (request: CourseRequest) => Promise<void>;
@@ -96,29 +110,54 @@ interface CourseDialogProps {
 
 const PAGE_SIZE = 8;
 
-const EMPTY_FORM: CourseForm = {
-    academicYearId: "",
-    name: "",
-    code: "",
-    activeStatus: "ENABLE",
-    newEnrollmentAllowed: true,
-};
-
 /* -------------------------------------------------------------------------- */
 /* General helpers                                                            */
 /* -------------------------------------------------------------------------- */
 
-function formatNumber(value: number): string {
+function formatNumber(value: number | null | undefined): string {
+    if (typeof value !== "number" || !Number.isFinite(value)) {
+        return "0";
+    }
     return new Intl.NumberFormat("en-IN").format(value);
 }
 
-function removePrefix(code: string, prefix: string): string {
-    const value = (code ?? "").trim();
+function formatDate(dateStr?: string | null): string {
+    if (!dateStr) return "—";
+    try {
+        const d = new Date(dateStr);
+        if (isNaN(d.getTime())) return "—";
+        return new Intl.DateTimeFormat("en-IN", {
+            day: "2-digit",
+            month: "short",
+            year: "numeric",
+        }).format(d);
+    } catch {
+        return "—";
+    }
+}
 
+function formatDateTime(dateStr?: string | null): string {
+    if (!dateStr) return "—";
+    try {
+        const d = new Date(dateStr);
+        if (isNaN(d.getTime())) return "—";
+        return new Intl.DateTimeFormat("en-IN", {
+            day: "2-digit",
+            month: "short",
+            year: "numeric",
+            hour: "2-digit",
+            minute: "2-digit",
+        }).format(d);
+    } catch {
+        return "—";
+    }
+}
+
+function removePrefix(code: string | null | undefined, prefix: string): string {
+    const value = (code ?? "").trim();
     if (prefix && value.startsWith(prefix)) {
         return value.slice(prefix.length).trim();
     }
-
     return value;
 }
 
@@ -128,33 +167,28 @@ function statusLabel(status: ActiveStatus | null | undefined): string {
     return "Unknown";
 }
 
-function getInitials(name: string): string {
-    return (
-        name
-            .trim()
-            .split(/\s+/)
-            .filter(Boolean)
-            .slice(0, 2)
-            .map((part) => part[0])
-            .join("")
-            .toUpperCase() || "CR"
-    );
+function getInitials(name?: string): string {
+    if (!name) return "CR";
+    const parts = name.trim().split(/\s+/).filter(Boolean);
+    if (parts.length === 0) return "CR";
+    if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+    return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
 }
 
 /* -------------------------------------------------------------------------- */
-/* Reusable UI components                                                     */
+/* Small UI components                                                        */
 /* -------------------------------------------------------------------------- */
 
 function GlassCard({
     children,
     className = "",
 }: {
-    children: React.ReactNode;
+    children: ReactNode;
     className?: string;
 }) {
     return (
         <div
-            className={`rounded-2xl border border-white/10 bg-slate-900/65 shadow-[0_12px_45px_rgba(0,0,0,0.18)] backdrop-blur-xl ${className}`}
+            className={`overflow-hidden rounded-2xl border border-white/10 bg-slate-900/65 shadow-[0_12px_45px_rgba(0,0,0,0.18)] backdrop-blur-xl ${className}`}
         >
             {children}
         </div>
@@ -164,34 +198,51 @@ function GlassCard({
 function SelectChevron() {
     return (
         <ChevronDown
-            size={15}
-            className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-slate-400"
+            size={16}
+            className="pointer-events-none absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-400"
         />
     );
 }
 
 function StatusBadge({ status }: { status: ActiveStatus }) {
     const active = status === "ENABLE";
-
     return (
         <span
-            className={`inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-xs font-semibold ${active
-                ? "border-emerald-400/30 bg-emerald-500/10 text-emerald-300"
-                : "border-amber-400/30 bg-amber-500/10 text-amber-300"
-                }`}
+            className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-semibold ${
+                active
+                    ? "border-emerald-400/30 bg-emerald-500/10 text-emerald-300"
+                    : "border-amber-400/30 bg-amber-500/10 text-amber-300"
+            }`}
         >
             <span
-                className={`h-1.5 w-1.5 rounded-full ${active ? "bg-emerald-400" : "bg-amber-400"
-                    }`}
+                className={`h-1.5 w-1.5 rounded-full ${
+                    active ? "bg-emerald-400" : "bg-amber-400"
+                }`}
             />
-            {statusLabel(status)}
+            {active ? "Active" : "Inactive"}
+        </span>
+    );
+}
+
+function EnrollmentBadge({ allowed }: { allowed: boolean | null | undefined }) {
+    if (allowed === true) {
+        return (
+            <span className="inline-flex items-center gap-1 rounded-md border border-emerald-400/20 bg-emerald-500/10 px-2 py-0.5 text-xs font-medium text-emerald-300">
+                <CheckCircle2 size={11} className="shrink-0" />
+                Open
+            </span>
+        );
+    }
+    return (
+        <span className="inline-flex items-center gap-1 rounded-md border border-slate-700/50 bg-slate-800/40 px-2 py-0.5 text-xs font-medium text-slate-400">
+            <X size={11} className="shrink-0" />
+            Closed
         </span>
     );
 }
 
 function FieldError({ children }: { children?: string }) {
     if (!children) return null;
-
     return (
         <motion.p
             initial={{ opacity: 0, y: -4 }}
@@ -205,69 +256,81 @@ function FieldError({ children }: { children?: string }) {
     );
 }
 
-function ErrorBanner({
-    title,
-    message,
-    onRetry,
-    onDismiss,
+function InfoField({
+    label,
+    value,
+    subValue,
 }: {
-    title: string;
-    message: string;
-    onRetry?: () => void;
-    onDismiss: () => void;
+    label: string;
+    value: string;
+    subValue?: string;
 }) {
     return (
-        <motion.div
-            role="alert"
-            initial={{ opacity: 0, y: -8 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -8 }}
-            className="flex items-start justify-between gap-4 rounded-xl border border-rose-400/30 bg-rose-500/10 p-4 text-sm text-rose-200"
-        >
-            <div className="flex min-w-0 items-start gap-3">
-                <AlertTriangle
-                    size={18}
-                    className="mt-0.5 shrink-0 text-rose-400"
-                />
+        <div className="rounded-xl border border-white/5 bg-slate-950/40 p-3 text-xs">
+            <span className="text-[11px] font-medium uppercase tracking-wider text-slate-400">
+                {label}
+            </span>
+            <p className="mt-1 font-semibold text-white break-words">{value}</p>
+            {subValue && (
+                <p className="mt-0.5 font-mono text-[11px] text-slate-400">
+                    {subValue}
+                </p>
+            )}
+        </div>
+    );
+}
 
-                <div className="min-w-0">
-                    <p className="font-semibold text-white">{title}</p>
-                    <p className="mt-1 break-words text-xs sm:text-sm">
-                        {message}
-                    </p>
-
-                    {onRetry && (
-                        <button
-                            type="button"
-                            onClick={onRetry}
-                            className="mt-3 rounded-lg border border-rose-400/30 bg-rose-500/15 px-3 py-1.5 text-xs font-semibold text-rose-200 transition hover:bg-rose-500/25"
-                        >
-                            Try again
-                        </button>
-                    )}
-                </div>
+function AssociationList({
+    title,
+    items,
+    emptyText = "None associated",
+}: {
+    title: string;
+    items: CommonDTO[];
+    emptyText?: string;
+}) {
+    return (
+        <div className="rounded-xl border border-white/5 bg-slate-950/30 p-3 text-xs">
+            <div className="flex items-center justify-between pb-1.5 border-b border-white/5">
+                <span className="font-semibold text-slate-300">{title}</span>
+                <span className="rounded-full bg-white/10 px-2 py-0.5 text-[10px] font-bold text-cyan-300">
+                    {items.length}
+                </span>
             </div>
-
-            <button
-                type="button"
-                onClick={onDismiss}
-                aria-label="Dismiss error"
-                className="shrink-0 text-slate-400 hover:text-white"
-            >
-                <X size={17} />
-            </button>
-        </motion.div>
+            {items.length === 0 ? (
+                <p className="mt-2 text-slate-500 italic text-[11px]">{emptyText}</p>
+            ) : (
+                <div className="mt-2 flex max-h-28 flex-wrap gap-1.5 overflow-y-auto custom-scrollbar">
+                    {items.map((item) => (
+                        <span
+                            key={item.id}
+                            className="inline-flex items-center gap-1 rounded-md border border-white/10 bg-white/5 px-2 py-0.5 text-[11px] text-slate-200"
+                            title={item.code ? `Code: ${item.code}` : undefined}
+                        >
+                            <span>{item.name}</span>
+                            {item.code && (
+                                <span className="text-[10px] text-cyan-300 font-mono">
+                                    ({item.code})
+                                </span>
+                            )}
+                        </span>
+                    ))}
+                </div>
+            )}
+        </div>
     );
 }
 
 /* -------------------------------------------------------------------------- */
-/* Course dialog                                                              */
+/* Course Dialog Component                                                    */
 /* -------------------------------------------------------------------------- */
 
 function CourseDialog({
     mode,
     course,
-    academicYears,
+    defaultDepartmentId,
+    departments,
+    departmentsLoading,
     busy,
     onClose,
     onCreate,
@@ -280,30 +343,44 @@ function CourseDialog({
     const isDelete = mode === "DELETE";
     const readOnly = isView || isDelete;
 
+    const initialDepartmentId: number | "" = isCreate
+        ? defaultDepartmentId && Number(defaultDepartmentId) > 0
+            ? Number(defaultDepartmentId)
+            : departments.length === 1
+                ? departments[0].id
+                : ""
+        : course?.department?.id ?? "";
+
+    const initialPrefix = course?.department?.code ?? "";
+
     const [form, setForm] = useState<CourseForm>(() => ({
-        academicYearId: course?.academicYear?.id ?? "",
+        departmentId: initialDepartmentId,
         name: course?.name ?? "",
-        code: course?.code ?? "",
+        code:
+            (isEdit || isView) && course && initialPrefix
+                ? removePrefix(course.code, initialPrefix)
+                : course?.code ?? "",
         activeStatus: course?.activeStatus ?? "ENABLE",
         newEnrollmentAllowed: course?.newEnrollmentAllowed ?? true,
     }));
 
-    const [prefix, setPrefix] = useState("");
+    const [prefix, setPrefix] = useState(initialPrefix);
     const [prefixLoading, setPrefixLoading] = useState(false);
     const [prefixError, setPrefixError] = useState("");
     const [dialogError, setDialogError] = useState("");
     const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
 
-    const selectedAcademicYear = academicYears.find(
-        (year) => year.id === Number(form.academicYearId)
-    );
+    const selectedDepartment = useMemo(() => {
+        const dId = Number(form.departmentId);
+        if (!dId || dId <= 0) return null;
+        return departments.find((dept) => dept.id === dId) || course?.department || null;
+    }, [form.departmentId, departments, course?.department]);
 
-    const academicYearName =
-        selectedAcademicYear?.name ?? course?.academicYear?.name ?? "—";
+    const departmentName = selectedDepartment?.name ?? course?.department?.name ?? "—";
+    const departmentCode = selectedDepartment?.code ?? course?.department?.code ?? "";
 
-    const universityName = course?.university?.name ?? "—";
     const schoolName = course?.school?.name ?? "—";
-    const departmentName = course?.department?.name ?? "—";
+    const universityName = course?.university?.name ?? "—";
 
     const title: Record<DialogMode, string> = {
         CREATE: "Create Course",
@@ -313,45 +390,58 @@ function CourseDialog({
     };
 
     /*
-     * The prefix is supplied by the backend.
-     * It is displayed separately and never included in the submitted code.
+     * Resolve prefix:
+     * First try instant local department.code, then verify via backend /prefix endpoint.
+     * Works for CREATE, EDIT, and VIEW modes so prefix is always cleanly handled.
      */
     useEffect(() => {
         let cancelled = false;
 
         async function loadPrefix() {
-            const yearId = Number(form.academicYearId);
+            const deptId = Number(form.departmentId);
 
-            if ((!isCreate && !isEdit) || !yearId || yearId <= 0) {
+            if (!deptId || deptId <= 0) {
                 setPrefix("");
                 setPrefixError("");
                 setPrefixLoading(false);
                 return;
             }
 
-            setPrefix("");
-            setPrefixError("");
+            // Local fallback from selected Department DTO or course.department
+            const matchingDept =
+                departments.find((d) => d.id === deptId) || course?.department;
+            if (matchingDept?.code) {
+                setPrefix(matchingDept.code);
+            }
+
             setPrefixLoading(true);
 
             try {
                 const result = await getCoursePrefix(
-                    yearId,
-                    isEdit && course ? course.id : undefined
+                    deptId,
+                    (isEdit || isView) && course ? course.id : undefined
                 );
 
                 if (cancelled) return;
 
-                setPrefix(result);
+                const resolvedPrefix = result || matchingDept?.code || "";
+                if (resolvedPrefix) {
+                    setPrefix(resolvedPrefix);
+                }
 
-                if (isEdit && course) {
+                if ((isEdit || isView) && course && resolvedPrefix) {
                     setForm((current) => ({
                         ...current,
-                        code: removePrefix(course.code, result),
+                        code: removePrefix(course.code, resolvedPrefix),
                     }));
                 }
             } catch (error) {
                 if (!cancelled) {
-                    setPrefixError(extractErrorMessage(error));
+                    if (matchingDept?.code) {
+                        setPrefix(matchingDept.code);
+                    } else {
+                        setPrefixError(extractErrorMessage(error));
+                    }
                 }
             } finally {
                 if (!cancelled) setPrefixLoading(false);
@@ -363,13 +453,7 @@ function CourseDialog({
         return () => {
             cancelled = true;
         };
-    }, [
-        form.academicYearId,
-        isCreate,
-        isEdit,
-        course?.id,
-        course?.code,
-    ]);
+    }, [form.departmentId, isCreate, isEdit, isView, departments, course?.id, course?.code, course?.department]);
 
     useEffect(() => {
         function handleKeyDown(event: KeyboardEvent) {
@@ -385,29 +469,22 @@ function CourseDialog({
         value: CourseForm[K]
     ) {
         setForm((current) => ({ ...current, [key]: value }));
-
-        setFieldErrors((current) => ({
-            ...current,
-            [key]: undefined,
-        }));
-
+        setFieldErrors((current) => ({ ...current, [key]: undefined }));
         setDialogError("");
     }
 
     function validate(): boolean {
         const errors: FieldErrors = {};
-
         const name = form.name.trim();
         const code = form.code.trim();
 
         if (isCreate) {
-            const yearId = Number(form.academicYearId);
-
-            if (!yearId || yearId <= 0) {
-                errors.academicYearId = "Please select an academic year.";
-            } else if (!academicYears.some((year) => year.id === yearId)) {
-                errors.academicYearId =
-                    "The selected academic year is no longer available.";
+            const deptId = Number(form.departmentId);
+            if (!deptId || deptId <= 0) {
+                errors.departmentId = "Please select a department first.";
+            } else if (!departments.some((dept) => dept.id === deptId)) {
+                errors.departmentId =
+                    "The selected department is no longer available.";
             }
         }
 
@@ -419,15 +496,12 @@ function CourseDialog({
             errors.name = "Course name cannot exceed 150 characters.";
         }
 
-        if (!prefix) {
-            errors.code = "The fixed course-code prefix could not be loaded.";
-        } else if (!code) {
+        if (!code) {
             errors.code = "Course code suffix is required.";
         } else if (code.length > 40) {
             errors.code = "Course code suffix cannot exceed 40 characters.";
         } else if (!/^[A-Za-z0-9_-]+$/.test(code)) {
-            errors.code =
-                "Use only letters, numbers, hyphens, and underscores.";
+            errors.code = "Use only letters, numbers, hyphens, and underscores.";
         }
 
         setFieldErrors(errors);
@@ -449,16 +523,15 @@ function CourseDialog({
             } catch (error) {
                 const message = extractErrorMessage(error);
                 const lower = message.toLowerCase();
-
                 setDialogError(
                     lower.includes("constraint") ||
                         lower.includes("foreign key") ||
+                        lower.includes("remove its specializations") ||
                         lower.includes("cannot delete")
-                        ? "This course has related records. Reassign or remove those records before deleting the course."
+                        ? "This course has associated subjects, sections, or specializations. Remove them first."
                         : message
                 );
             }
-
             return;
         }
 
@@ -467,33 +540,20 @@ function CourseDialog({
             return;
         }
 
-        if (prefixLoading) {
-            setDialogError("Please wait while the course prefix loads.");
-            return;
-        }
-
-        if (prefixError) {
-            setDialogError(prefixError);
-            return;
-        }
-
         if (!validate()) return;
 
-        /*
-         * IMPORTANT:
-         * Submit only the editable suffix.
-         * The backend adds the fixed prefix.
-         */
         const code = form.code.trim();
         const name = form.name.trim();
 
         try {
             if (isCreate) {
-                await onCreate(Number(form.academicYearId), {
+                // Controller contract: @RequestParam Long departmentId, @RequestBody CommonRequest { name, code }
+                await onCreate(Number(form.departmentId), {
                     name,
                     code,
                 });
             } else if (isEdit && course) {
+                // Controller contract: @RequestBody CourseRequest { id, name, code, activeStatus, newEnrollmentAllowed }
                 await onUpdate({
                     id: course.id,
                     name,
@@ -507,17 +567,23 @@ function CourseDialog({
         }
     }
 
+    const inputClass =
+        "w-full rounded-xl border border-white/10 bg-slate-950/60 px-4 py-3 text-xs sm:text-sm text-white outline-none transition focus:border-cyan-400/60 disabled:opacity-50";
+
+    const hasDependents =
+        course &&
+        (course.subjects.length > 0 ||
+            course.sections.length > 0 ||
+            course.specializations.length > 0);
+
     return (
         <motion.div
-            className="fixed inset-0 z-[100] flex items-center justify-center overflow-y-auto bg-slate-950/80 p-4 backdrop-blur-md"
+            className="fixed inset-0 z-[100] flex items-center justify-center overflow-y-auto bg-slate-950/80 p-3 sm:p-4 backdrop-blur-md"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             onMouseDown={(event) => {
-                if (
-                    event.target === event.currentTarget &&
-                    !busy
-                ) {
+                if (event.target === event.currentTarget && !busy) {
                     onClose();
                 }
             }}
@@ -530,22 +596,21 @@ function CourseDialog({
                 animate={{ opacity: 1, y: 0, scale: 1 }}
                 exit={{ opacity: 0, y: 10, scale: 0.98 }}
                 transition={{ duration: 0.2 }}
-                className="my-auto w-full max-w-2xl overflow-hidden rounded-2xl border border-cyan-300/20 bg-[#0c1530] shadow-[0_0_70px_rgba(59,130,246,0.16)]"
+                className="my-auto w-full max-w-xl overflow-hidden rounded-2xl border border-cyan-300/20 bg-[#0c1530] shadow-[0_0_70px_rgba(59,130,246,0.16)]"
             >
-                <div className="flex items-center justify-between border-b border-white/10 px-5 py-5 sm:px-6">
+                {/* Dialog Header */}
+                <div className="flex items-center justify-between border-b border-white/10 px-5 py-4 sm:px-6 sm:py-5">
                     <div>
                         <p className="text-xs font-semibold uppercase tracking-[0.2em] text-cyan-300">
-                            Smart ERP · Academic Administration
+                            Smart ERP · Academic Management
                         </p>
-
                         <h2
                             id="course-dialog-title"
-                            className="mt-1 text-xl font-semibold text-white"
+                            className="mt-1 text-lg sm:text-xl font-bold text-white"
                         >
                             {title[mode]}
                         </h2>
                     </div>
-
                     <button
                         type="button"
                         onClick={onClose}
@@ -560,8 +625,9 @@ function CourseDialog({
                 <form
                     onSubmit={submit}
                     noValidate
-                    className="max-h-[78vh] space-y-5 overflow-y-auto p-5 sm:p-6"
+                    className="max-h-[80vh] space-y-4 sm:space-y-5 overflow-y-auto p-4 sm:p-6 custom-scrollbar"
                 >
+                    {/* Error message */}
                     <AnimatePresence>
                         {dialogError && (
                             <motion.div
@@ -569,17 +635,15 @@ function CourseDialog({
                                 initial={{ opacity: 0, y: -6 }}
                                 animate={{ opacity: 1, y: 0 }}
                                 exit={{ opacity: 0, y: -6 }}
-                                className="flex items-start gap-3 rounded-xl border border-rose-500/30 bg-rose-500/10 p-3.5 text-sm text-rose-200"
+                                className="flex items-start gap-3 rounded-xl border border-rose-500/30 bg-rose-500/10 p-3.5 text-xs sm:text-sm text-rose-200"
                             >
                                 <AlertCircle
-                                    size={18}
+                                    size={17}
                                     className="mt-0.5 shrink-0 text-rose-400"
                                 />
-
-                                <p className="min-w-0 flex-1 break-words text-xs leading-relaxed">
+                                <p className="min-w-0 flex-1 break-words leading-relaxed">
                                     {dialogError}
                                 </p>
-
                                 <button
                                     type="button"
                                     onClick={() => setDialogError("")}
@@ -593,100 +657,117 @@ function CourseDialog({
                     </AnimatePresence>
 
                     {isDelete ? (
-                        <div className="rounded-xl border border-rose-500/20 bg-rose-500/10 p-4">
+                        <div className="space-y-3 rounded-xl border border-rose-500/20 bg-rose-500/10 p-4">
                             <div className="flex items-start gap-3">
-                                <div className="rounded-xl bg-rose-500/15 p-3 text-rose-400">
+                                <div className="rounded-xl bg-rose-500/15 p-2.5 sm:p-3 text-rose-400 shrink-0">
                                     <Trash2 size={22} />
                                 </div>
-
                                 <div className="min-w-0">
-                                    <p className="font-semibold text-white">
+                                    <p className="font-semibold text-white text-sm sm:text-base">
                                         Delete this course?
                                     </p>
-
-                                    <p className="mt-1 text-sm leading-relaxed text-slate-300">
-                                        You are about to delete{" "}
+                                    <p className="mt-1 text-xs sm:text-sm leading-relaxed text-slate-300">
+                                        Are you sure you want to delete{" "}
                                         <strong className="text-white">
                                             {course?.name}
                                         </strong>
-                                        . This action may be blocked if related
-                                        records exist.
+                                        ? This action cannot be reversed.
                                     </p>
-
-                                    <p className="mt-2 break-all font-mono text-xs text-cyan-300">
-                                        {course?.code}
-                                    </p>
+                                    <div className="mt-2 flex flex-wrap items-center gap-2 font-mono text-xs text-cyan-300">
+                                        <span>Code: {course?.code}</span>
+                                        <span>·</span>
+                                        <span>ID #{course?.id}</span>
+                                    </div>
                                 </div>
                             </div>
+
+                            {hasDependents && (
+                                <div className="mt-3 rounded-lg border border-amber-500/30 bg-amber-500/10 p-3 text-xs text-amber-200">
+                                    <div className="flex items-start gap-2">
+                                        <AlertTriangle
+                                            size={15}
+                                            className="mt-0.5 shrink-0 text-amber-400"
+                                        />
+                                        <div>
+                                            <p className="font-semibold text-amber-300">
+                                                Active Dependents Detected
+                                            </p>
+                                            <p className="mt-0.5 leading-relaxed text-amber-200/90">
+                                                This course is currently linked to{" "}
+                                                <strong>{course?.subjects.length}</strong> subjects,{" "}
+                                                <strong>{course?.sections.length}</strong> sections, and{" "}
+                                                <strong>{course?.specializations.length}</strong> specializations.
+                                                The backend requires removing or reassigning these child records first.
+                                            </p>
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
                         </div>
                     ) : (
                         <>
+                            {/* Select Department (CREATE mode) */}
                             {isCreate && (
                                 <div>
                                     <label
-                                        htmlFor="course-academic-year"
-                                        className="mb-2 block text-sm font-medium text-slate-300"
+                                        htmlFor="course-department"
+                                        className="mb-2 block text-xs sm:text-sm font-medium text-slate-300"
                                     >
-                                        Academic Year{" "}
+                                        Department{" "}
                                         <span className="text-cyan-400">*</span>
                                     </label>
 
                                     <div className="relative">
                                         <select
-                                            id="course-academic-year"
-                                            value={form.academicYearId}
+                                            id="course-department"
+                                            value={form.departmentId}
                                             onChange={(event) => {
-                                                changeField(
-                                                    "academicYearId",
-                                                    event.target.value
-                                                        ? Number(event.target.value)
-                                                        : ""
-                                                );
+                                                const dId = event.target.value
+                                                    ? Number(event.target.value)
+                                                    : "";
+                                                changeField("departmentId", dId);
                                                 changeField("code", "");
                                             }}
-                                            disabled={busy || academicYears.length === 0}
-                                            className="w-full appearance-none rounded-xl border border-white/10 bg-slate-950/60 px-4 py-3 pr-10 text-sm text-white outline-none transition focus:border-cyan-400/60 disabled:opacity-60"
+                                            disabled={
+                                                busy ||
+                                                departmentsLoading ||
+                                                departments.length === 0
+                                            }
+                                            className={`${inputClass} appearance-none pr-10`}
                                         >
                                             <option value="">
-                                                Select academic year
+                                                {departmentsLoading
+                                                    ? "Loading departments..."
+                                                    : "Select Department"}
                                             </option>
-
-                                            {academicYears.map((year) => (
+                                            {departments.map((dept) => (
                                                 <option
-                                                    key={year.id}
-                                                    value={year.id}
+                                                    key={dept.id}
+                                                    value={dept.id}
                                                 >
-                                                    {year.name}
-                                                    {year.code ? ` (${year.code})` : ""}
+                                                    {dept.name}
+                                                    {dept.code
+                                                        ? ` (${dept.code})`
+                                                        : ""}
                                                 </option>
                                             ))}
                                         </select>
-
                                         <SelectChevron />
                                     </div>
 
-                                    {academicYears.length === 0 && (
-                                        <p className="mt-2 text-xs text-amber-300">
-                                            No academic years are available.
-                                            Course creation is unavailable.
-                                        </p>
-                                    )}
-
                                     <FieldError>
-                                        {fieldErrors.academicYearId}
+                                        {fieldErrors.departmentId}
                                     </FieldError>
                                 </div>
                             )}
 
+                            {/* Department Info & Hierarchy (EDIT mode) */}
                             {!isCreate && (
-                                <div className="grid gap-3 sm:grid-cols-2">
-                                    <InfoField
-                                        label="Academic Year"
-                                        value={academicYearName}
-                                    />
+                                <div className="grid gap-2.5 sm:grid-cols-3">
                                     <InfoField
                                         label="Department"
                                         value={departmentName}
+                                        subValue={departmentCode ? `Code: ${departmentCode}` : undefined}
                                     />
                                     <InfoField
                                         label="School"
@@ -699,21 +780,19 @@ function CourseDialog({
                                 </div>
                             )}
 
+                            {/* Course Name */}
                             <div>
-                                <div className="mb-2 flex items-center justify-between gap-3">
+                                <div className="mb-1.5 flex items-center justify-between gap-3">
                                     <label
                                         htmlFor="course-name"
-                                        className="text-sm font-medium text-slate-300"
+                                        className="text-xs sm:text-sm font-medium text-slate-300"
                                     >
-                                        Course Name{" "}
-                                        <span className="text-cyan-400">*</span>
+                                        Course Name <span className="text-cyan-400">*</span>
                                     </label>
-
                                     <span className="text-[11px] text-slate-500">
                                         {form.name.length}/150
                                     </span>
                                 </div>
-
                                 <input
                                     id="course-name"
                                     value={form.name}
@@ -722,34 +801,32 @@ function CourseDialog({
                                     }
                                     readOnly={readOnly || busy}
                                     maxLength={150}
-                                    placeholder="e.g. Bachelor of Technology"
-                                    className={`w-full rounded-xl border bg-slate-950/60 px-4 py-3 text-sm text-white outline-none transition placeholder:text-slate-500 ${fieldErrors.name
-                                        ? "border-rose-500/60 focus:border-rose-400"
-                                        : "border-white/10 focus:border-cyan-400/60"
-                                        } read-only:opacity-75`}
+                                    placeholder="e.g. Bachelor of Technology (Computer Science)"
+                                    className={`w-full rounded-xl border bg-slate-950/60 px-4 py-3 text-xs sm:text-sm text-white outline-none transition placeholder:text-slate-500 ${
+                                        fieldErrors.name
+                                            ? "border-rose-500/60 focus:border-rose-400"
+                                            : "border-white/10 focus:border-cyan-400/60"
+                                    } read-only:opacity-75`}
                                 />
-
                                 <FieldError>{fieldErrors.name}</FieldError>
                             </div>
 
+                            {/* Course Code with Fixed Department Prefix */}
                             <div>
                                 <label
                                     htmlFor="course-code"
-                                    className="mb-2 block text-sm font-medium text-slate-300"
+                                    className="mb-1.5 block text-xs sm:text-sm font-medium text-slate-300"
                                 >
-                                    Course Code{" "}
-                                    <span className="text-cyan-400">*</span>
+                                    Course Code <span className="text-cyan-400">*</span>
                                 </label>
-
                                 <div className="flex overflow-hidden rounded-xl border border-white/10 bg-slate-950/60 focus-within:border-cyan-400/60">
-                                    <div className="flex max-w-[55%] items-center border-r border-white/10 bg-white/[0.04] px-3 font-mono text-sm text-cyan-300 sm:px-4">
+                                    <div className="flex max-w-[55%] items-center border-r border-white/10 bg-white/[0.04] px-3 font-mono text-xs sm:text-sm text-cyan-300 sm:px-4">
                                         <span className="truncate">
                                             {prefixLoading
                                                 ? "Loading..."
-                                                : prefix || "PREFIX"}
+                                                : prefix || departmentCode || "DEPT_PREFIX"}
                                         </span>
                                     </div>
-
                                     <input
                                         id="course-code"
                                         value={form.code}
@@ -761,31 +838,33 @@ function CourseDialog({
                                         }
                                         readOnly={readOnly || busy}
                                         maxLength={40}
-                                        placeholder="CSE"
-                                        className="min-w-0 flex-1 bg-transparent px-3 py-3 font-mono text-sm uppercase text-white outline-none placeholder:text-slate-600 read-only:opacity-75 sm:px-4"
+                                        placeholder="BTECH"
+                                        className="min-w-0 flex-1 bg-transparent px-3 py-3 font-mono text-xs sm:text-sm uppercase text-white outline-none placeholder:text-slate-600 read-only:opacity-75 sm:px-4"
                                     />
                                 </div>
-
                                 <FieldError>
                                     {fieldErrors.code || prefixError}
                                 </FieldError>
-
-                                <p className="mt-2 text-[11px] leading-relaxed text-slate-500">
-                                    The prefix is fixed by the server. Only
-                                    the suffix is entered and sent to the API.
-                                </p>
+                                <div className="mt-1.5 flex flex-wrap items-center justify-between gap-1 text-[11px] text-slate-500">
+                                    <span>Fixed department prefix is auto-applied by backend.</span>
+                                    {(prefix || departmentCode) && form.code.trim() && (
+                                        <span className="font-mono text-cyan-400">
+                                            Resulting Code: <strong>{prefix || departmentCode}{form.code.trim()}</strong>
+                                        </span>
+                                    )}
+                                </div>
                             </div>
 
+                            {/* Active Status & Enrollment (EDIT mode) */}
                             {!isCreate && (
-                                <>
+                                <div className="space-y-3.5">
                                     <div>
                                         <label
                                             htmlFor="course-status"
-                                            className="mb-2 block text-sm font-medium text-slate-300"
+                                            className="mb-1.5 block text-xs sm:text-sm font-medium text-slate-300"
                                         >
                                             Active Status
                                         </label>
-
                                         <div className="relative">
                                             <select
                                                 id="course-status"
@@ -797,7 +876,7 @@ function CourseDialog({
                                                     )
                                                 }
                                                 disabled={readOnly || busy}
-                                                className="w-full appearance-none rounded-xl border border-white/10 bg-slate-950/60 px-4 py-3 pr-10 text-sm text-white outline-none transition focus:border-cyan-400/60 disabled:opacity-70"
+                                                className="w-full appearance-none rounded-xl border border-white/10 bg-slate-950/60 px-4 py-3 pr-10 text-xs sm:text-sm text-white outline-none transition focus:border-cyan-400/60 disabled:opacity-70"
                                             >
                                                 <option value="ENABLE">
                                                     Active (Enable)
@@ -806,12 +885,11 @@ function CourseDialog({
                                                     Inactive (Disable)
                                                 </option>
                                             </select>
-
                                             <SelectChevron />
                                         </div>
                                     </div>
 
-                                    <label className="flex cursor-pointer items-start gap-3 rounded-xl border border-white/10 bg-white/[0.025] p-4">
+                                    <label className="flex cursor-pointer items-start gap-3 rounded-xl border border-white/10 bg-white/[0.025] p-3.5 sm:p-4 transition hover:bg-white/[0.04]">
                                         <input
                                             type="checkbox"
                                             checked={form.newEnrollmentAllowed}
@@ -822,35 +900,30 @@ function CourseDialog({
                                                 )
                                             }
                                             disabled={readOnly || busy}
-                                            className="mt-1 h-4 w-4 accent-cyan-400"
+                                            className="mt-0.5 h-4 w-4 rounded accent-cyan-400"
                                         />
-
-                                        <span>
-                                            <span className="block text-sm font-medium text-slate-200">
-                                                Allow new enrollment
+                                        <div>
+                                            <span className="block text-xs sm:text-sm font-medium text-slate-200">
+                                                Allow New Enrollment
                                             </span>
-                                            <span className="mt-1 block text-xs leading-relaxed text-slate-500">
-                                                Allow new students to enroll
-                                                in this course.
+                                            <span className="mt-0.5 block text-[11px] sm:text-xs leading-relaxed text-slate-400">
+                                                When enabled, new students can register and enroll into this course offering.
                                             </span>
-                                        </span>
+                                        </div>
                                     </label>
-                                </>
+                                </div>
                             )}
 
+                            {/* VIEW Mode Details & Audit Showcase */}
                             {isView && course && (
-                                <div className="space-y-3">
-                                    <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">
-                                        Course Information
-                                    </p>
-
-                                    <div className="grid gap-3 sm:grid-cols-2">
+                                <div className="space-y-4 pt-2 border-t border-white/5">
+                                    <div className="grid gap-2 sm:grid-cols-2">
                                         <InfoField
                                             label="Course ID"
-                                            value={String(course.id)}
+                                            value={`#${course.id}`}
                                         />
                                         <InfoField
-                                            label="Status"
+                                            label="Active Status"
                                             value={statusLabel(course.activeStatus)}
                                         />
                                         <InfoField
@@ -859,60 +932,156 @@ function CourseDialog({
                                                 course.newEnrollmentAllowed === null
                                                     ? "Not specified"
                                                     : course.newEnrollmentAllowed
-                                                        ? "Allowed"
-                                                        : "Not allowed"
+                                                        ? "Allowed (Open)"
+                                                        : "Not allowed (Closed)"
                                             }
                                         />
                                         <InfoField
-                                            label="Subjects"
-                                            value={String(course.subjects.length)}
+                                            label="Full Course Code"
+                                            value={course.code || "—"}
                                         />
                                         <InfoField
-                                            label="Sections"
-                                            value={String(course.sections.length)}
+                                            label="Department Prefix"
+                                            value={prefix || departmentCode || "—"}
                                         />
                                         <InfoField
-                                            label="Specializations"
-                                            value={String(course.specializations.length)}
+                                            label="Course Suffix"
+                                            value={
+                                                removePrefix(
+                                                    course.code,
+                                                    prefix || departmentCode
+                                                ) || "—"
+                                            }
                                         />
                                     </div>
 
-                                    <div className="grid gap-3 sm:grid-cols-3">
-                                        <AssociationList
-                                            title="Subjects"
-                                            items={course.subjects}
-                                        />
-                                        <AssociationList
-                                            title="Sections"
-                                            items={course.sections}
-                                        />
-                                        <AssociationList
-                                            title="Specializations"
-                                            items={course.specializations}
-                                        />
-                                    </div>
-
-                                    <div className="rounded-xl border border-white/10 bg-white/[0.03] p-3">
-                                        <p className="mb-2 text-xs text-slate-500">
-                                            Available permissions
+                                    {/* Associated Child Entities */}
+                                    <div className="space-y-2.5">
+                                        <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">
+                                            Curricular Components
                                         </p>
+                                        <div className="grid gap-2.5 sm:grid-cols-3">
+                                            <AssociationList
+                                                title="Subjects"
+                                                items={course.subjects}
+                                                emptyText="No subjects configured"
+                                            />
+                                            <AssociationList
+                                                title="Sections"
+                                                items={course.sections}
+                                                emptyText="No sections assigned"
+                                            />
+                                            <AssociationList
+                                                title="Specializations"
+                                                items={course.specializations}
+                                                emptyText="No specializations assigned"
+                                            />
+                                        </div>
+                                    </div>
 
-                                        <div className="flex flex-wrap gap-2">
-                                            {course.permissionActions.length ? (
-                                                course.permissionActions.map(
-                                                    (action) => (
-                                                        <span
-                                                            key={action}
-                                                            className="rounded-lg border border-cyan-400/20 bg-cyan-400/10 px-2.5 py-1 font-mono text-xs text-cyan-300"
-                                                        >
-                                                            {action}
+                                    {/* Audit Trail & Governance Showcase */}
+                                    <div className="rounded-xl border border-white/10 bg-slate-950/40 p-3 space-y-2.5">
+                                        <div className="flex items-center justify-between">
+                                            <span className="text-xs font-semibold text-slate-300 flex items-center gap-1.5">
+                                                <ShieldCheck size={13} className="text-emerald-400" />
+                                                Audit Trail & Governance
+                                            </span>
+                                            <span className="text-[10px] uppercase tracking-wider text-slate-500 font-mono">
+                                                System Records
+                                            </span>
+                                        </div>
+
+                                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
+                                            {/* Created By Card */}
+                                            <div className="rounded-lg border border-emerald-500/20 bg-emerald-500/5 p-2.5 space-y-1.5">
+                                                <div className="flex items-center justify-between text-[10px] text-emerald-400 font-medium">
+                                                    <span className="flex items-center gap-1">
+                                                        <UserCheck size={11} /> Created By
+                                                    </span>
+                                                    {course.createdAt && (
+                                                        <span className="text-slate-400 font-mono text-[10px]">
+                                                            {formatDate(course.createdAt)}
                                                         </span>
-                                                    )
-                                                )
+                                                    )}
+                                                </div>
+                                                <div className="flex items-center gap-2">
+                                                    <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-emerald-500/20 text-[10px] font-bold text-emerald-300">
+                                                        {getInitials(course.createdBy?.name || "System")}
+                                                    </div>
+                                                    <div className="min-w-0 flex-1">
+                                                        <p className="truncate font-semibold text-slate-200 text-xs">
+                                                            {course.createdBy?.name || "System Administrator"}
+                                                        </p>
+                                                        {(course.createdBy?.code || course.createdBy?.id) && (
+                                                            <p className="text-[10px] text-slate-400 font-mono truncate">
+                                                                {course.createdBy.code ? `Code: ${course.createdBy.code}` : `ID: #${course.createdBy.id}`}
+                                                            </p>
+                                                        )}
+                                                    </div>
+                                                </div>
+                                                {course.createdAt && (
+                                                    <div className="text-[10px] text-slate-500 flex items-center gap-1 pt-0.5 border-t border-emerald-500/10">
+                                                        <Clock size={10} className="text-slate-400 shrink-0" />
+                                                        <span className="truncate">Timestamp: {formatDateTime(course.createdAt)}</span>
+                                                    </div>
+                                                )}
+                                            </div>
+
+                                            {/* Updated By Card */}
+                                            <div className="rounded-lg border border-cyan-500/20 bg-cyan-500/5 p-2.5 space-y-1.5">
+                                                <div className="flex items-center justify-between text-[10px] text-cyan-400 font-medium">
+                                                    <span className="flex items-center gap-1">
+                                                        <RotateCcw size={11} /> Last Modified By
+                                                    </span>
+                                                    {(course.updatedAt || course.createdAt) && (
+                                                        <span className="text-slate-400 font-mono text-[10px]">
+                                                            {formatDate(course.updatedAt || course.createdAt)}
+                                                        </span>
+                                                    )}
+                                                </div>
+                                                <div className="flex items-center gap-2">
+                                                    <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-cyan-500/20 text-[10px] font-bold text-cyan-300">
+                                                        {getInitials(course.updatedBy?.name || course.createdBy?.name || "System")}
+                                                    </div>
+                                                    <div className="min-w-0 flex-1">
+                                                        <p className="truncate font-semibold text-slate-200 text-xs">
+                                                            {course.updatedBy?.name || course.createdBy?.name || "System Administrator"}
+                                                        </p>
+                                                        {(course.updatedBy?.code || course.updatedBy?.id) && (
+                                                            <p className="text-[10px] text-slate-400 font-mono truncate">
+                                                                {course.updatedBy.code ? `Code: ${course.updatedBy.code}` : `ID: #${course.updatedBy.id}`}
+                                                            </p>
+                                                        )}
+                                                    </div>
+                                                </div>
+                                                {(course.updatedAt || course.createdAt) && (
+                                                    <div className="text-[10px] text-slate-500 flex items-center gap-1 pt-0.5 border-t border-cyan-500/10">
+                                                        <Clock size={10} className="text-slate-400 shrink-0" />
+                                                        <span className="truncate">Timestamp: {formatDateTime(course.updatedAt || course.createdAt)}</span>
+                                                    </div>
+                                                )}
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    {/* Permission Pills */}
+                                    <div className="rounded-xl border border-white/5 bg-slate-950/30 p-3">
+                                        <p className="mb-2 text-[11px] font-medium text-slate-400 uppercase tracking-wider">
+                                            Assigned User Permissions
+                                        </p>
+                                        <div className="flex flex-wrap gap-1.5">
+                                            {course.permissionActions.length > 0 ? (
+                                                course.permissionActions.map((action) => (
+                                                    <span
+                                                        key={action}
+                                                        className="rounded-lg border border-cyan-400/20 bg-cyan-400/10 px-2.5 py-1 font-mono text-[11px] text-cyan-300"
+                                                    >
+                                                        {action}
+                                                    </span>
+                                                ))
                                             ) : (
                                                 <span className="text-xs text-slate-500">
-                                                    No update or delete
-                                                    permissions were returned.
+                                                    No direct modification permissions granted.
                                                 </span>
                                             )}
                                         </div>
@@ -922,12 +1091,13 @@ function CourseDialog({
                         </>
                     )}
 
-                    <div className="flex flex-col-reverse gap-3 border-t border-white/10 pt-4 sm:flex-row sm:justify-end">
+                    {/* Dialog Actions Footer */}
+                    <div className="flex flex-col-reverse gap-2.5 border-t border-white/10 pt-4 sm:flex-row sm:justify-end">
                         <button
                             type="button"
                             onClick={onClose}
                             disabled={busy}
-                            className="rounded-xl border border-white/10 px-5 py-2.5 text-sm font-medium text-slate-300 transition hover:bg-white/5 disabled:opacity-50"
+                            className="rounded-xl border border-white/10 px-5 py-2.5 text-xs sm:text-sm font-medium text-slate-300 transition hover:bg-white/5 disabled:opacity-50"
                         >
                             {isView ? "Close" : "Cancel"}
                         </button>
@@ -938,19 +1108,19 @@ function CourseDialog({
                                 disabled={
                                     busy ||
                                     prefixLoading ||
-                                    ((isCreate || isEdit) && !prefix) ||
-                                    (isCreate && academicYears.length === 0)
+                                    (isCreate &&
+                                        (departmentsLoading ||
+                                            departments.length === 0 ||
+                                            !form.departmentId))
                                 }
-                                className={`inline-flex items-center justify-center gap-2 rounded-xl px-5 py-2.5 text-sm font-semibold text-white shadow-lg transition hover:-translate-y-0.5 hover:brightness-110 active:translate-y-0 disabled:cursor-not-allowed disabled:opacity-50 ${isDelete
-                                    ? "bg-gradient-to-r from-red-600 to-rose-500 shadow-red-500/20"
-                                    : "bg-gradient-to-r from-violet-600 via-blue-600 to-cyan-500 shadow-blue-500/20"
-                                    }`}
+                                className={`inline-flex items-center justify-center gap-2 rounded-xl px-5 py-2.5 text-xs sm:text-sm font-semibold text-white shadow-lg transition hover:-translate-y-0.5 hover:brightness-110 active:translate-y-0 disabled:cursor-not-allowed disabled:opacity-50 ${
+                                    isDelete
+                                        ? "bg-gradient-to-r from-red-600 to-rose-500 shadow-red-500/20"
+                                        : "bg-gradient-to-r from-violet-600 via-blue-600 to-cyan-500 shadow-blue-500/20"
+                                }`}
                             >
                                 {busy || prefixLoading ? (
-                                    <LoaderCircle
-                                        size={16}
-                                        className="animate-spin"
-                                    />
+                                    <LoaderCircle size={16} className="animate-spin" />
                                 ) : isDelete ? (
                                     <Trash2 size={16} />
                                 ) : (
@@ -975,100 +1145,60 @@ function CourseDialog({
     );
 }
 
-function InfoField({
-    label,
-    value,
-}: {
-    label: string;
-    value: string;
-}) {
-    return (
-        <div className="min-w-0 rounded-xl border border-white/10 bg-white/[0.03] p-3">
-            <p className="text-xs text-slate-500">{label}</p>
-            <p className="mt-1 break-words text-sm font-medium text-slate-200">
-                {value || "—"}
-            </p>
-        </div>
-    );
-}
-
-function AssociationList({
-    title,
-    items,
-}: {
-    title: string;
-    items: CommonDTO[];
-}) {
-    return (
-        <div className="rounded-xl border border-white/10 bg-white/[0.025] p-3">
-            <p className="mb-2 text-xs font-semibold text-slate-400">
-                {title} ({items.length})
-            </p>
-
-            {items.length ? (
-                <div className="space-y-2">
-                    {items.slice(0, 5).map((item) => (
-                        <div key={item.id} className="min-w-0">
-                            <p className="truncate text-xs text-slate-200">
-                                {item.name || "Unnamed"}
-                            </p>
-                            {item.code && (
-                                <p className="truncate font-mono text-[10px] text-slate-500">
-                                    {item.code}
-                                </p>
-                            )}
-                        </div>
-                    ))}
-
-                    {items.length > 5 && (
-                        <p className="text-[10px] text-slate-500">
-                            +{items.length - 5} more
-                        </p>
-                    )}
-                </div>
-            ) : (
-                <p className="text-xs text-slate-500">No records linked</p>
-            )}
-        </div>
-    );
-}
-
 /* -------------------------------------------------------------------------- */
-/* Main Courses page                                                          */
+/* Main Courses Page Component                                                */
 /* -------------------------------------------------------------------------- */
 
 export default function Courses() {
     const reduceMotion = useReducedMotion();
 
     const [courses, setCourses] = useState<CourseResponse[]>([]);
-    const [academicYears, setAcademicYears] = useState<CommonDTO[]>([]);
+    const [departments, setDepartments] = useState<CommonDTO[]>([]);
 
     const [loading, setLoading] = useState(true);
     const [refreshing, setRefreshing] = useState(false);
+    const [departmentsLoading, setDepartmentsLoading] = useState(false);
     const [busy, setBusy] = useState(false);
 
     const [pageError, setPageError] = useState("");
-    const [academicYearError, setAcademicYearError] = useState("");
     const [notice, setNotice] = useState("");
 
-    /* All table filters are local. */
+    /* Table search and filters */
     const [search, setSearch] = useState("");
     const [statusFilter, setStatusFilter] = useState<StatusFilter>("ALL");
-    const [universityFilter, setUniversityFilter] = useState("ALL");
-    const [schoolFilter, setSchoolFilter] = useState("ALL");
     const [departmentFilter, setDepartmentFilter] = useState("ALL");
-    const [academicYearFilter, setAcademicYearFilter] = useState("ALL");
+    const [schoolFilter, setSchoolFilter] = useState("ALL");
+    const [universityFilter, setUniversityFilter] = useState("ALL");
+    const [enrollmentFilter, setEnrollmentFilter] = useState<EnrollmentFilter>("ALL");
     const [sort, setSort] = useState<SortOption>("NEWEST");
     const [page, setPage] = useState(1);
 
     const [dialog, setDialog] = useState<{
         mode: DialogMode;
         course: CourseResponse | null;
+        defaultDepartmentId?: number | "";
     } | null>(null);
 
     /* ---------------------------------------------------------------------- */
-    /* Load the complete hierarchical response once                          */
+    /* Load courses and department options (Common Controller for CREATE)     */
     /* ---------------------------------------------------------------------- */
+
+    const loadDepartments = useCallback(async () => {
+        setDepartmentsLoading(true);
+
+        try {
+            const result = await getDepartmentFilter();
+            const opts = uniqueDTOs(result);
+            setDepartments(opts);
+            return opts;
+        } catch (error) {
+            const message = extractErrorMessage(error);
+            toast.error(`Could not load departments: ${message}`);
+            return [];
+        } finally {
+            setDepartmentsLoading(false);
+        }
+    }, []);
 
     const loadCourses = useCallback(async (background = false) => {
         if (background) {
@@ -1081,7 +1211,7 @@ export default function Courses() {
 
         try {
             const result = await getAllCourses();
-            setCourses(result);
+            setCourses(Array.isArray(result) ? result : []);
         } catch (error) {
             const message = extractErrorMessage(error);
             setPageError(message);
@@ -1092,39 +1222,33 @@ export default function Courses() {
         }
     }, []);
 
-    const loadAcademicYears = useCallback(async () => {
-        setAcademicYearError("");
-
-        try {
-            const result = await getAcademicYearFilter();
-            setAcademicYears(uniqueDTOs(result));
-        } catch (error) {
-            const message = extractErrorMessage(error);
-            setAcademicYearError(message);
-            toast.error(`Could not load academic years: ${message}`);
-        }
-    }, []);
-
+    // Load courses on mount
     useEffect(() => {
         void loadCourses();
-        void loadAcademicYears();
-    }, [loadCourses, loadAcademicYears]);
+    }, [loadCourses]);
 
     useEffect(() => {
         if (!notice) return;
-
         const timer = window.setTimeout(() => setNotice(""), 5000);
         return () => window.clearTimeout(timer);
     }, [notice]);
 
     /* ---------------------------------------------------------------------- */
-    /* Hierarchical filter options from already-loaded course data            */
-    /* University -> School -> Department -> Academic Year                    */
+    /* Filter options derived from loaded courses data                       */
     /* ---------------------------------------------------------------------- */
 
-    const tableUniversities = useMemo(
-        () => uniqueDTOs(courses.map((course) => course.university)),
-        [courses]
+    const tableDepartments = useMemo(
+        () =>
+            uniqueDTOs(
+                courses
+                    .filter(
+                        (course) =>
+                            schoolFilter === "ALL" ||
+                            course.school?.id === Number(schoolFilter)
+                    )
+                    .map((course) => course.department)
+            ),
+        [courses, schoolFilter]
     );
 
     const tableSchools = useMemo(
@@ -1141,102 +1265,27 @@ export default function Courses() {
         [courses, universityFilter]
     );
 
-    const tableDepartments = useMemo(
-        () =>
-            uniqueDTOs(
-                courses
-                    .filter(
-                        (course) =>
-                            universityFilter === "ALL" ||
-                            course.university?.id === Number(universityFilter)
-                    )
-                    .filter(
-                        (course) =>
-                            schoolFilter === "ALL" ||
-                            course.school?.id === Number(schoolFilter)
-                    )
-                    .map((course) => course.department)
-            ),
-        [courses, universityFilter, schoolFilter]
+    const tableUniversities = useMemo(
+        () => uniqueDTOs(courses.map((course) => course.university)),
+        [courses]
     );
-
-    const tableAcademicYears = useMemo(
-        () =>
-            uniqueDTOs(
-                courses
-                    .filter(
-                        (course) =>
-                            universityFilter === "ALL" ||
-                            course.university?.id === Number(universityFilter)
-                    )
-                    .filter(
-                        (course) =>
-                            schoolFilter === "ALL" ||
-                            course.school?.id === Number(schoolFilter)
-                    )
-                    .filter(
-                        (course) =>
-                            departmentFilter === "ALL" ||
-                            course.department?.id === Number(departmentFilter)
-                    )
-                    .map((course) => course.academicYear)
-            ),
-        [courses, universityFilter, schoolFilter, departmentFilter]
-    );
-
-    /* Keep dependent hierarchy selections valid. */
-    useEffect(() => {
-        if (
-            schoolFilter !== "ALL" &&
-            !tableSchools.some((school) => school.id === Number(schoolFilter))
-        ) {
-            setSchoolFilter("ALL");
-        }
-    }, [schoolFilter, tableSchools]);
-
-    useEffect(() => {
-        if (
-            departmentFilter !== "ALL" &&
-            !tableDepartments.some(
-                (department) => department.id === Number(departmentFilter)
-            )
-        ) {
-            setDepartmentFilter("ALL");
-        }
-    }, [departmentFilter, tableDepartments]);
-
-    useEffect(() => {
-        if (
-            academicYearFilter !== "ALL" &&
-            !tableAcademicYears.some(
-                (year) => year.id === Number(academicYearFilter)
-            )
-        ) {
-            setAcademicYearFilter("ALL");
-        }
-    }, [academicYearFilter, tableAcademicYears]);
 
     /* ---------------------------------------------------------------------- */
-    /* Statistics from all loaded records                                     */
+    /* Statistics cards metrics                                               */
     /* ---------------------------------------------------------------------- */
 
     const stats = useMemo(() => {
-        const active = courses.filter(
-            (course) => course.activeStatus === "ENABLE"
-        ).length;
-
-        const inactive = courses.filter(
-            (course) => course.activeStatus === "DISABLE"
-        ).length;
-
-        const enrollmentAllowed = courses.filter(
-            (course) => course.newEnrollmentAllowed === true
-        ).length;
+        const list = Array.isArray(courses) ? courses : [];
+        const active = list.filter((course) => course.activeStatus === "ENABLE").length;
+        const enrollmentOpen = list.filter((course) => course.newEnrollmentAllowed === true).length;
+        const deptSet = new Set(
+            list.map((c) => c.department?.id).filter((id): id is number => typeof id === "number" && id > 0)
+        );
 
         return [
             {
                 label: "Total Courses",
-                value: formatNumber(courses.length),
+                value: formatNumber(list.length),
                 icon: BookOpen,
                 tone: "cyan",
             },
@@ -1247,22 +1296,22 @@ export default function Courses() {
                 tone: "green",
             },
             {
-                label: "Inactive Courses",
-                value: formatNumber(inactive),
-                icon: ShieldCheck,
+                label: "Departments",
+                value: formatNumber(deptSet.size || departments.length),
+                icon: Building2,
                 tone: "purple",
             },
             {
-                label: "Enrollment Allowed",
-                value: formatNumber(enrollmentAllowed),
-                icon: Building2,
+                label: "Enrollment Open",
+                value: formatNumber(enrollmentOpen),
+                icon: ShieldCheck,
                 tone: "blue",
             },
         ];
-    }, [courses]);
+    }, [courses, departments]);
 
     /* ---------------------------------------------------------------------- */
-    /* Local search, filters and sorting                                      */
+    /* Filtering and sorting                                                  */
     /* ---------------------------------------------------------------------- */
 
     const filteredCourses = useMemo(() => {
@@ -1274,42 +1323,41 @@ export default function Courses() {
                 normalizeSearch(course.name).includes(query) ||
                 normalizeSearch(course.code).includes(query) ||
                 String(course.id).includes(query) ||
-                normalizeSearch(course.academicYear?.name).includes(query) ||
-                normalizeSearch(course.academicYear?.code).includes(query) ||
                 normalizeSearch(course.department?.name).includes(query) ||
                 normalizeSearch(course.department?.code).includes(query) ||
                 normalizeSearch(course.school?.name).includes(query) ||
                 normalizeSearch(course.school?.code).includes(query) ||
                 normalizeSearch(course.university?.name).includes(query) ||
-                normalizeSearch(course.university?.code).includes(query);
+                normalizeSearch(course.createdBy?.name).includes(query) ||
+                normalizeSearch(course.updatedBy?.name).includes(query);
 
             const matchesStatus =
-                statusFilter === "ALL" ||
-                course.activeStatus === statusFilter;
-
-            const matchesUniversity =
-                universityFilter === "ALL" ||
-                course.university?.id === Number(universityFilter);
-
-            const matchesSchool =
-                schoolFilter === "ALL" ||
-                course.school?.id === Number(schoolFilter);
+                statusFilter === "ALL" || course.activeStatus === statusFilter;
 
             const matchesDepartment =
                 departmentFilter === "ALL" ||
                 course.department?.id === Number(departmentFilter);
 
-            const matchesAcademicYear =
-                academicYearFilter === "ALL" ||
-                course.academicYear?.id === Number(academicYearFilter);
+            const matchesSchool =
+                schoolFilter === "ALL" ||
+                course.school?.id === Number(schoolFilter);
+
+            const matchesUniversity =
+                universityFilter === "ALL" ||
+                course.university?.id === Number(universityFilter);
+
+            const matchesEnrollment =
+                enrollmentFilter === "ALL" ||
+                (enrollmentFilter === "ALLOWED" && course.newEnrollmentAllowed === true) ||
+                (enrollmentFilter === "CLOSED" && course.newEnrollmentAllowed !== true);
 
             return (
                 matchesSearch &&
                 matchesStatus &&
-                matchesUniversity &&
-                matchesSchool &&
                 matchesDepartment &&
-                matchesAcademicYear
+                matchesSchool &&
+                matchesUniversity &&
+                matchesEnrollment
             );
         });
 
@@ -1317,19 +1365,15 @@ export default function Courses() {
             switch (sort) {
                 case "NAME_ASC":
                     return a.name.localeCompare(b.name);
-
                 case "NAME_DESC":
                     return b.name.localeCompare(a.name);
-
                 case "CODE_ASC":
                     return a.code.localeCompare(b.code);
-
                 case "CODE_DESC":
                     return b.code.localeCompare(a.code);
-
                 case "NEWEST":
                 default:
-                    return b.id - a.id;
+                    return (b.id ?? 0) - (a.id ?? 0);
             }
         });
 
@@ -1338,10 +1382,10 @@ export default function Courses() {
         courses,
         search,
         statusFilter,
-        universityFilter,
-        schoolFilter,
         departmentFilter,
-        academicYearFilter,
+        schoolFilter,
+        universityFilter,
+        enrollmentFilter,
         sort,
     ]);
 
@@ -1349,13 +1393,8 @@ export default function Courses() {
     /* Pagination                                                             */
     /* ---------------------------------------------------------------------- */
 
-    const totalPages = Math.max(
-        1,
-        Math.ceil(filteredCourses.length / PAGE_SIZE)
-    );
-
+    const totalPages = Math.max(1, Math.ceil(filteredCourses.length / PAGE_SIZE));
     const currentPage = Math.min(Math.max(page, 1), totalPages);
-
     const visibleCourses = filteredCourses.slice(
         (currentPage - 1) * PAGE_SIZE,
         currentPage * PAGE_SIZE
@@ -1366,10 +1405,10 @@ export default function Courses() {
     }, [
         search,
         statusFilter,
-        universityFilter,
-        schoolFilter,
         departmentFilter,
-        academicYearFilter,
+        schoolFilter,
+        universityFilter,
+        enrollmentFilter,
         sort,
     ]);
 
@@ -1379,42 +1418,44 @@ export default function Courses() {
 
     const hasActiveFilters =
         search.trim() !== "" ||
-        statusFilter !== "ALL" ||
-        universityFilter !== "ALL" ||
-        schoolFilter !== "ALL" ||
         departmentFilter !== "ALL" ||
-        academicYearFilter !== "ALL" ||
+        schoolFilter !== "ALL" ||
+        universityFilter !== "ALL" ||
+        statusFilter !== "ALL" ||
+        enrollmentFilter !== "ALL" ||
         sort !== "NEWEST";
 
+    function resetFilters() {
+        setSearch("");
+        setDepartmentFilter("ALL");
+        setSchoolFilter("ALL");
+        setUniversityFilter("ALL");
+        setStatusFilter("ALL");
+        setEnrollmentFilter("ALL");
+        setSort("NEWEST");
+        setPage(1);
+    }
+
     /* ---------------------------------------------------------------------- */
-    /* Dialog and CRUD handlers                                               */
+    /* CRUD & Dialog Handlers                                                 */
     /* ---------------------------------------------------------------------- */
 
-    async function openCreateDialog() {
+    function openCreateDialog() {
         setPageError("");
         setNotice("");
 
-        /* Refresh form options only; do not reload the course table. */
-        try {
-            const result = await getAcademicYearFilter();
-            const options = uniqueDTOs(result);
-
-            setAcademicYears(options);
-
-            if (options.length === 0) {
-                toast.error(
-                    "No academic years are available for course creation."
-                );
-                return;
-            }
-
-            setAcademicYearError("");
-            setDialog({ mode: "CREATE", course: null });
-        } catch (error) {
-            const message = extractErrorMessage(error);
-            setAcademicYearError(message);
-            toast.error(`Cannot create a course: ${message}`);
+        // Load departments from common controller if not loaded
+        if (departments.length === 0) {
+            void loadDepartments();
         }
+
+        // Pre-select the department if chosen in table filter
+        const defaultDept = departmentFilter !== "ALL" ? Number(departmentFilter) : "";
+        setDialog({
+            mode: "CREATE",
+            course: null,
+            defaultDepartmentId: defaultDept,
+        });
     }
 
     function openDialog(
@@ -1427,18 +1468,15 @@ export default function Courses() {
     }
 
     async function handleCreate(
-        academicYearId: number,
+        departmentId: number,
         request: CourseCreateRequest
     ) {
         setBusy(true);
-
         try {
-            await createCourse(academicYearId, request);
-
+            await createCourse(departmentId, request);
             setDialog(null);
-            setNotice("Course created successfully.");
+            setNotice(`Course "${request.name}" created successfully.`);
             toast.success(`Course "${request.name}" created successfully.`);
-
             await loadCourses(true);
         } catch (error) {
             const message = extractErrorMessage(error);
@@ -1451,14 +1489,11 @@ export default function Courses() {
 
     async function handleUpdate(request: CourseRequest) {
         setBusy(true);
-
         try {
             await updateCourse(request);
-
             setDialog(null);
             setNotice("Course updated successfully.");
             toast.success("Course updated successfully.");
-
             await loadCourses(true);
         } catch (error) {
             const message = extractErrorMessage(error);
@@ -1471,14 +1506,11 @@ export default function Courses() {
 
     async function handleDelete(courseId: number) {
         setBusy(true);
-
         try {
             const message = await deleteCourse(courseId);
-
             setDialog(null);
             setNotice(message || "Course deleted successfully.");
             toast.success(message || "Course deleted successfully.");
-
             await loadCourses(true);
         } catch (error) {
             const message = extractErrorMessage(error);
@@ -1489,17 +1521,6 @@ export default function Courses() {
         }
     }
 
-    function resetFilters() {
-        setSearch("");
-        setStatusFilter("ALL");
-        setUniversityFilter("ALL");
-        setSchoolFilter("ALL");
-        setDepartmentFilter("ALL");
-        setAcademicYearFilter("ALL");
-        setSort("NEWEST");
-        setPage(1);
-    }
-
     const tones: Record<string, string> = {
         cyan: "border-cyan-400/20 from-cyan-500/10 to-blue-500/5 text-cyan-300",
         green: "border-emerald-400/20 from-emerald-500/10 to-teal-500/5 text-emerald-300",
@@ -1508,7 +1529,7 @@ export default function Courses() {
     };
 
     /* ---------------------------------------------------------------------- */
-    /* Render                                                                 */
+    /* Render Page                                                            */
     /* ---------------------------------------------------------------------- */
 
     return (
@@ -1516,124 +1537,133 @@ export default function Courses() {
             initial={reduceMotion ? false : { opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.3 }}
-            className="relative w-full min-w-0 space-y-7 p-4 text-white sm:p-6 lg:p-8"
+            className="relative w-full min-w-0 space-y-5 p-3 text-slate-100 sm:space-y-6 sm:p-5 lg:p-7"
         >
-            {/* Page heading */}
-            <section>
-                <div className="mb-4 flex items-center gap-2 text-sm text-slate-400">
-                    <span>Academic Management</span>
-                    <ChevronRight size={15} />
-                    <span className="text-cyan-300">Courses</span>
+            {/* Header & Breadcrumbs */}
+            <section className="space-y-3">
+                <div className="flex items-center gap-1.5 sm:gap-2 text-xs font-semibold text-slate-400 sm:text-sm">
+                    <span className="truncate">Academic Management</span>
+                    <ChevronRight size={14} className="text-slate-500 shrink-0" />
+                    <span className="text-cyan-300 shrink-0">Courses</span>
                 </div>
 
                 <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
                     <div>
-                        <p className="text-xs font-semibold uppercase tracking-[0.2em] text-cyan-300">
-                            Academic Administration
+                        <p className="text-[11px] sm:text-xs font-semibold uppercase tracking-[0.2em] text-cyan-300">
+                            Academic Infrastructure &amp; Curriculum
                         </p>
-
-                        <h1 className="mt-2 text-3xl font-bold tracking-tight sm:text-4xl">
+                        <h1 className="mt-1 text-2xl font-bold tracking-tight text-white sm:text-3xl lg:text-4xl">
                             Course Management
                         </h1>
-
-                        <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-400 sm:text-base">
-                            Manage courses across your academic hierarchy,
-                            inspect linked academic records, and control
-                            course access using your assigned permissions.
+                        <p className="mt-1 max-w-2xl text-xs leading-5 text-slate-400 sm:text-sm sm:leading-6">
+                            Manage department-scoped courses, configure active statuses, monitor enrollment permissions, and track audit history.
                         </p>
                     </div>
 
-                    <div className="flex flex-wrap items-center gap-3">
+                    <div className="flex flex-wrap items-center gap-2 sm:gap-3">
                         <button
                             type="button"
-                            onClick={() => void loadCourses(true)}
+                            onClick={() => {
+                                void loadDepartments();
+                                void loadCourses(true);
+                            }}
                             disabled={loading || refreshing}
-                            title="Refresh courses"
-                            className="inline-flex items-center justify-center gap-2 rounded-xl border border-white/10 bg-slate-900/60 px-4 py-3 text-sm font-medium text-slate-300 transition hover:bg-white/10 hover:text-white disabled:opacity-50"
+                            title="Refresh course list"
+                            className="flex-1 sm:flex-none inline-flex items-center justify-center gap-2 rounded-xl border border-white/10 bg-slate-900/60 px-3.5 py-2.5 text-xs font-medium text-slate-300 transition hover:bg-white/10 hover:text-white sm:px-4 sm:py-3 sm:text-sm disabled:opacity-50"
                         >
                             <RefreshCw
-                                size={16}
+                                size={15}
                                 className={
-                                    loading || refreshing
+                                    refreshing || loading
                                         ? "animate-spin text-cyan-400"
                                         : ""
                                 }
                             />
-                            <span className="hidden sm:inline">
-                                {refreshing ? "Refreshing..." : "Refresh"}
-                            </span>
+                            <span>{refreshing ? "Refreshing..." : "Refresh"}</span>
                         </button>
 
                         <button
                             type="button"
-                            onClick={() => void openCreateDialog()}
+                            onClick={openCreateDialog}
                             disabled={loading || refreshing}
-                            className="inline-flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-violet-600 via-blue-600 to-cyan-500 px-5 py-3 text-sm font-semibold text-white shadow-lg shadow-blue-500/20 transition duration-200 hover:-translate-y-0.5 hover:brightness-110 active:translate-y-0 disabled:cursor-not-allowed disabled:opacity-50"
+                            className="flex-1 sm:flex-none inline-flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-violet-600 via-blue-600 to-cyan-500 px-4 py-2.5 text-xs font-semibold text-white shadow-lg shadow-blue-500/20 transition duration-200 hover:-translate-y-0.5 hover:brightness-110 active:translate-y-0 sm:px-5 sm:py-3 sm:text-sm disabled:cursor-not-allowed disabled:opacity-50"
                         >
-                            <Plus size={19} />
-                            Add Course
+                            <Plus size={16} className="sm:w-[18px] sm:h-[18px]" />
+                            <span>Add Course</span>
                         </button>
                     </div>
                 </div>
             </section>
 
-            {/* Error and success messages */}
+            {/* Alert Status Banners */}
             <AnimatePresence>
-                {pageError && (
-                    <ErrorBanner
-                        title="Could not load courses"
-                        message={pageError}
-                        onRetry={() => void loadCourses()}
-                        onDismiss={() => setPageError("")}
-                    />
-                )}
-
-                {academicYearError && (
-                    <ErrorBanner
-                        title="Academic-year options unavailable"
-                        message={academicYearError}
-                        onRetry={() =>
-                            void loadAcademicYears()
-                        }
-                        onDismiss={() => setAcademicYearError("")}
-                    />
-                )}
-
-                {notice && (
+                {(pageError || notice) && (
                     <motion.div
-                        role="status"
+                        role={pageError ? "alert" : "status"}
                         initial={{ opacity: 0, y: -8 }}
                         animate={{ opacity: 1, y: 0 }}
                         exit={{ opacity: 0, y: -8 }}
-                        className="flex items-start gap-3 rounded-xl border border-emerald-400/30 bg-emerald-500/10 p-4 text-sm text-emerald-200"
+                        className={`flex items-start justify-between gap-3 rounded-xl border p-3.5 sm:p-4 text-xs sm:text-sm ${
+                            pageError
+                                ? "border-rose-400/30 bg-rose-500/10 text-rose-200"
+                                : "border-emerald-400/30 bg-emerald-500/10 text-emerald-200"
+                        }`}
                     >
-                        <CheckCircle2
-                            size={18}
-                            className="mt-0.5 shrink-0 text-emerald-400"
-                        />
+                        <div className="flex items-start gap-2.5">
+                            {pageError ? (
+                                <AlertTriangle
+                                    size={18}
+                                    className="mt-0.5 shrink-0 text-rose-400"
+                                />
+                            ) : (
+                                <CheckCircle2
+                                    size={18}
+                                    className="mt-0.5 shrink-0 text-emerald-400"
+                                />
+                            )}
+                            <div>
+                                <p className="font-semibold text-white">
+                                    {pageError ? "Action Required" : "Success"}
+                                </p>
+                                <p className="mt-0.5 leading-relaxed">
+                                    {pageError || notice}
+                                </p>
+                            </div>
+                        </div>
 
-                        <p>{notice}</p>
-
-                        <button
-                            type="button"
-                            onClick={() => setNotice("")}
-                            aria-label="Dismiss success message"
-                            className="ml-auto text-slate-400 hover:text-white"
-                        >
-                            <X size={16} />
-                        </button>
+                        <div className="flex items-center gap-2 shrink-0">
+                            {pageError && (
+                                <button
+                                    type="button"
+                                    onClick={() => void loadCourses()}
+                                    className="rounded-lg border border-rose-400/30 bg-rose-500/20 px-2.5 py-1 text-xs font-medium text-rose-200 hover:bg-rose-500/30"
+                                >
+                                    Retry
+                                </button>
+                            )}
+                            <button
+                                type="button"
+                                onClick={() => {
+                                    setPageError("");
+                                    setNotice("");
+                                }}
+                                aria-label="Dismiss message"
+                                className="text-slate-400 hover:text-white"
+                            >
+                                <X size={16} />
+                            </button>
+                        </div>
                     </motion.div>
                 )}
             </AnimatePresence>
 
-            {/* Statistics */}
+            {/* Metric / Statistics Cards */}
             <section
                 aria-label="Course statistics"
-                className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4"
+                className="grid grid-cols-2 gap-2.5 sm:gap-3.5 sm:grid-cols-2 lg:grid-cols-4"
             >
                 {stats.map((stat, index) => {
                     const Icon = stat.icon;
-
                     return (
                         <motion.div
                             key={stat.label}
@@ -1645,32 +1675,27 @@ export default function Courses() {
                                 duration: 0.3,
                                 delay: reduceMotion ? 0 : index * 0.06,
                             }}
-                            whileHover={
-                                reduceMotion ? undefined : { y: -3 }
-                            }
-                            className={`rounded-2xl border bg-gradient-to-br p-5 shadow-lg backdrop-blur-xl ${tones[stat.tone]}`}
+                            whileHover={reduceMotion ? undefined : { y: -3 }}
+                            className={`rounded-2xl border bg-gradient-to-br p-3.5 sm:p-5 shadow-lg backdrop-blur-xl ${tones[stat.tone]}`}
                         >
-                            <div className="flex items-start justify-between gap-3">
-                                <div>
-                                    <p className="text-sm font-medium text-slate-300">
+                            <div className="flex items-start justify-between gap-2 sm:gap-3">
+                                <div className="min-w-0">
+                                    <p className="text-xs font-medium text-slate-300 truncate sm:text-sm">
                                         {stat.label}
                                     </p>
-
-                                    <p className="mt-3 text-3xl font-bold tracking-tight text-white">
+                                    <p className="mt-1.5 text-xl font-bold tracking-tight text-white sm:mt-3 sm:text-3xl">
                                         {loading ? (
-                                            <span className="inline-block h-8 w-20 animate-pulse rounded bg-white/10" />
+                                            <span className="inline-block h-7 w-16 animate-pulse rounded bg-white/10 sm:h-8 sm:w-20" />
                                         ) : (
                                             stat.value
                                         )}
                                     </p>
                                 </div>
-
-                                <div className="rounded-xl border border-white/10 bg-slate-950/30 p-3">
-                                    <Icon size={23} />
+                                <div className="rounded-xl border border-white/10 bg-slate-950/30 p-2 sm:p-3 shrink-0">
+                                    <Icon size={18} className="sm:w-[22px] sm:h-[22px]" />
                                 </div>
                             </div>
-
-                            <div className="mt-5 h-1 overflow-hidden rounded-full bg-white/10">
+                            <div className="mt-3 sm:mt-5 h-1 overflow-hidden rounded-full bg-white/10">
                                 <motion.div
                                     initial={{ width: "0%" }}
                                     animate={{
@@ -1688,24 +1713,23 @@ export default function Courses() {
                 })}
             </section>
 
-            {/* Filters and table */}
+            {/* Main Data Container: Secondary Filters + Table + Mobile Cards */}
             <GlassCard>
-                <div className="grid gap-3.5 border-b border-white/10 p-4 sm:p-5 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 2xl:grid-cols-[minmax(200px,1.4fr)_140px_160px_160px_160px_160px_170px_auto]">
-                    {/* Search */}
+                {/* Secondary Search & Filter Toolbar */}
+                <div className="grid gap-2.5 sm:gap-3 border-b border-white/10 p-3 sm:p-4 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-6">
+                    {/* Search Field */}
                     <div className="relative min-w-0 sm:col-span-2 md:col-span-1">
                         <Search
-                            size={17}
-                            className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400"
+                            size={16}
+                            className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none"
                         />
-
                         <input
                             aria-label="Search courses"
                             value={search}
                             onChange={(event) => setSearch(event.target.value)}
-                            placeholder="Search name, code, department..."
-                            className="w-full rounded-xl border border-white/10 bg-slate-950/50 py-3 pl-10 pr-9 text-sm text-white outline-none transition placeholder:text-slate-500 focus:border-cyan-400/50"
+                            placeholder="Search name, code, author..."
+                            className="w-full rounded-xl border border-white/10 bg-slate-950/50 py-2.5 pl-9 pr-8 text-xs sm:text-sm text-white placeholder:text-slate-500 outline-none transition focus:border-cyan-400/50"
                         />
-
                         {search && (
                             <button
                                 type="button"
@@ -1713,89 +1737,22 @@ export default function Courses() {
                                 aria-label="Clear search"
                                 className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white"
                             >
-                                <X size={15} />
+                                <X size={14} />
                             </button>
                         )}
                     </div>
 
-                    {/* Status */}
-                    <div className="relative">
-                        <select
-                            aria-label="Filter by status"
-                            value={statusFilter}
-                            onChange={(event) =>
-                                setStatusFilter(
-                                    event.target.value as StatusFilter
-                                )
-                            }
-                            className="w-full appearance-none rounded-xl border border-white/10 bg-slate-950/50 px-3.5 py-3 pr-9 text-sm text-white outline-none focus:border-cyan-400/50"
-                        >
-                            <option value="ALL">All statuses</option>
-                            <option value="ENABLE">Active</option>
-                            <option value="DISABLE">Inactive</option>
-                        </select>
-                        <SelectChevron />
-                    </div>
-
-                    {/* University */}
-                    <div className="relative">
-                        <select
-                            aria-label="Filter by university"
-                            value={universityFilter}
-                            onChange={(event) => {
-                                setUniversityFilter(event.target.value);
-                                setSchoolFilter("ALL");
-                                setDepartmentFilter("ALL");
-                                setAcademicYearFilter("ALL");
-                            }}
-                            className="w-full appearance-none rounded-xl border border-white/10 bg-slate-950/50 px-3.5 py-3 pr-9 text-sm text-white outline-none focus:border-cyan-400/50"
-                        >
-                            <option value="ALL">All universities</option>
-                            {tableUniversities.map((item) => (
-                                <option key={item.id} value={item.id}>
-                                    {item.name}
-                                    {item.code ? ` (${item.code})` : ""}
-                                </option>
-                            ))}
-                        </select>
-                        <SelectChevron />
-                    </div>
-
-                    {/* School */}
-                    <div className="relative">
-                        <select
-                            aria-label="Filter by school"
-                            value={schoolFilter}
-                            onChange={(event) => {
-                                setSchoolFilter(event.target.value);
-                                setDepartmentFilter("ALL");
-                                setAcademicYearFilter("ALL");
-                            }}
-                            className="w-full appearance-none rounded-xl border border-white/10 bg-slate-950/50 px-3.5 py-3 pr-9 text-sm text-white outline-none focus:border-cyan-400/50"
-                        >
-                            <option value="ALL">All schools</option>
-                            {tableSchools.map((item) => (
-                                <option key={item.id} value={item.id}>
-                                    {item.name}
-                                    {item.code ? ` (${item.code})` : ""}
-                                </option>
-                            ))}
-                        </select>
-                        <SelectChevron />
-                    </div>
-
-                    {/* Department */}
+                    {/* Department Filter (from loaded courses data) */}
                     <div className="relative">
                         <select
                             aria-label="Filter by department"
                             value={departmentFilter}
-                            onChange={(event) => {
-                                setDepartmentFilter(event.target.value);
-                                setAcademicYearFilter("ALL");
-                            }}
-                            className="w-full appearance-none rounded-xl border border-white/10 bg-slate-950/50 px-3.5 py-3 pr-9 text-sm text-white outline-none focus:border-cyan-400/50"
+                            onChange={(event) =>
+                                setDepartmentFilter(event.target.value)
+                            }
+                            className="w-full appearance-none rounded-xl border border-white/10 bg-slate-950/50 px-3 py-2.5 pr-8 text-xs sm:text-sm text-white outline-none focus:border-cyan-400/50"
                         >
-                            <option value="ALL">All departments</option>
+                            <option value="ALL">All Departments</option>
                             {tableDepartments.map((item) => (
                                 <option key={item.id} value={item.id}>
                                     {item.name}
@@ -1806,18 +1763,16 @@ export default function Courses() {
                         <SelectChevron />
                     </div>
 
-                    {/* Academic Year (comes after Department) */}
+                    {/* School Filter */}
                     <div className="relative">
                         <select
-                            aria-label="Filter by academic year"
-                            value={academicYearFilter}
-                            onChange={(event) =>
-                                setAcademicYearFilter(event.target.value)
-                            }
-                            className="w-full appearance-none rounded-xl border border-white/10 bg-slate-950/50 px-3.5 py-3 pr-9 text-sm text-white outline-none focus:border-cyan-400/50"
+                            aria-label="Filter by school"
+                            value={schoolFilter}
+                            onChange={(event) => setSchoolFilter(event.target.value)}
+                            className="w-full appearance-none rounded-xl border border-white/10 bg-slate-950/50 px-3 py-2.5 pr-8 text-xs sm:text-sm text-white outline-none focus:border-cyan-400/50"
                         >
-                            <option value="ALL">All academic years</option>
-                            {tableAcademicYears.map((item) => (
+                            <option value="ALL">All Schools</option>
+                            {tableSchools.map((item) => (
                                 <option key={item.id} value={item.id}>
                                     {item.name}
                                     {item.code ? ` (${item.code})` : ""}
@@ -1827,90 +1782,116 @@ export default function Courses() {
                         <SelectChevron />
                     </div>
 
-                    {/* Sort */}
+                    {/* Status Filter */}
                     <div className="relative">
                         <select
-                            aria-label="Sort courses"
-                            value={sort}
+                            aria-label="Filter by status"
+                            value={statusFilter}
                             onChange={(event) =>
-                                setSort(event.target.value as SortOption)
+                                setStatusFilter(event.target.value as StatusFilter)
                             }
-                            className="w-full appearance-none rounded-xl border border-white/10 bg-slate-950/50 px-3.5 py-3 pr-9 text-sm text-white outline-none focus:border-cyan-400/50"
+                            className="w-full appearance-none rounded-xl border border-white/10 bg-slate-950/50 px-3 py-2.5 pr-8 text-xs sm:text-sm text-white outline-none focus:border-cyan-400/50"
                         >
-                            <option value="NEWEST">Highest ID first</option>
-                            <option value="NAME_ASC">Name: A to Z</option>
-                            <option value="NAME_DESC">Name: Z to A</option>
-                            <option value="CODE_ASC">Code: A to Z</option>
-                            <option value="CODE_DESC">Code: Z to A</option>
+                            <option value="ALL">All Statuses</option>
+                            <option value="ENABLE">Active</option>
+                            <option value="DISABLE">Inactive</option>
                         </select>
-                        <ArrowDownUp
-                            size={15}
-                            className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-slate-400"
-                        />
+                        <SelectChevron />
                     </div>
 
-                    {hasActiveFilters && (
-                        <button
-                            type="button"
-                            onClick={resetFilters}
-                            className="inline-flex items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-xs font-semibold text-slate-300 transition hover:bg-white/10 hover:text-white"
+                    {/* Enrollment Allowed Filter */}
+                    <div className="relative">
+                        <select
+                            aria-label="Filter by enrollment"
+                            value={enrollmentFilter}
+                            onChange={(event) =>
+                                setEnrollmentFilter(event.target.value as EnrollmentFilter)
+                            }
+                            className="w-full appearance-none rounded-xl border border-white/10 bg-slate-950/50 px-3 py-2.5 pr-8 text-xs sm:text-sm text-white outline-none focus:border-cyan-400/50"
                         >
-                            <RotateCcw size={14} />
-                            Reset
-                        </button>
-                    )}
+                            <option value="ALL">All Enrollments</option>
+                            <option value="ALLOWED">Enrollment Open</option>
+                            <option value="CLOSED">Enrollment Closed</option>
+                        </select>
+                        <SelectChevron />
+                    </div>
+
+                    {/* Sort Filter */}
+                    <div className="relative flex items-center gap-2">
+                        <div className="relative w-full">
+                            <select
+                                aria-label="Sort courses"
+                                value={sort}
+                                onChange={(event) =>
+                                    setSort(event.target.value as SortOption)
+                                }
+                                className="w-full appearance-none rounded-xl border border-white/10 bg-slate-950/50 px-3 py-2.5 pr-8 text-xs sm:text-sm text-white outline-none focus:border-cyan-400/50"
+                            >
+                                <option value="NEWEST">Newest First</option>
+                                <option value="NAME_ASC">Name (A to Z)</option>
+                                <option value="NAME_DESC">Name (Z to A)</option>
+                                <option value="CODE_ASC">Code (A to Z)</option>
+                                <option value="CODE_DESC">Code (Z to A)</option>
+                            </select>
+                            <ArrowDownUp
+                                size={14}
+                                className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-slate-400"
+                            />
+                        </div>
+
+                        {hasActiveFilters && (
+                            <button
+                                type="button"
+                                onClick={resetFilters}
+                                title="Reset all filters"
+                                className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-white/10 bg-white/5 text-slate-300 transition hover:bg-white/10 hover:text-white"
+                            >
+                                <RotateCcw size={14} />
+                            </button>
+                        )}
+                    </div>
                 </div>
 
-                {/* Table */}
-                <div className="w-full min-w-0 overflow-x-auto">
-                    <table className="w-full min-w-[1250px] border-collapse text-left text-sm">
+                {/* 1. Desktop Table View (>= lg) */}
+                <div className="hidden lg:block overflow-x-auto custom-scrollbar">
+                    <table className="w-full min-w-[1100px] border-collapse text-left text-sm">
                         <thead>
                             <tr className="border-b border-white/10 bg-white/[0.025] text-xs uppercase tracking-wider text-slate-400">
                                 <th className="px-5 py-4 font-medium">#</th>
                                 <th className="px-4 py-4 font-medium">Course</th>
                                 <th className="px-4 py-4 font-medium">Code</th>
-                                <th className="px-4 py-4 font-medium">Academic Year</th>
                                 <th className="px-4 py-4 font-medium">Department</th>
                                 <th className="px-4 py-4 font-medium">School</th>
                                 <th className="px-4 py-4 font-medium">University</th>
                                 <th className="px-4 py-4 font-medium">Status</th>
+                                <th className="px-4 py-4 font-medium">Enrollment</th>
+                                <th className="px-4 py-4 font-medium">Curricula</th>
                                 <th className="px-5 py-4 text-right font-medium">Actions</th>
                             </tr>
                         </thead>
-
                         <tbody className="divide-y divide-white/[0.07]">
                             {loading ? (
-                                Array.from({ length: PAGE_SIZE }).map(
-                                    (_, rowIndex) => (
-                                        <tr key={`loading-${rowIndex}`}>
-                                            {Array.from({ length: 9 }).map(
-                                                (_, cellIndex) => (
-                                                    <td
-                                                        key={cellIndex}
-                                                        className="px-4 py-5"
-                                                    >
-                                                        <div className="h-4 animate-pulse rounded bg-white/[0.07]" />
-                                                    </td>
-                                                )
-                                            )}
-                                        </tr>
-                                    )
-                                )
+                                Array.from({ length: 5 }).map((_, i) => (
+                                    <tr key={`loading-${i}`}>
+                                        {Array.from({ length: 10 }).map((__, j) => (
+                                            <td key={j} className="px-4 py-4">
+                                                <div className="h-4 animate-pulse rounded bg-white/[0.07]" />
+                                            </td>
+                                        ))}
+                                    </tr>
+                                ))
                             ) : pageError && courses.length === 0 ? (
                                 <tr>
-                                    <td colSpan={9} className="px-6 py-16 text-center">
+                                    <td colSpan={10} className="px-6 py-16 text-center">
                                         <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl border border-rose-500/20 bg-rose-500/10 text-rose-400">
                                             <AlertTriangle size={26} />
                                         </div>
-
                                         <p className="mt-4 font-semibold text-slate-200">
                                             Failed to load courses
                                         </p>
-
-                                        <p className="mx-auto mt-1 max-w-md text-sm text-slate-400">
+                                        <p className="mt-1 text-sm text-slate-400 max-w-md mx-auto">
                                             {pageError}
                                         </p>
-
                                         <button
                                             type="button"
                                             onClick={() => void loadCourses()}
@@ -1922,210 +1903,194 @@ export default function Courses() {
                                     </td>
                                 </tr>
                             ) : visibleCourses.length > 0 ? (
-                                <AnimatePresence mode="popLayout">
-                                    {visibleCourses.map((course, index) => {
-                                        const canUpdate = hasCoursePermission(
-                                            course,
-                                            "UPDATE"
-                                        );
+                                visibleCourses.map((course, index) => {
+                                    const initials = getInitials(course.name);
+                                    const canUpdate = hasCoursePermission(course, "UPDATE");
+                                    const canDelete = hasCoursePermission(course, "DELETE");
+                                    const curriculaCount =
+                                        course.subjects.length +
+                                        course.sections.length +
+                                        course.specializations.length;
 
-                                        const canDelete = hasCoursePermission(
-                                            course,
-                                            "DELETE"
-                                        );
+                                    return (
+                                        <motion.tr
+                                            key={course.id}
+                                            initial={{ opacity: 0 }}
+                                            animate={{ opacity: 1 }}
+                                            className="group transition-colors hover:bg-cyan-400/[0.035]"
+                                        >
+                                            <td className="px-5 py-4 text-slate-500 text-xs font-mono">
+                                                {(currentPage - 1) * PAGE_SIZE + index + 1}
+                                            </td>
 
-                                        return (
-                                            <motion.tr
-                                                layout={!reduceMotion}
-                                                key={course.id}
-                                                initial={
-                                                    reduceMotion
-                                                        ? false
-                                                        : { opacity: 0, x: -6 }
-                                                }
-                                                animate={{ opacity: 1, x: 0 }}
-                                                exit={{ opacity: 0 }}
-                                                transition={{ duration: 0.18 }}
-                                                className="group transition-colors hover:bg-cyan-400/[0.035]"
-                                            >
-                                                <td className="px-5 py-5 text-slate-500">
-                                                    {(currentPage - 1) *
-                                                        PAGE_SIZE +
-                                                        index +
-                                                        1}
-                                                </td>
-
-                                                <td className="px-4 py-5">
-                                                    <div className="flex items-center gap-3">
-                                                        <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-blue-300/20 bg-gradient-to-br from-blue-500/25 to-violet-500/20 text-sm font-bold text-cyan-200">
-                                                            {getInitials(course.name)}
-                                                        </div>
-
-                                                        <div className="min-w-0">
-                                                            <p className="max-w-xs truncate font-semibold text-slate-100">
-                                                                {course.name ||
-                                                                    "Unnamed Course"}
-                                                            </p>
-                                                            <p className="mt-0.5 text-xs text-slate-500">
-                                                                ID: {course.id}
-                                                            </p>
+                                            {/* Course Name & Audit Pill */}
+                                            <td className="px-4 py-4">
+                                                <div className="flex items-center gap-3">
+                                                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-blue-300/20 bg-gradient-to-br from-blue-500/25 to-violet-500/20 text-xs font-bold text-cyan-200">
+                                                        {initials}
+                                                    </div>
+                                                    <div className="min-w-0 max-w-[240px]">
+                                                        <p className="truncate font-semibold text-slate-100">
+                                                            {course.name || "Unnamed Course"}
+                                                        </p>
+                                                        <div className="flex flex-wrap items-center gap-1.5 text-xs text-slate-400">
+                                                            <span className="font-mono text-[11px] text-slate-500">
+                                                                ID #{course.id}
+                                                            </span>
+                                                            <span className="text-slate-600">·</span>
+                                                            <span
+                                                                className="inline-flex items-center gap-1 text-[11px] text-slate-400 group-hover:text-slate-300 transition-colors"
+                                                                title={`Created by: ${formatAuditActor(course.createdBy)}${course.createdAt ? ` on ${formatDate(course.createdAt)}` : ""}${course.updatedBy?.name ? ` | Modified by: ${formatAuditActor(course.updatedBy)}` : ""}`}
+                                                            >
+                                                                <UserCheck size={11} className="text-emerald-400 shrink-0" />
+                                                                <span className="truncate max-w-[120px] font-medium text-slate-300">
+                                                                    {course.createdBy?.name || "System"}
+                                                                </span>
+                                                            </span>
                                                         </div>
                                                     </div>
-                                                </td>
+                                                </div>
+                                            </td>
 
-                                                <td className="px-4 py-5">
-                                                    <span className="inline-flex max-w-[180px] truncate rounded-lg border border-white/10 bg-white/[0.035] px-3 py-1.5 font-mono text-xs text-slate-300">
-                                                        {course.code || "—"}
-                                                    </span>
-                                                </td>
+                                            <td className="px-4 py-4">
+                                                <span className="inline-flex rounded-lg border border-white/10 bg-white/[0.035] px-2.5 py-1 font-mono text-xs text-cyan-200">
+                                                    {course.code || "—"}
+                                                </span>
+                                            </td>
 
-                                                <td className="px-4 py-5">
-                                                    <p className="max-w-[180px] truncate font-medium text-slate-200">
-                                                        {course.academicYear?.name || "—"}
-                                                    </p>
-                                                    {course.academicYear?.code && (
-                                                        <p className="mt-1 truncate font-mono text-xs text-slate-500">
-                                                            {course.academicYear.code}
-                                                        </p>
-                                                    )}
-                                                </td>
-
-                                                <td className="px-4 py-5">
-                                                    <p className="max-w-[180px] truncate font-medium text-slate-200">
+                                            <td className="px-4 py-4">
+                                                <div className="min-w-0 max-w-[170px]">
+                                                    <p className="truncate font-medium text-slate-200">
                                                         {course.department?.name || "—"}
                                                     </p>
                                                     {course.department?.code && (
-                                                        <p className="mt-1 truncate font-mono text-xs text-slate-500">
+                                                        <span className="font-mono text-[11px] text-cyan-400">
                                                             {course.department.code}
-                                                        </p>
+                                                        </span>
                                                     )}
-                                                </td>
+                                                </div>
+                                            </td>
 
-                                                <td className="px-4 py-5">
-                                                    <p className="max-w-[180px] truncate font-medium text-slate-200">
+                                            <td className="px-4 py-4">
+                                                <div className="min-w-0 max-w-[150px]">
+                                                    <p className="truncate font-medium text-slate-300">
                                                         {course.school?.name || "—"}
                                                     </p>
                                                     {course.school?.code && (
-                                                        <p className="mt-1 truncate font-mono text-xs text-slate-500">
+                                                        <span className="font-mono text-[11px] text-slate-500">
                                                             {course.school.code}
-                                                        </p>
+                                                        </span>
                                                     )}
-                                                </td>
+                                                </div>
+                                            </td>
 
-                                                <td className="px-4 py-5">
-                                                    <p className="max-w-[180px] truncate font-medium text-slate-200">
+                                            <td className="px-4 py-4">
+                                                <div className="min-w-0 max-w-[150px]">
+                                                    <p className="truncate font-medium text-slate-300">
                                                         {course.university?.name || "—"}
                                                     </p>
                                                     {course.university?.code && (
-                                                        <p className="mt-1 truncate font-mono text-xs text-slate-500">
+                                                        <span className="font-mono text-[11px] text-slate-500">
                                                             {course.university.code}
-                                                        </p>
+                                                        </span>
                                                     )}
-                                                </td>
+                                                </div>
+                                            </td>
 
-                                                <td className="px-4 py-5">
-                                                    <StatusBadge
-                                                        status={course.activeStatus}
-                                                    />
-                                                </td>
+                                            <td className="px-4 py-4">
+                                                <StatusBadge status={course.activeStatus} />
+                                            </td>
 
-                                                <td className="px-5 py-5">
-                                                    <div className="flex justify-end gap-2">
+                                            <td className="px-4 py-4">
+                                                <EnrollmentBadge allowed={course.newEnrollmentAllowed} />
+                                            </td>
+
+                                            <td className="px-4 py-4">
+                                                <span
+                                                    className="inline-flex items-center gap-1 rounded-md border border-white/10 bg-slate-950/40 px-2 py-0.5 text-xs text-slate-300"
+                                                    title={`${course.subjects.length} Subjects, ${course.sections.length} Sections, ${course.specializations.length} Specializations`}
+                                                >
+                                                    <Layers size={12} className="text-cyan-400" />
+                                                    {curriculaCount} units
+                                                </span>
+                                            </td>
+
+                                            {/* Action Buttons: Strict h-8 w-8 preventing pill distortion */}
+                                            <td className="px-5 py-4">
+                                                <div className="flex items-center justify-end gap-1.5">
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => openDialog("VIEW", course)}
+                                                        aria-label={`View details of ${course.name}`}
+                                                        title="View details & audit"
+                                                        className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-white/10 bg-white/[0.04] text-sky-300 transition hover:border-sky-400/30 hover:bg-sky-400/10 active:scale-95"
+                                                    >
+                                                        <Eye size={15} />
+                                                    </button>
+                                                    {canUpdate && (
                                                         <button
                                                             type="button"
-                                                            onClick={() =>
-                                                                openDialog("VIEW", course)
-                                                            }
-                                                            aria-label={`View ${course.name}`}
-                                                            title="View details"
-                                                            className="rounded-lg border border-white/10 bg-white/[0.04] p-2 text-sky-300 transition hover:border-sky-400/30 hover:bg-sky-400/10"
+                                                            onClick={() => openDialog("EDIT", course)}
+                                                            aria-label={`Edit ${course.name}`}
+                                                            title="Edit course"
+                                                            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-white/10 bg-white/[0.04] text-cyan-300 transition hover:border-cyan-400/30 hover:bg-cyan-400/10 active:scale-95"
                                                         >
-                                                            <Eye size={17} />
+                                                            <Pencil size={15} />
                                                         </button>
-
-                                                        {canUpdate && (
-                                                            <button
-                                                                type="button"
-                                                                onClick={() =>
-                                                                    openDialog("EDIT", course)
-                                                                }
-                                                                aria-label={`Edit ${course.name}`}
-                                                                title="Edit course"
-                                                                className="rounded-lg border border-white/10 bg-white/[0.04] p-2 text-cyan-300 transition hover:border-cyan-400/30 hover:bg-cyan-400/10"
-                                                            >
-                                                                <Pencil size={17} />
-                                                            </button>
-                                                        )}
-
-                                                        {canDelete && (
-                                                            <button
-                                                                type="button"
-                                                                onClick={() =>
-                                                                    openDialog("DELETE", course)
-                                                                }
-                                                                aria-label={`Delete ${course.name}`}
-                                                                title="Delete course"
-                                                                className="rounded-lg border border-white/10 bg-white/[0.04] p-2 text-rose-400 transition hover:border-rose-400/30 hover:bg-rose-400/10"
-                                                            >
-                                                                <Trash2 size={17} />
-                                                            </button>
-                                                        )}
-
-                                                        {!canUpdate && !canDelete && (
-                                                            <span className="self-center text-xs text-slate-500">
-                                                                View only
-                                                            </span>
-                                                        )}
-                                                    </div>
-                                                </td>
-                                            </motion.tr>
-                                        );
-                                    })}
-                                </AnimatePresence>
+                                                    )}
+                                                    {canDelete && (
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => openDialog("DELETE", course)}
+                                                            aria-label={`Delete ${course.name}`}
+                                                            title="Delete course"
+                                                            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-white/10 bg-white/[0.04] text-rose-400 transition hover:border-rose-400/30 hover:bg-rose-400/10 active:scale-95"
+                                                        >
+                                                            <Trash2 size={15} />
+                                                        </button>
+                                                    )}
+                                                </div>
+                                            </td>
+                                        </motion.tr>
+                                    );
+                                })
                             ) : (
                                 <tr>
-                                    <td colSpan={9} className="px-6 py-16 text-center">
+                                    <td colSpan={10} className="px-6 py-16 text-center">
                                         <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.04] text-slate-400">
                                             <BookOpen size={25} />
                                         </div>
-
                                         <p className="mt-4 font-semibold text-slate-200">
                                             {hasActiveFilters
                                                 ? "No matching courses found"
                                                 : "No courses registered yet"}
                                         </p>
-
-                                        <p className="mx-auto mt-1 max-w-sm text-sm text-slate-500">
+                                        <p className="mt-1 text-sm text-slate-500 max-w-sm mx-auto">
                                             {hasActiveFilters
-                                                ? "Try changing your search or filters."
-                                                : "Courses will appear here after they are created."}
+                                                ? "Try revising your search term, changing filters, or clearing search criteria."
+                                                : "Get started by adding your department's first course."}
                                         </p>
-
-                                        {hasActiveFilters && (
-                                            <button
-                                                type="button"
-                                                onClick={resetFilters}
-                                                className="mt-5 inline-flex items-center gap-2 rounded-xl border border-white/10 bg-white/5 px-4 py-2.5 text-xs font-semibold text-slate-200 transition hover:bg-white/10"
-                                            >
-                                                <RotateCcw size={14} />
-                                                Clear Filters
-                                            </button>
-                                        )}
-
-                                        {!hasActiveFilters &&
-                                            !loading &&
-                                            courses.length === 0 && (
+                                        <div className="mt-4 flex justify-center gap-2">
+                                            {hasActiveFilters ? (
                                                 <button
                                                     type="button"
-                                                    onClick={() =>
-                                                        void openCreateDialog()
-                                                    }
-                                                    className="mt-5 inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-violet-600 via-blue-600 to-cyan-500 px-4 py-2.5 text-xs font-semibold text-white shadow-lg shadow-blue-500/20 transition hover:brightness-110"
+                                                    onClick={resetFilters}
+                                                    className="inline-flex items-center gap-1.5 rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-xs font-semibold text-slate-200 hover:bg-white/10"
                                                 >
-                                                    <Plus size={15} />
+                                                    <RotateCcw size={13} />
+                                                    Clear Filters
+                                                </button>
+                                            ) : (
+                                                <button
+                                                    type="button"
+                                                    onClick={openCreateDialog}
+                                                    className="inline-flex items-center gap-1.5 rounded-xl bg-gradient-to-r from-violet-600 via-blue-600 to-cyan-500 px-4 py-2 text-xs font-semibold text-white shadow-lg shadow-blue-500/20"
+                                                >
+                                                    <Plus size={14} />
                                                     Add Course
                                                 </button>
                                             )}
+                                        </div>
                                     </td>
                                 </tr>
                             )}
@@ -2133,121 +2098,272 @@ export default function Courses() {
                     </table>
                 </div>
 
-                {/* Pagination */}
-                <div className="flex flex-col gap-4 border-t border-white/10 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
-                    <p className="text-sm text-slate-400">
+                {/* 2. Mobile & Tablet Cards View (< lg) */}
+                <div className="divide-y divide-white/5 lg:hidden">
+                    {loading ? (
+                        Array.from({ length: 4 }).map((_, i) => (
+                            <div key={i} className="animate-pulse space-y-3 p-4">
+                                <div className="h-5 w-40 rounded bg-white/10" />
+                                <div className="h-4 w-56 rounded bg-white/5" />
+                                <div className="h-10 rounded bg-white/5" />
+                            </div>
+                        ))
+                    ) : visibleCourses.length === 0 ? (
+                        <div className="p-8 text-center text-slate-500">
+                            <BookOpen size={36} className="mx-auto mb-2 opacity-30 text-slate-400" />
+                            <p className="text-sm font-semibold text-slate-300">No courses found</p>
+                            <p className="mt-1 text-xs text-slate-500">
+                                {hasActiveFilters ? "Try clearing active filters." : "No courses added yet."}
+                            </p>
+                            {hasActiveFilters && (
+                                <button
+                                    type="button"
+                                    onClick={resetFilters}
+                                    className="mt-3 inline-flex items-center gap-1.5 rounded-lg border border-white/10 bg-white/5 px-3 py-1.5 text-xs text-slate-300"
+                                >
+                                    <RotateCcw size={13} />
+                                    Reset Filters
+                                </button>
+                            )}
+                        </div>
+                    ) : (
+                        visibleCourses.map((course) => {
+                            const initials = getInitials(course.name);
+                            const canUpdate = hasCoursePermission(course, "UPDATE");
+                            const canDelete = hasCoursePermission(course, "DELETE");
+
+                            return (
+                                <article
+                                    key={course.id}
+                                    className="min-w-0 space-y-3 p-3.5 sm:p-5"
+                                >
+                                    {/* Card Top Header */}
+                                    <div className="flex items-start gap-3">
+                                        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-blue-300/20 bg-gradient-to-br from-blue-500/25 to-violet-500/20 text-xs font-bold text-cyan-200">
+                                            {initials}
+                                        </div>
+                                        <div className="min-w-0 flex-1">
+                                            <div className="flex flex-wrap items-center gap-1.5">
+                                                <h3 className="text-sm font-bold text-white break-words">
+                                                    {course.name}
+                                                </h3>
+                                                <StatusBadge status={course.activeStatus} />
+                                                <EnrollmentBadge allowed={course.newEnrollmentAllowed} />
+                                            </div>
+                                            <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-slate-400 font-mono">
+                                                <span>
+                                                    Code: <strong className="text-cyan-300">{course.code}</strong>
+                                                </span>
+                                                <span>·</span>
+                                                <span>ID #{course.id}</span>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    {/* Summary 4-cell Grid */}
+                                    <div className="grid grid-cols-2 gap-2 rounded-xl border border-white/5 bg-slate-950/40 p-2.5 text-xs sm:grid-cols-4 sm:p-3">
+                                        <div>
+                                            <p className="text-[10px] text-slate-400 uppercase">Department</p>
+                                            <p className="font-semibold text-white mt-0.5 truncate">
+                                                {course.department?.name || "—"}
+                                            </p>
+                                        </div>
+                                        <div>
+                                            <p className="text-[10px] text-slate-400 uppercase">School</p>
+                                            <p className="font-semibold text-slate-300 mt-0.5 truncate">
+                                                {course.school?.name || "—"}
+                                            </p>
+                                        </div>
+                                        <div>
+                                            <p className="text-[10px] text-slate-400 uppercase">University</p>
+                                            <p className="font-semibold text-slate-300 mt-0.5 truncate">
+                                                {course.university?.name || "—"}
+                                            </p>
+                                        </div>
+                                        <div>
+                                            <p className="text-[10px] text-slate-400 uppercase">Curricula</p>
+                                            <p className="font-semibold text-cyan-300 mt-0.5">
+                                                {course.subjects.length} sub · {course.sections.length} sec
+                                            </p>
+                                        </div>
+                                    </div>
+
+                                    {/* Card Audit Bar */}
+                                    <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 rounded-xl border border-white/5 bg-slate-950/30 px-3 py-1.5 text-[11px] text-slate-400">
+                                        <div className="flex items-center gap-1.5 min-w-0">
+                                            <UserCheck size={12} className="text-emerald-400 shrink-0" />
+                                            <span className="text-slate-500">Created:</span>
+                                            <span className="font-medium text-slate-200 truncate max-w-[120px]">
+                                                {course.createdBy?.name || "System"}
+                                            </span>
+                                            {course.createdAt && (
+                                                <span className="text-slate-500 font-mono text-[10px]">
+                                                    · {formatDate(course.createdAt)}
+                                                </span>
+                                            )}
+                                        </div>
+                                        {course.updatedBy?.name && (
+                                            <div className="flex items-center gap-1.5 min-w-0">
+                                                <RotateCcw size={11} className="text-cyan-400 shrink-0" />
+                                                <span className="text-slate-500">Updated:</span>
+                                                <span className="font-medium text-slate-200 truncate max-w-[120px]">
+                                                    {course.updatedBy.name}
+                                                </span>
+                                            </div>
+                                        )}
+                                    </div>
+
+                                    {/* Action Buttons Toolbar */}
+                                    <div className="flex items-center justify-between pt-1 border-t border-white/5">
+                                        <div className="flex items-center gap-1.5">
+                                            <button
+                                                type="button"
+                                                onClick={() => openDialog("VIEW", course)}
+                                                aria-label={`View details of ${course.name}`}
+                                                className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-white/10 bg-white/[0.04] text-sky-300"
+                                            >
+                                                <Eye size={15} />
+                                            </button>
+                                            {canUpdate && (
+                                                <button
+                                                    type="button"
+                                                    onClick={() => openDialog("EDIT", course)}
+                                                    aria-label={`Edit ${course.name}`}
+                                                    className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-white/10 bg-white/[0.04] text-cyan-300"
+                                                >
+                                                    <Pencil size={15} />
+                                                </button>
+                                            )}
+                                            {canDelete && (
+                                                <button
+                                                    type="button"
+                                                    onClick={() => openDialog("DELETE", course)}
+                                                    aria-label={`Delete ${course.name}`}
+                                                    className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-white/10 bg-white/[0.04] text-rose-400"
+                                                >
+                                                    <Trash2 size={15} />
+                                                </button>
+                                            )}
+                                        </div>
+
+                                        <span className="text-[11px] text-slate-400 font-mono">
+                                            ID #{course.id}
+                                        </span>
+                                    </div>
+                                </article>
+                            );
+                        })
+                    )}
+                </div>
+
+                {/* Footer Pagination Controls */}
+                <footer className="flex flex-col gap-3 border-t border-white/10 px-4 py-3.5 sm:flex-row sm:items-center sm:justify-between sm:px-6">
+                    <p className="text-xs text-slate-400 text-center sm:text-left">
                         {filteredCourses.length === 0
                             ? "Showing 0 courses"
-                            : `Showing ${(currentPage - 1) * PAGE_SIZE + 1
-                            }–${Math.min(
-                                currentPage * PAGE_SIZE,
-                                filteredCourses.length
-                            )} of ${filteredCourses.length} courses${filteredCourses.length !== courses.length
-                                ? ` (filtered from ${courses.length})`
-                                : ""
-                            }`}
+                            : `Showing ${(currentPage - 1) * PAGE_SIZE + 1}–${Math.min(
+                                  currentPage * PAGE_SIZE,
+                                  filteredCourses.length
+                              )} of ${filteredCourses.length} courses`}
                     </p>
 
-                    <div className="flex flex-wrap items-center gap-2">
+                    <div className="flex flex-wrap items-center justify-center gap-1 sm:gap-1.5">
                         <button
                             type="button"
                             disabled={currentPage === 1 || loading}
                             onClick={() => setPage(1)}
                             aria-label="First page"
                             title="First page"
-                            className="rounded-lg border border-white/10 bg-white/[0.035] p-2 text-slate-300 transition hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-30"
+                            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-white/10 bg-white/[0.035] text-slate-300 transition hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-30"
                         >
-                            <ChevronsLeft size={17} />
+                            <ChevronsLeft size={15} />
                         </button>
-
                         <button
                             type="button"
                             disabled={currentPage === 1 || loading}
-                            onClick={() =>
-                                setPage((value) => Math.max(1, value - 1))
-                            }
+                            onClick={() => setPage((v) => Math.max(1, v - 1))}
                             aria-label="Previous page"
                             title="Previous page"
-                            className="rounded-lg border border-white/10 bg-white/[0.035] p-2 text-slate-300 transition hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-30"
+                            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-white/10 bg-white/[0.035] text-slate-300 transition hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-30"
                         >
-                            <ChevronLeft size={17} />
+                            <ChevronLeft size={15} />
                         </button>
 
-                        {Array.from(
-                            { length: totalPages },
-                            (_, index) => index + 1
-                        )
-                            .filter(
-                                (number) =>
-                                    number === 1 ||
-                                    number === totalPages ||
-                                    Math.abs(number - currentPage) <= 1
-                            )
-                            .map((number, index, pages) => (
-                                <span key={number} className="contents">
-                                    {index > 0 &&
-                                        number - pages[index - 1] > 1 && (
-                                            <span className="px-1 text-slate-500">
+                        {/* Compact on mobile (<sm), full buttons on sm+ */}
+                        <span className="flex sm:hidden items-center px-2 text-xs font-semibold text-cyan-300">
+                            {currentPage} / {totalPages}
+                        </span>
+
+                        <span className="hidden sm:inline-flex items-center gap-1.5">
+                            {Array.from({ length: totalPages }, (_, i) => i + 1)
+                                .filter(
+                                    (n) =>
+                                        n === 1 ||
+                                        n === totalPages ||
+                                        Math.abs(n - currentPage) <= 1
+                                )
+                                .map((n, i, pages) => (
+                                    <span key={n} className="contents">
+                                        {i > 0 && n - pages[i - 1] > 1 && (
+                                            <span className="px-1 text-slate-500 text-xs">
                                                 …
                                             </span>
                                         )}
-
-                                    <button
-                                        type="button"
-                                        disabled={loading}
-                                        onClick={() => setPage(number)}
-                                        aria-current={
-                                            currentPage === number
-                                                ? "page"
-                                                : undefined
-                                        }
-                                        className={`min-w-9 rounded-lg border px-3 py-2 text-sm transition ${currentPage === number
-                                            ? "border-cyan-300/40 bg-gradient-to-r from-violet-600 to-blue-500 font-semibold text-white shadow-md shadow-blue-500/20"
-                                            : "border-white/10 bg-white/[0.035] text-slate-300 hover:bg-white/10"
+                                        <button
+                                            type="button"
+                                            disabled={loading}
+                                            onClick={() => setPage(n)}
+                                            aria-current={
+                                                currentPage === n ? "page" : undefined
+                                            }
+                                            className={`flex h-8 min-w-8 items-center justify-center rounded-lg border px-2.5 text-xs font-semibold transition ${
+                                                currentPage === n
+                                                    ? "border-cyan-300/40 bg-gradient-to-r from-violet-600 to-blue-500 text-white shadow-md shadow-blue-500/20"
+                                                    : "border-white/10 bg-white/[0.035] text-slate-300 hover:bg-white/10"
                                             }`}
-                                    >
-                                        {number}
-                                    </button>
-                                </span>
-                            ))}
+                                        >
+                                            {n}
+                                        </button>
+                                    </span>
+                                ))}
+                        </span>
 
                         <button
                             type="button"
                             disabled={currentPage === totalPages || loading}
                             onClick={() =>
-                                setPage((value) =>
-                                    Math.min(totalPages, value + 1)
-                                )
+                                setPage((v) => Math.min(totalPages, v + 1))
                             }
                             aria-label="Next page"
                             title="Next page"
-                            className="rounded-lg border border-white/10 bg-white/[0.035] p-2 text-slate-300 transition hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-30"
+                            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-white/10 bg-white/[0.035] text-slate-300 transition hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-30"
                         >
-                            <ChevronRight size={17} />
+                            <ChevronRight size={15} />
                         </button>
-
                         <button
                             type="button"
                             disabled={currentPage === totalPages || loading}
                             onClick={() => setPage(totalPages)}
                             aria-label="Last page"
                             title="Last page"
-                            className="rounded-lg border border-white/10 bg-white/[0.035] p-2 text-slate-300 transition hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-30"
+                            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-white/10 bg-white/[0.035] text-slate-300 transition hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-30"
                         >
-                            <ChevronsRight size={17} />
+                            <ChevronsRight size={15} />
                         </button>
                     </div>
-                </div>
+                </footer>
             </GlassCard>
 
-            {/* Dialog */}
+            {/* Modal Dialog */}
             <AnimatePresence>
                 {dialog && (
                     <CourseDialog
                         key={`${dialog.mode}-${dialog.course?.id ?? "new"}`}
                         mode={dialog.mode}
                         course={dialog.course}
-                        academicYears={academicYears}
+                        defaultDepartmentId={dialog.defaultDepartmentId}
+                        departments={departments}
+                        departmentsLoading={departmentsLoading}
                         busy={busy}
                         onClose={() => {
                             if (!busy) setDialog(null);

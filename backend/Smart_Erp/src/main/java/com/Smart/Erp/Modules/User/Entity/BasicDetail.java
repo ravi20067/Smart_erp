@@ -3,6 +3,7 @@ package com.Smart.Erp.Modules.User.Entity;
 import com.Smart.Erp.Config.BaseAuditableEntity;
 import com.Smart.Erp.Modules.File.Entity.FileMetadata;
 import com.Smart.Erp.Modules.User.DTO.BasicDetail.UserProfileResponse;
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import jakarta.persistence.*;
 import lombok.*;
 import org.jspecify.annotations.Nullable;
@@ -24,6 +25,7 @@ public class BasicDetail extends BaseAuditableEntity {
 
     @OneToOne
     @JoinColumn(name = "user_id")
+    @JsonIgnore
     private User user;
 
     @OneToOne(fetch = FetchType.LAZY)
@@ -54,6 +56,10 @@ public class BasicDetail extends BaseAuditableEntity {
                 .motherName(this.getMotherName())
                 .address(this.getAddress())
                 .guardianMobileNumber(this.getGuardianMobileNumber())
+                .createdAt(this.getCreatedAt())
+                .updatedAt(this.getUpdatedAt())
+                .createdBy(this.getCreatedBy() != null ? this.getCreatedBy().toCommonDTO() : null)
+                .updatedBy(this.getUpdatedBy() != null ? this.getUpdatedBy().toCommonDTO() : null)
                 .build();
     }
 }

@@ -25,7 +25,6 @@ import java.util.*;
         name = "student_enrollment",
         indexes = {
                 @Index(name = "idx_student_enrollment_student", columnList = "student_id"),
-                @Index(name = "idx_student_enrollment_academic_year", columnList = "academic_year_id"),
                 @Index(name = "idx_student_enrollment_section_group", columnList = "section_group_id")
         }
 )
@@ -40,12 +39,6 @@ public class StudentEnrollment extends BaseAuditableEntity {
 
     @Column(name = "roll_number")
     private String rollNumber;
-
-    @ManyToOne(fetch = FetchType.LAZY, optional = false)
-    @JoinColumn(name = "academic_year_id", nullable = false, foreignKey = @ForeignKey(name = "fk_student_enrollment_academic_year"))
-    @ToString.Exclude
-    @EqualsAndHashCode.Exclude
-    private AcademicYear academicYear;
 
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "section_group_id", nullable = false, foreignKey = @ForeignKey(name = "fk_student_enrollment_section_group"))
@@ -88,7 +81,6 @@ public class StudentEnrollment extends BaseAuditableEntity {
 
     public static StudentEnrollment enrollNewStudent(Student student, Set<Scholarship> scholarships, SectionGroup sectionGroup, AcademicYear academicYear, LocalDate dueDate){
         StudentEnrollment studentEnrollment = StudentEnrollment.builder()
-                .academicYear(academicYear)
                 .sectionGroup(sectionGroup)
                 .student(student)
                 .build();
@@ -134,13 +126,13 @@ public class StudentEnrollment extends BaseAuditableEntity {
     public StudentEnrollmentResponse mapToResponse(List<PermissionAction> permissionActions) {
         Specialization specialization = sectionGroup.getSpecialization();
         Course course = specialization.getCourse();
-        Department department = course.getAcademicYear().getDepartment();
+        Department department = course.getDepartment();
         School school = department.getSchool();
 
         return StudentEnrollmentResponse.builder()
                 .id(this.getId())
                 .rollNumber(this.getRollNumber())
-                .academicYear(this.getAcademicYear().toCommonDTO())
+                .academicYear(this.getSectionGroup().getSection().getAcademicYear().toCommonDTO())
                 .school(school.toCommonDTO())
                 .department(department.toCommonDTO())
                 .course(course.toCommonDTO())
@@ -167,6 +159,10 @@ public class StudentEnrollment extends BaseAuditableEntity {
                                 .toList()
                 )
                 .permissionActions(permissionActions)
+                .createdAt(this.getCreatedAt())
+                .updatedAt(this.getUpdatedAt())
+                .createdBy(this.getCreatedBy() != null ? this.getCreatedBy().toCommonDTO() : null)
+                .updatedBy(this.getUpdatedBy() != null ? this.getUpdatedBy().toCommonDTO() : null)
                 .student(this.student.mapToResponse())
                 .build();
     }

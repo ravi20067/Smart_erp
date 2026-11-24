@@ -1,23 +1,20 @@
 package com.Smart.Erp.Modules.Student.DTO.Enrollment;
 
+import com.Smart.Erp.Core.Common.BaseDTO;
 import com.Smart.Erp.Core.Common.CommonDTO;
 import com.Smart.Erp.Modules.Finance.DTO.Student.FeeResponse;
 import com.Smart.Erp.Modules.Finance.Enum.FeeFrequency;
 import com.Smart.Erp.Modules.Student.DTO.Student.StudentResponse;
 import com.Smart.Erp.Modules.User.Enum.EnrollmentStatus;
 import com.Smart.Erp.Modules.User.Enum.PermissionAction;
-import lombok.AllArgsConstructor;
-import lombok.Builder;
-import lombok.Data;
-import lombok.NoArgsConstructor;
+import lombok.*;
+import lombok.experimental.SuperBuilder;
 
 import java.util.List;
 
-@Builder
-@Data
-@NoArgsConstructor
-@AllArgsConstructor
-public class StudentEnrollmentResponse {
+@SuperBuilder
+@Getter
+public class StudentEnrollmentResponse extends BaseDTO {
     private Long id;
     private String rollNumber;
     private EnrollmentStatus status;

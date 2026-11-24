@@ -26,6 +26,7 @@ import {
     ChevronsLeft,
     ChevronsRight,
     CircleUserRound,
+    Clock,
     Copy,
     Eye,
     Filter,
@@ -66,6 +67,8 @@ import {
     createStudent,
     extractStudentErrorMessage,
     filterSection,
+    formatAuditActor,
+    formatDateTime,
     getStudentEnrollments,
     getStudentScholarships,
     getStudentSectionGroups,
@@ -342,7 +345,7 @@ function Modal({
     };
 
     return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-2.5 sm:p-5">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 md:p-6">
             <motion.div
                 initial={reduceMotion ? false : { opacity: 0 }}
                 animate={{ opacity: 1 }}
@@ -358,14 +361,14 @@ function Modal({
                 animate={{ opacity: 1, scale: 1, y: 0 }}
                 exit={{ opacity: 0, scale: 0.96, y: 14 }}
                 transition={{ duration: 0.2 }}
-                className={`relative z-10 flex max-h-[92vh] sm:max-h-[88vh] w-full flex-col overflow-hidden rounded-2xl border border-white/10 bg-slate-900 shadow-2xl shadow-black/70 ${wide ? "max-w-4xl" : "max-w-xl"
+                className={`relative z-10 flex max-h-[94vh] sm:max-h-[88vh] w-full flex-col overflow-hidden rounded-2xl border border-white/10 bg-slate-900 shadow-2xl shadow-black/70 ${wide ? "max-w-4xl" : "max-w-xl"
                     }`}
             >
                 {/* Header */}
-                <div className="sticky top-0 z-20 flex items-center justify-between border-b border-white/10 bg-slate-900/95 px-5 py-4 backdrop-blur-md sm:px-6">
-                    <div className="flex items-center gap-3 min-w-0">
+                <div className="sticky top-0 z-20 flex items-center justify-between border-b border-white/10 bg-slate-900/95 px-4 py-3.5 backdrop-blur-md sm:px-6 sm:py-4">
+                    <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
                         <div className={`rounded-xl border p-2 shrink-0 sm:p-2.5 ${toneClasses[iconTone]}`}>
-                            <Icon size={20} className="sm:w-[22px] sm:h-[22px]" />
+                            <Icon size={18} className="sm:w-[22px] sm:h-[22px]" />
                         </div>
                         <div className="min-w-0">
                             <h2 className="text-base font-bold tracking-tight text-white truncate sm:text-lg">
@@ -380,14 +383,14 @@ function Modal({
                         type="button"
                         onClick={onClose}
                         aria-label="Close dialog"
-                        className="rounded-lg p-1.5 text-slate-400 transition hover:bg-white/10 hover:text-white shrink-0 ml-3"
+                        className="rounded-lg p-1.5 text-slate-400 transition hover:bg-white/10 hover:text-white shrink-0 ml-2 sm:ml-3"
                     >
                         <X size={18} />
                     </button>
                 </div>
 
                 {/* Content */}
-                <div className="min-h-0 flex-1 overflow-y-auto px-5 py-5 sm:px-6 custom-scrollbar">
+                <div className="min-h-0 flex-1 overflow-y-auto px-4 py-4 sm:px-6 sm:py-5 custom-scrollbar">
                     {children}
                 </div>
             </motion.section>
@@ -1270,12 +1273,16 @@ export default function Student() {
             return;
         }
         const rect = e.currentTarget.getBoundingClientRect();
-        const menuWidth = 240;
-        const menuHeight = 320;
-        const xPos = Math.min(rect.right - menuWidth, window.innerWidth - menuWidth - 16);
-        // Smart upward opening if close to viewport bottom
+        const isMobile = window.innerWidth < 640;
+        const menuWidth = isMobile ? Math.min(window.innerWidth - 32, 280) : 256;
+        const menuHeight = 360;
+        const xPos = isMobile
+            ? Math.max(16, (window.innerWidth - menuWidth) / 2)
+            : Math.min(rect.right - menuWidth, window.innerWidth - menuWidth - 16);
         const openUpward = rect.bottom + menuHeight > window.innerHeight;
-        const yPos = openUpward ? rect.top - menuHeight - 6 : rect.bottom + 6;
+        const yPos = isMobile
+            ? Math.max(16, Math.min(rect.bottom + 6, window.innerHeight - menuHeight - 16))
+            : (openUpward ? rect.top - menuHeight - 6 : rect.bottom + 6);
 
         setActionMenu({
             student,
@@ -1289,37 +1296,37 @@ export default function Student() {
             initial={reduceMotion ? false : { opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.3 }}
-            className="relative w-full min-w-0 space-y-6 p-3 text-slate-100 sm:p-5 lg:p-7"
+            className="relative w-full min-w-0 space-y-5 p-3 text-slate-100 sm:space-y-6 sm:p-5 lg:p-7"
         >
             {/* Header Section (Matching Sections.tsx breadcrumb + header architecture) */}
-            <section>
-                <div className="mb-3 flex items-center gap-2 text-xs font-semibold text-slate-400 sm:text-sm">
-                    <span>Academic Management</span>
-                    <ChevronRight size={14} className="text-slate-500" />
-                    <span className="text-cyan-300">Students</span>
+            <section className="space-y-3">
+                <div className="flex items-center gap-1.5 sm:gap-2 text-xs font-semibold text-slate-400 sm:text-sm">
+                    <span className="truncate">Academic Management</span>
+                    <ChevronRight size={14} className="text-slate-500 shrink-0" />
+                    <span className="text-cyan-300 shrink-0">Students</span>
                 </div>
 
                 <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
                     <div>
-                        <p className="text-xs font-semibold uppercase tracking-[0.2em] text-cyan-300">
+                        <p className="text-[11px] sm:text-xs font-semibold uppercase tracking-[0.2em] text-cyan-300">
                             Academic Administration &amp; Admissions
                         </p>
                         <h1 className="mt-1 text-2xl font-bold tracking-tight text-white sm:text-3xl lg:text-4xl">
                             Student Management
                         </h1>
-                        <p className="mt-1.5 max-w-2xl text-xs leading-5 text-slate-400 sm:text-sm sm:leading-6">
+                        <p className="mt-1 max-w-2xl text-xs leading-5 text-slate-400 sm:text-sm sm:leading-6">
                             Manage student profiles, registrations, section enrollments, scholarships,
                             fee accounts, and login access permissions.
                         </p>
                     </div>
 
-                    <div className="flex flex-wrap items-center gap-2.5 sm:gap-3">
+                    <div className="flex flex-wrap items-center gap-2 sm:gap-3">
                         <button
                             type="button"
                             onClick={() => void loadStudents(true)}
                             disabled={loading || refreshing}
                             title="Refresh student records"
-                            className="inline-flex items-center justify-center gap-2 rounded-xl border border-white/10 bg-slate-900/60 px-3.5 py-2.5 text-xs font-medium text-slate-300 transition hover:bg-white/10 hover:text-white sm:px-4 sm:py-3 sm:text-sm disabled:opacity-50"
+                            className="flex-1 sm:flex-none inline-flex items-center justify-center gap-2 rounded-xl border border-white/10 bg-slate-900/60 px-3.5 py-2.5 text-xs font-medium text-slate-300 transition hover:bg-white/10 hover:text-white sm:px-4 sm:py-3 sm:text-sm disabled:opacity-50"
                         >
                             <RefreshCw
                                 size={15}
@@ -1337,9 +1344,9 @@ export default function Student() {
                                     ? "No section groups are available"
                                     : "Add a student"
                             }
-                            className="inline-flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-violet-600 via-blue-600 to-cyan-500 px-4 py-2.5 text-xs font-semibold text-white shadow-lg shadow-blue-500/20 transition duration-200 hover:-translate-y-0.5 hover:brightness-110 active:translate-y-0 sm:px-5 sm:py-3 sm:text-sm disabled:cursor-not-allowed disabled:opacity-50"
+                            className="flex-1 sm:flex-none inline-flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-violet-600 via-blue-600 to-cyan-500 px-4 py-2.5 text-xs font-semibold text-white shadow-lg shadow-blue-500/20 transition duration-200 hover:-translate-y-0.5 hover:brightness-110 active:translate-y-0 sm:px-5 sm:py-3 sm:text-sm disabled:cursor-not-allowed disabled:opacity-50"
                         >
-                            <UserPlus size={18} />
+                            <UserPlus size={16} className="sm:w-[18px] sm:h-[18px]" />
                             <span>Add Student</span>
                         </button>
                     </div>
@@ -1363,10 +1370,10 @@ export default function Student() {
                         initial={{ opacity: 0, y: -8 }}
                         animate={{ opacity: 1, y: 0 }}
                         exit={{ opacity: 0, y: -8 }}
-                        className="flex items-start gap-3 rounded-xl border border-emerald-400/30 bg-emerald-500/10 p-4 text-sm text-emerald-200"
+                        className="flex items-start gap-3 rounded-xl border border-emerald-400/30 bg-emerald-500/10 p-3.5 sm:p-4 text-xs sm:text-sm text-emerald-200"
                     >
                         <CheckCircle2 size={18} className="mt-0.5 shrink-0 text-emerald-400" />
-                        <p className="flex-1">{notice}</p>
+                        <p className="flex-1 leading-relaxed">{notice}</p>
                         <button
                             type="button"
                             onClick={() => setNotice("")}
@@ -1382,10 +1389,11 @@ export default function Student() {
             {/* Statistics Row */}
             <section
                 aria-label="Student statistics"
-                className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5"
+                className="grid grid-cols-2 gap-2.5 sm:gap-3.5 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-5"
             >
                 {stats.map((stat, index) => {
                     const Icon = stat.icon;
+                    const isLast = index === stats.length - 1;
 
                     return (
                         <motion.div
@@ -1397,27 +1405,28 @@ export default function Student() {
                                 delay: reduceMotion ? 0 : index * 0.05,
                             }}
                             whileHover={reduceMotion ? undefined : { y: -3 }}
-                            className={`rounded-2xl border bg-gradient-to-br p-4 sm:p-5 shadow-lg backdrop-blur-xl ${tones[stat.tone]
-                                }`}
+                            className={`rounded-2xl border bg-gradient-to-br p-3.5 sm:p-5 shadow-lg backdrop-blur-xl ${
+                                isLast ? "col-span-2 sm:col-span-1 md:col-span-1" : ""
+                            } ${tones[stat.tone]}`}
                         >
-                            <div className="flex items-start justify-between gap-3">
-                                <div>
-                                    <p className="text-xs font-medium text-slate-300 sm:text-sm">
+                            <div className="flex items-start justify-between gap-2 sm:gap-3">
+                                <div className="min-w-0">
+                                    <p className="text-xs font-medium text-slate-300 truncate sm:text-sm">
                                         {stat.label}
                                     </p>
-                                    <p className="mt-2 text-2xl font-bold tracking-tight text-white sm:mt-3 sm:text-3xl">
+                                    <p className="mt-1.5 text-xl font-bold tracking-tight text-white sm:mt-3 sm:text-3xl">
                                         {loading ? (
-                                            <span className="inline-block h-8 w-16 animate-pulse rounded bg-white/10" />
+                                            <span className="inline-block h-7 w-14 animate-pulse rounded bg-white/10 sm:h-8 sm:w-16" />
                                         ) : (
                                             stat.value.toLocaleString()
                                         )}
                                     </p>
                                 </div>
-                                <div className="rounded-xl border border-white/10 bg-slate-950/30 p-2.5 sm:p-3">
-                                    <Icon size={21} className="sm:w-[22px] sm:h-[22px]" />
+                                <div className="rounded-xl border border-white/10 bg-slate-950/30 p-2 sm:p-3 shrink-0">
+                                    <Icon size={18} className="sm:w-[22px] sm:h-[22px]" />
                                 </div>
                             </div>
-                            <div className="mt-4 sm:mt-5 h-1 overflow-hidden rounded-full bg-white/10">
+                            <div className="mt-3 sm:mt-5 h-1 overflow-hidden rounded-full bg-white/10">
                                 <motion.div
                                     initial={{ width: "0%" }}
                                     animate={{ width: loading ? "30%" : "100%" }}
@@ -1691,7 +1700,7 @@ export default function Student() {
                 </AnimatePresence>
 
                 {/* Desktop Table View */}
-                <div className="hidden lg:block overflow-x-auto custom-scrollbar">
+                <div className="hidden sm:block overflow-x-auto custom-scrollbar">
                     <table className="w-full text-left text-sm text-slate-300 min-w-[1050px]">
                         <thead className="border-b border-white/10 bg-slate-950/40 text-xs font-semibold uppercase tracking-wider text-slate-400">
                             <tr>
@@ -1710,6 +1719,9 @@ export default function Student() {
                                 <th scope="col" className="px-4 py-4">
                                     Enrollment Status
                                 </th>
+                                <th scope="col" className="px-4 py-4">
+                                    Governance
+                                </th>
                                 <th scope="col" className="px-5 py-4 text-right">
                                     Actions
                                 </th>
@@ -1720,7 +1732,7 @@ export default function Student() {
                                 Array.from({ length: 5 }).map((_, i) => <SkeletonRow key={i} />)
                             ) : pageStudents.length === 0 ? (
                                 <tr>
-                                    <td colSpan={6} className="px-6 py-16 text-center text-slate-500">
+                                    <td colSpan={7} className="px-6 py-16 text-center text-slate-500">
                                         <Users
                                             size={44}
                                             className="mx-auto mb-3 opacity-30 text-slate-400"
@@ -1923,16 +1935,33 @@ export default function Student() {
                                                 </span>
                                             </td>
 
-                                            {/* Actions */}
+                                            {/* Governance / Creator Pill with Tooltip */}
+                                            <td className="px-4 py-4">
+                                                <div
+                                                    className="inline-flex items-center gap-1.5 rounded-lg border border-white/10 bg-slate-950/50 px-2.5 py-1 text-xs text-slate-300"
+                                                    title={`Enrolled by: ${formatAuditActor(
+                                                        student.createdBy || student.student.createdBy
+                                                    )} on ${formatDate(student.createdAt || student.student.createdAt)} | Modified by: ${formatAuditActor(
+                                                        student.updatedBy || student.student.updatedBy
+                                                    )} on ${formatDate(student.updatedAt || student.createdAt || student.student.updatedAt)}`}
+                                                >
+                                                    <UserCheck size={12} className="text-emerald-400 shrink-0" />
+                                                    <span className="truncate max-w-[110px]">
+                                                        {(student.createdBy || student.student.createdBy)?.name || "System"}
+                                                    </span>
+                                                </div>
+                                            </td>
+
+                                            {/* Actions with strict h-8 w-8 shrink-0 */}
                                             <td className="px-5 py-4 text-right">
-                                                <div className="inline-flex items-center gap-1.5">
+                                                <div className="flex items-center justify-end gap-1.5">
                                                     {/* Quick View Button */}
                                                     <button
                                                         type="button"
                                                         onClick={() => void openDialog("VIEW", student)}
                                                         disabled={!canRead}
                                                         aria-label="View student details"
-                                                        className="rounded-lg border border-cyan-500/20 bg-cyan-500/10 p-2 text-cyan-300 hover:border-cyan-400/40 hover:bg-cyan-500/20 hover:text-cyan-200 transition disabled:opacity-40"
+                                                        className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-white/10 bg-white/[0.04] text-sky-300 transition hover:border-sky-400/30 hover:bg-sky-400/10 disabled:opacity-40"
                                                         title="View Overview & Profile"
                                                     >
                                                         <Eye size={15} />
@@ -1944,7 +1973,7 @@ export default function Student() {
                                                         onClick={() => void openDialog("PROFILE", student)}
                                                         disabled={!canEdit}
                                                         aria-label="Edit student profile"
-                                                        className="rounded-lg border border-white/10 bg-slate-800/60 p-2 text-slate-300 hover:bg-white/10 hover:text-white transition disabled:opacity-40"
+                                                        className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-white/10 bg-white/[0.04] text-cyan-300 transition hover:border-cyan-400/30 hover:bg-cyan-400/10 disabled:opacity-40"
                                                         title={canEdit ? "Edit Profile" : "No update permission"}
                                                     >
                                                         <Pencil size={15} />
@@ -1983,8 +2012,8 @@ export default function Student() {
                     </table>
                 </div>
 
-                {/* Mobile / Tablet Cards View (Responsive design for < lg) */}
-                <div className="divide-y divide-white/5 lg:hidden">
+                {/* Mobile / Tablet Cards View (Responsive design for < sm) */}
+                <div className="divide-y divide-white/5 sm:hidden">
                     {loading ? (
                         Array.from({ length: 4 }).map((_, i) => (
                             <div key={i} className="animate-pulse space-y-3 p-4">
@@ -2001,6 +2030,14 @@ export default function Student() {
                         pageStudents.map((student) => {
                             const canRead = hasAction(student, "READ");
                             const canEdit = hasAction(student, "UPDATE");
+                            const feeRows = student.fees ?? [];
+                            const totalDue = feeRows.reduce((acc, fee) => {
+                                const bal = Number(
+                                    fee.balance ??
+                                        (Number(fee.payableAmount ?? 0) - Number(fee.paidAmount ?? 0))
+                                );
+                                return acc + (Number.isFinite(bal) && bal > 0 ? bal : 0);
+                            }, 0);
 
                             return (
                                 <article key={student.id} className="min-w-0 space-y-3 p-4 sm:p-5">
@@ -2043,7 +2080,7 @@ export default function Student() {
                                     </div>
 
                                     {/* Grid summary */}
-                                    <div className="grid grid-cols-2 gap-2 rounded-xl border border-white/5 bg-slate-950/40 p-2.5 text-xs sm:grid-cols-3 sm:p-3">
+                                    <div className="grid grid-cols-2 gap-2 rounded-xl border border-white/5 bg-slate-950/40 p-2.5 text-xs sm:grid-cols-4 sm:p-3">
                                         <InfoCell
                                             label="Registration"
                                             value={student.student.registrationNumber || "—"}
@@ -2076,15 +2113,38 @@ export default function Student() {
                                                     : "None"
                                             }
                                         />
+                                        <InfoCell
+                                            label="Fee Status"
+                                            value={
+                                                totalDue > 0
+                                                    ? `Due: ${formatMoney(totalDue)}`
+                                                    : feeRows.length > 0
+                                                        ? "Settled"
+                                                        : "No Fee Plan"
+                                            }
+                                        />
+                                    </div>
+
+                                    {/* Audit bar footer */}
+                                    <div className="flex flex-wrap items-center justify-between gap-2 border-t border-white/5 pt-2 text-[11px] text-slate-400">
+                                        <span className="inline-flex items-center gap-1.5">
+                                            <UserCheck size={12} className="text-emerald-400" />
+                                            <span>Enrolled: {(student.createdBy || student.student.createdBy)?.name || "System"}</span>
+                                        </span>
+                                        {(student.createdAt || student.student.createdAt) && (
+                                            <span className="font-mono text-slate-500">
+                                                {formatDate(student.createdAt || student.student.createdAt)}
+                                            </span>
+                                        )}
                                     </div>
 
                                     {/* Mobile Action Buttons */}
-                                    <div className="flex flex-wrap items-center gap-2 pt-1 border-t border-white/5">
+                                    <div className="flex flex-wrap items-center gap-2 pt-1.5 border-t border-white/5">
                                         <button
                                             type="button"
                                             onClick={() => void openDialog("VIEW", student)}
                                             disabled={!canRead}
-                                            className="inline-flex items-center gap-1.5 rounded-lg border border-cyan-500/20 bg-cyan-500/10 px-3 py-1.5 text-xs font-semibold text-cyan-300 hover:bg-cyan-500/20 transition disabled:opacity-40"
+                                            className="flex-1 sm:flex-none inline-flex items-center justify-center gap-1.5 rounded-lg border border-cyan-500/20 bg-cyan-500/10 px-3 py-2 text-xs font-semibold text-cyan-300 hover:bg-cyan-500/20 transition disabled:opacity-40"
                                         >
                                             <Eye size={13} /> Details
                                         </button>
@@ -2092,14 +2152,14 @@ export default function Student() {
                                             type="button"
                                             onClick={() => void openDialog("PROFILE", student)}
                                             disabled={!canEdit}
-                                            className="inline-flex items-center gap-1.5 rounded-lg border border-white/10 bg-slate-800/80 px-3 py-1.5 text-xs font-semibold text-slate-200 hover:bg-white/10 transition disabled:opacity-40"
+                                            className="flex-1 sm:flex-none inline-flex items-center justify-center gap-1.5 rounded-lg border border-white/10 bg-slate-800/80 px-3 py-2 text-xs font-semibold text-slate-200 hover:bg-white/10 transition disabled:opacity-40"
                                         >
                                             <Pencil size={13} /> Edit Profile
                                         </button>
                                         <button
                                             type="button"
                                             onClick={(e) => handleToggleActionMenu(student, e)}
-                                            className="inline-flex items-center gap-1.5 rounded-lg border border-white/10 bg-slate-800 px-3 py-1.5 text-xs font-semibold text-cyan-300 hover:bg-white/10 transition"
+                                            className="w-full sm:w-auto inline-flex items-center justify-center gap-1.5 rounded-lg border border-white/10 bg-slate-800 px-3 py-2 text-xs font-semibold text-cyan-300 hover:bg-white/10 transition"
                                         >
                                             <SlidersHorizontal size={13} /> More Actions{" "}
                                             <ChevronDown size={12} />
@@ -2113,8 +2173,8 @@ export default function Student() {
 
                 {/* Pagination Footer */}
                 {!loading && visibleStudents.length > 0 && (
-                    <div className="flex flex-col gap-3 border-t border-white/10 px-4 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-6">
-                        <p className="text-xs text-slate-400">
+                    <div className="flex flex-col gap-3 border-t border-white/10 px-4 py-3.5 sm:flex-row sm:items-center sm:justify-between sm:px-6">
+                        <p className="text-xs text-slate-400 text-center sm:text-left">
                             Showing{" "}
                             <span className="font-semibold text-white">
                                 {(page - 1) * PAGE_SIZE + 1}–
@@ -2127,7 +2187,7 @@ export default function Student() {
                             students
                         </p>
 
-                        <div className="flex flex-wrap items-center gap-1.5">
+                        <div className="flex flex-wrap items-center justify-center gap-1 sm:gap-1.5">
                             <PageButton
                                 label="First page"
                                 disabled={page === 1}
@@ -2142,31 +2202,40 @@ export default function Student() {
                             >
                                 <ChevronLeft size={15} />
                             </PageButton>
-                            {Array.from({ length: totalPages }, (_, i) => i + 1)
-                                .filter(
-                                    (v) =>
-                                        v === 1 ||
-                                        v === totalPages ||
-                                        Math.abs(v - page) <= 1
-                                )
-                                .map((v, i, list) => (
-                                    <span key={v} className="contents">
-                                        {i > 0 && v - list[i - 1] > 1 && (
-                                            <span className="px-1 text-xs text-slate-600">…</span>
-                                        )}
-                                        <button
-                                            type="button"
-                                            onClick={() => setPage(v)}
-                                            aria-current={page === v ? "page" : undefined}
-                                            className={`h-8 min-w-8 rounded-lg px-2 text-xs font-semibold transition ${page === v
-                                                ? "bg-cyan-500/20 text-cyan-300 ring-1 ring-cyan-400/40"
-                                                : "text-slate-400 hover:bg-white/5 hover:text-white"
-                                                }`}
-                                        >
-                                            {v}
-                                        </button>
-                                    </span>
-                                ))}
+
+                            {/* Page numbers: compact on mobile, numbered with ellipses on sm+ */}
+                            <span className="flex sm:hidden items-center px-2 text-xs font-semibold text-cyan-300">
+                                {page} / {totalPages}
+                            </span>
+
+                            <span className="hidden sm:inline-flex items-center gap-1.5">
+                                {Array.from({ length: totalPages }, (_, i) => i + 1)
+                                    .filter(
+                                        (v) =>
+                                            v === 1 ||
+                                            v === totalPages ||
+                                            Math.abs(v - page) <= 1
+                                    )
+                                    .map((v, i, list) => (
+                                        <span key={v} className="contents">
+                                            {i > 0 && v - list[i - 1] > 1 && (
+                                                <span className="px-1 text-xs text-slate-600">…</span>
+                                            )}
+                                            <button
+                                                type="button"
+                                                onClick={() => setPage(v)}
+                                                aria-current={page === v ? "page" : undefined}
+                                                className={`h-8 min-w-8 rounded-lg px-2 text-xs font-semibold transition ${page === v
+                                                    ? "bg-cyan-500/20 text-cyan-300 ring-1 ring-cyan-400/40"
+                                                    : "text-slate-400 hover:bg-white/5 hover:text-white"
+                                                    }`}
+                                            >
+                                                {v}
+                                            </button>
+                                        </span>
+                                    ))}
+                            </span>
+
                             <PageButton
                                 label="Next page"
                                 disabled={page === totalPages}
@@ -2202,7 +2271,7 @@ export default function Student() {
                             left: `${actionMenu.x}px`,
                             zIndex: 80,
                         }}
-                        className="w-64 max-h-[85vh] overflow-y-auto custom-scrollbar rounded-2xl border border-white/15 bg-slate-900/95 p-2 shadow-2xl shadow-black/80 backdrop-blur-2xl"
+                        className="w-[calc(100vw-32px)] max-w-[280px] sm:max-w-none sm:w-64 max-h-[85vh] overflow-y-auto custom-scrollbar rounded-2xl border border-white/15 bg-slate-900/95 p-2 shadow-2xl shadow-black/80 backdrop-blur-2xl"
                     >
                         <div className="border-b border-white/10 px-3 py-2">
                             <p className="truncate text-xs font-bold text-white">
@@ -2392,7 +2461,7 @@ export default function Student() {
                                                 "No email on record"}
                                         </p>
 
-                                        <div className="mt-3.5 grid grid-cols-2 gap-2.5 sm:grid-cols-[1fr_1.1fr_1.8.2fr_0.8fr]">
+                                        <div className="mt-3.5 grid grid-cols-2 gap-2.5 sm:grid-cols-4">
                                             <StatMini
                                                 label="Registration No"
                                                 value={
@@ -2756,6 +2825,137 @@ export default function Student() {
                                     </DetailSection>
                                 </div>
                             )}
+
+                            {/* EXACT Audit Trail & Governance Showcase Matching University.tsx */}
+                            <div className="rounded-xl border border-white/5 bg-slate-900/60 p-3 space-y-2.5">
+                                <div className="flex items-center justify-between">
+                                    <span className="text-xs font-semibold text-slate-300 flex items-center gap-1.5">
+                                        <ShieldCheck size={13} className="text-emerald-400" />
+                                        Audit Trail &amp; Governance
+                                    </span>
+                                    <span className="text-[10px] uppercase tracking-wider text-slate-500 font-mono">
+                                        System Records
+                                    </span>
+                                </div>
+
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
+                                    {/* Created By Card (Emerald) */}
+                                    <div className="rounded-lg border border-emerald-500/20 bg-emerald-500/5 p-2.5 space-y-1.5">
+                                        <div className="flex items-center justify-between text-[10px] text-emerald-400 font-medium">
+                                            <span className="flex items-center gap-1">
+                                                <UserCheck size={11} /> Enrolled / Created By
+                                            </span>
+                                            {(dialog.student.createdAt || dialog.student.student.createdAt) && (
+                                                <span className="text-slate-400 font-mono text-[10px]">
+                                                    {formatDate(dialog.student.createdAt || dialog.student.student.createdAt)}
+                                                </span>
+                                            )}
+                                        </div>
+                                        <div className="flex items-center gap-2">
+                                            <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-emerald-500/20 text-[10px] font-bold text-emerald-300">
+                                                {initials(
+                                                    dialog.student.createdBy?.name ||
+                                                        dialog.student.student.createdBy?.name ||
+                                                        "System"
+                                                )}
+                                            </div>
+                                            <div className="min-w-0 flex-1">
+                                                <p className="truncate font-semibold text-slate-200 text-xs">
+                                                    {dialog.student.createdBy?.name ||
+                                                        dialog.student.student.createdBy?.name ||
+                                                        "System Administrator"}
+                                                </p>
+                                                {(dialog.student.createdBy?.code ||
+                                                    dialog.student.createdBy?.id ||
+                                                    dialog.student.student.createdBy?.code) && (
+                                                    <p className="text-[10px] text-slate-400 font-mono truncate">
+                                                        {dialog.student.createdBy?.code
+                                                            ? `Code: ${dialog.student.createdBy.code}`
+                                                            : dialog.student.createdBy?.id
+                                                            ? `ID: #${dialog.student.createdBy.id}`
+                                                            : `Code: ${dialog.student.student.createdBy?.code}`}
+                                                    </p>
+                                                )}
+                                            </div>
+                                        </div>
+                                        {(dialog.student.createdAt || dialog.student.student.createdAt) && (
+                                            <div className="text-[10px] text-slate-500 flex items-center gap-1 pt-0.5 border-t border-emerald-500/10">
+                                                <Clock size={10} className="text-slate-400 shrink-0" />
+                                                <span className="truncate">
+                                                    Timestamp:{" "}
+                                                    {formatDateTime(
+                                                        dialog.student.createdAt || dialog.student.student.createdAt
+                                                    )}
+                                                </span>
+                                            </div>
+                                        )}
+                                    </div>
+
+                                    {/* Modified By Card (Cyan) */}
+                                    <div className="rounded-lg border border-cyan-500/20 bg-cyan-500/5 p-2.5 space-y-1.5">
+                                        <div className="flex items-center justify-between text-[10px] text-cyan-400 font-medium">
+                                            <span className="flex items-center gap-1">
+                                                <RotateCcw size={11} /> Last Modified By
+                                            </span>
+                                            {(dialog.student.updatedAt ||
+                                                dialog.student.createdAt ||
+                                                dialog.student.student.updatedAt) && (
+                                                <span className="text-slate-400 font-mono text-[10px]">
+                                                    {formatDate(
+                                                        dialog.student.updatedAt ||
+                                                            dialog.student.createdAt ||
+                                                            dialog.student.student.updatedAt
+                                                    )}
+                                                </span>
+                                            )}
+                                        </div>
+                                        <div className="flex items-center gap-2">
+                                            <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-cyan-500/20 text-[10px] font-bold text-cyan-300">
+                                                {initials(
+                                                    dialog.student.updatedBy?.name ||
+                                                        dialog.student.student.updatedBy?.name ||
+                                                        dialog.student.createdBy?.name ||
+                                                        "System"
+                                                )}
+                                            </div>
+                                            <div className="min-w-0 flex-1">
+                                                <p className="truncate font-semibold text-slate-200 text-xs">
+                                                    {dialog.student.updatedBy?.name ||
+                                                        dialog.student.student.updatedBy?.name ||
+                                                        dialog.student.createdBy?.name ||
+                                                        "System Administrator"}
+                                                </p>
+                                                {(dialog.student.updatedBy?.code ||
+                                                    dialog.student.updatedBy?.id ||
+                                                    dialog.student.student.updatedBy?.code) && (
+                                                    <p className="text-[10px] text-slate-400 font-mono truncate">
+                                                        {dialog.student.updatedBy?.code
+                                                            ? `Code: ${dialog.student.updatedBy.code}`
+                                                            : dialog.student.updatedBy?.id
+                                                            ? `ID: #${dialog.student.updatedBy.id}`
+                                                            : `Code: ${dialog.student.student.updatedBy?.code}`}
+                                                    </p>
+                                                )}
+                                            </div>
+                                        </div>
+                                        {(dialog.student.updatedAt ||
+                                            dialog.student.createdAt ||
+                                            dialog.student.student.updatedAt) && (
+                                            <div className="text-[10px] text-slate-500 flex items-center gap-1 pt-0.5 border-t border-cyan-500/10">
+                                                <Clock size={10} className="text-slate-400 shrink-0" />
+                                                <span className="truncate">
+                                                    Timestamp:{" "}
+                                                    {formatDateTime(
+                                                        dialog.student.updatedAt ||
+                                                            dialog.student.createdAt ||
+                                                            dialog.student.student.updatedAt
+                                                    )}
+                                                </span>
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
+                            </div>
 
                             {/* Footer Buttons */}
                             <div className="flex flex-wrap items-center justify-end gap-2.5 border-t border-white/10 pt-4">
@@ -3755,6 +3955,9 @@ function SkeletonRow() {
             </td>
             <td className="px-4 py-4">
                 <div className="h-6 w-20 rounded-full bg-white/10" />
+            </td>
+            <td className="px-4 py-4">
+                <div className="h-6 w-24 rounded bg-white/10" />
             </td>
             <td className="px-5 py-4 text-right">
                 <div className="inline-block h-8 w-28 rounded bg-white/10" />

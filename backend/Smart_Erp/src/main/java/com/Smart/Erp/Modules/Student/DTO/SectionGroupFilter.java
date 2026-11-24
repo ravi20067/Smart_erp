@@ -12,4 +12,8 @@ public class SectionGroupFilter {
     private CommonDTO sectionGroup;
     private CommonDTO specialization;
     private CommonDTO courses;
+    private CommonDTO academicYear;
+    private CommonDTO department;
+    private CommonDTO school;
+    private CommonDTO university;
 }

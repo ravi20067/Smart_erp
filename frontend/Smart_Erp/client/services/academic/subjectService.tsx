@@ -1,4 +1,3 @@
-
 import api from "@/services/axiosConfig";
 import { getBaseUrl } from "@/services/authutil";
 
@@ -30,17 +29,16 @@ export interface SubjectResponse {
     isPracticalSubject: boolean;
     specializations: CommonDTO[];
     activeStatus: ActiveStatus | null;
-    questionBankTeacher: CommonDTO | null;
-    studyMaterialTeacher: CommonDTO | null;
     subjectTeachers: CommonDTO[];
-    lastDateQuestionBankSummit: string | null;
-    lastDateStudyMaterialSummit: string | null;
     course: CommonDTO | null;
-    academicYear: CommonDTO | null;
     department: CommonDTO | null;
     school: CommonDTO | null;
     university: CommonDTO | null;
     permissionActions: PermissionAction[];
+    createdBy?: CommonDTO | null;
+    updatedBy?: CommonDTO | null;
+    createdAt?: string | null;
+    updatedAt?: string | null;
 }
 
 export interface CommonRequest {
@@ -56,10 +54,16 @@ export interface SubjectRequest {
     isPracticalSubject: boolean;
     activeStatus: ActiveStatus;
     specializationsId: number[];
-    questionBankTeacherId: number | null;
-    lastDateQuestionBankSummit: string | null;
-    studyMaterialTeacherId: number | null;
-    lastDateStudyMaterialSummit: string | null;
+}
+
+export interface SubjectFilters {
+    search: string;
+    status: "ALL" | ActiveStatus;
+    universityId: string;
+    schoolId: string;
+    departmentId: string;
+    courseId: string;
+    practicalOnly: boolean;
 }
 
 /* -------------------------------------------------------------------------- */
@@ -67,7 +71,6 @@ export interface SubjectRequest {
 /* -------------------------------------------------------------------------- */
 
 const getSubjectBaseUrl = (): string => getBaseUrl().replace(/\/+$/, "");
-
 
 /* -------------------------------------------------------------------------- */
 /* Error handling                                                             */
@@ -121,9 +124,9 @@ export function extractErrorMessage(
                         const entry = item as Record<string, unknown>;
                         return String(
                             entry.defaultMessage ??
-                            entry.message ??
-                            entry.field ??
-                            ""
+                                entry.message ??
+                                entry.field ??
+                                ""
                         );
                     }
 
@@ -137,13 +140,18 @@ export function extractErrorMessage(
 
     const status = candidate.response?.status;
 
-    if (status === 400) return "Invalid request. Check the entered information.";
-    if (status === 401) return "Your session has expired. Please sign in again.";
-    if (status === 403) return "You do not have permission to perform this action.";
+    if (status === 400)
+        return "Invalid request. Check the entered information.";
+    if (status === 401)
+        return "Your session has expired. Please sign in again.";
+    if (status === 403)
+        return "You do not have permission to perform this action.";
     if (status === 404) return "The requested record was not found.";
     if (status === 409) return "This record conflicts with existing data.";
-    if (status === 422) return "The submitted information could not be processed.";
-    if (status === 500) return "A server error occurred. Please try again later.";
+    if (status === 422)
+        return "The submitted information could not be processed.";
+    if (status === 500)
+        return "A server error occurred. Please try again later.";
 
     if (
         typeof candidate.message === "string" &&
@@ -165,15 +173,15 @@ export function extractErrorMessage(
 
 function asRecord(value: unknown): Record<string, unknown> {
     return value && typeof value === "object"
-        ? value as Record<string, unknown>
+        ? (value as Record<string, unknown>)
         : {};
 }
 
 function asArray<T>(value: unknown): T[] {
-    return Array.isArray(value) ? value as T[] : [];
+    return Array.isArray(value) ? (value as T[]) : [];
 }
 
-function normalizeCommonDTO(value: unknown): CommonDTO | null {
+export function normalizeCommonDTO(value: unknown): CommonDTO | null {
     const item = asRecord(value);
     const id = Number(item.id);
 
@@ -222,13 +230,6 @@ function normalizeSubject(value: unknown): SubjectResponse {
     const common = (key: string): CommonDTO | null =>
         normalizeCommonDTO(item[key]);
 
-    const nullableDate = (key: string): string | null => {
-        const value = item[key];
-        return typeof value === "string" && value.trim()
-            ? value
-            : null;
-    };
-
     return {
         id: Number(item.id) || 0,
         name: String(item.name ?? ""),
@@ -247,25 +248,22 @@ function normalizeSubject(value: unknown): SubjectResponse {
             item.activeStatus === "ENABLE" || item.activeStatus === "DISABLE"
                 ? item.activeStatus
                 : null,
-        questionBankTeacher: common("questionBankTeacher"),
-        studyMaterialTeacher: common("studyMaterialTeacher"),
         subjectTeachers: uniqueCommonDTOs(
             asArray(item.subjectTeachers)
                 .map(normalizeCommonDTO)
                 .filter((value): value is CommonDTO => value !== null)
         ),
-        lastDateQuestionBankSummit: nullableDate(
-            "lastDateQuestionBankSummit"
-        ),
-        lastDateStudyMaterialSummit: nullableDate(
-            "lastDateStudyMaterialSummit"
-        ),
         course: common("course"),
-        academicYear: common("academicYear"),
         department: common("department"),
         school: common("school"),
         university: common("university"),
         permissionActions: asArray<PermissionAction>(item.permissionActions),
+        createdBy: common("createdBy"),
+        updatedBy: common("updatedBy"),
+        createdAt:
+            typeof item.createdAt === "string" ? item.createdAt : null,
+        updatedAt:
+            typeof item.updatedAt === "string" ? item.updatedAt : null,
     };
 }
 
@@ -294,19 +292,36 @@ function normalizePrefix(value: unknown): string {
     throw new Error("The server returned an invalid subject prefix.");
 }
 
+export const formatAuditActor = (
+    actor?: CommonDTO | null,
+    fallback = "System Administrator"
+): string => {
+    if (!actor) return fallback;
+    if (actor.name && actor.code) return `${actor.name} (${actor.code})`;
+    return actor.name || fallback;
+};
+
+export function removePrefix(
+    code: string | null | undefined,
+    prefix: string
+): string {
+    const value = (code ?? "").trim();
+    if (!prefix) return value;
+    return value.startsWith(prefix) ? value.slice(prefix.length).trim() : value;
+}
+
 /* -------------------------------------------------------------------------- */
-/* Subject CRUD                                                               */
+/* Subject API Functions                                                      */
 /* -------------------------------------------------------------------------- */
 
 /**
  * GET /{role}/subjects
- *
- * The supplied SubjectController.getAll() does not currently show
- * @GetMapping. The backend must expose this method as a GET endpoint.
  */
 export async function getAllSubjects(): Promise<SubjectResponse[]> {
     try {
-        const response = await api.get<unknown>(`${getSubjectBaseUrl()}/subjects`);
+        const response = await api.get<unknown>(
+            `${getSubjectBaseUrl()}/subjects`
+        );
         return normalizeSubjects(response.data);
     } catch (error) {
         throw new Error(
@@ -332,7 +347,10 @@ export async function createSubject(
     try {
         const response = await api.post<unknown>(
             `${getSubjectBaseUrl()}/subjects`,
-            request,
+            {
+                name: request.name.trim(),
+                code: request.code.trim(),
+            },
             { params: { courseId } }
         );
 
@@ -360,7 +378,15 @@ export async function updateSubject(
     try {
         const response = await api.put<unknown>(
             `${getSubjectBaseUrl()}/subjects`,
-            request
+            {
+                id: request.id,
+                name: request.name.trim(),
+                code: request.code.trim(),
+                lecturesPerWeek: request.lecturesPerWeek,
+                isPracticalSubject: request.isPracticalSubject,
+                activeStatus: request.activeStatus,
+                specializationsId: request.specializationsId,
+            }
         );
 
         return normalizeSubject(response.data);
@@ -374,17 +400,18 @@ export async function updateSubject(
 /**
  * DELETE /{role}/subjects?subjectId={subjectId}
  */
-export async function deleteSubject(
-    subjectId: number
-): Promise<string> {
+export async function deleteSubject(subjectId: number): Promise<string> {
     if (!Number.isSafeInteger(subjectId) || subjectId <= 0) {
         throw new Error("Invalid subject ID.");
     }
 
     try {
-        const response = await api.delete<unknown>(`${getSubjectBaseUrl()}/subjects`, {
-            params: { subjectId },
-        });
+        const response = await api.delete<unknown>(
+            `${getSubjectBaseUrl()}/subjects`,
+            {
+                params: { subjectId },
+            }
+        );
 
         return typeof response.data === "string" && response.data.trim()
             ? response.data
@@ -401,8 +428,6 @@ export async function deleteSubject(
 
 /**
  * GET /{role}/subjects/prefix?courseId={courseId}[&subjectId={subjectId}]
- *
- * The supplied controller requires courseId. subjectId is optional.
  */
 export async function getSubjectPrefix(
     courseId: number,
@@ -432,19 +457,17 @@ export async function getSubjectPrefix(
 }
 
 /* -------------------------------------------------------------------------- */
-/* Form options                                                               */
+/* Common Filter APIs                                                         */
 /* -------------------------------------------------------------------------- */
 
 /**
  * GET /{role}/filter/courses
  */
-export async function getCourseFilter(
-): Promise<CommonDTO[]> {
+export async function getCourseFilter(): Promise<CommonDTO[]> {
     try {
         const response = await api.get<unknown>(
             `${getSubjectBaseUrl()}/filter/courses`
         );
-
         return normalizeCommonDTOs(response.data);
     } catch (error) {
         throw new Error(
@@ -456,13 +479,11 @@ export async function getCourseFilter(
 /**
  * GET /{role}/filter/specialization
  */
-export async function getSpecializationFilter(
-): Promise<CommonDTO[]> {
+export async function getSpecializationFilter(): Promise<CommonDTO[]> {
     try {
         const response = await api.get<unknown>(
             `${getSubjectBaseUrl()}/filter/specialization`
         );
-
         return normalizeCommonDTOs(response.data);
     } catch (error) {
         throw new Error(
@@ -474,26 +495,24 @@ export async function getSpecializationFilter(
     }
 }
 
+/**
+ * GET /{role}/subjects/filter/teacher?subjectId={subjectId}
+ */
 export async function getTeacherFilter(
-    subjectId?: number
+    subjectId: number
 ): Promise<CommonDTO[]> {
     try {
         const response = await api.get<unknown>(
             `${getSubjectBaseUrl()}/subjects/filter/teacher`,
             {
-                params: {
-                    subjectId
-                },
+                params: { subjectId },
             }
         );
 
         return normalizeCommonDTOs(response.data);
     } catch (error) {
         throw new Error(
-            extractErrorMessage(
-                error,
-                "Unable to load teacher options."
-            )
+            extractErrorMessage(error, "Unable to load teacher options.")
         );
     }
 }

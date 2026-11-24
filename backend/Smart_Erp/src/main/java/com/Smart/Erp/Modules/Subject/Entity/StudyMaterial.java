@@ -4,6 +4,7 @@ import com.Smart.Erp.Config.BaseAuditableEntity;
 import jakarta.persistence.*;
 import lombok.*;
 
+@EqualsAndHashCode(callSuper = true)
 @Entity
 @Table(name = "study_materials")
 @Data

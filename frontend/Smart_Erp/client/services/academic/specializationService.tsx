@@ -7,7 +7,13 @@ import { getBaseUrl } from "@/services/authutil";
 
 export type ActiveStatus = "ENABLE" | "DISABLE";
 
-export type PermissionAction = "UPDATE" | "DELETE" | string;
+export type PermissionAction =
+    | "CREATE"
+    | "CREATE_CHILD"
+    | "READ"
+    | "UPDATE"
+    | "DELETE"
+    | string;
 
 export interface CommonDTO {
     id: number;
@@ -22,12 +28,15 @@ export interface SpecializationResponse {
     subjects: CommonDTO[];
     sectionGroups: CommonDTO[];
     course: CommonDTO | null;
-    academicYear: CommonDTO | null;
     department: CommonDTO | null;
     school: CommonDTO | null;
     university: CommonDTO | null;
     activeStatus: ActiveStatus;
     permissionActions: PermissionAction[];
+    createdBy?: CommonDTO | null;
+    updatedBy?: CommonDTO | null;
+    createdAt?: string | null;
+    updatedAt?: string | null;
 }
 
 export interface SpecializationCreateRequest {
@@ -43,15 +52,17 @@ export interface SpecializationRequest extends SpecializationCreateRequest {
 export interface SpecializationFilters {
     search: string;
     status: "ALL" | ActiveStatus;
-    academicYearId?: string;
     courseId?: string;
     universityId: string;
     schoolId: string;
     departmentId: string;
 }
 
-const getSpecializationUrl = (): string => `${getBaseUrl().replace(/\/+$/, "")}/specializations`;
-const getCourseFilterUrl = (): string => `${getBaseUrl().replace(/\/+$/, "")}/filter/courses`;
+const getSpecializationUrl = (): string =>
+    `${getBaseUrl().replace(/\/+$/, "")}/specializations`;
+
+const getCourseFilterUrl = (): string =>
+    `${getBaseUrl().replace(/\/+$/, "")}/filter/courses`;
 
 /* -------------------------------------------------------------------------- */
 /* Error handling                                                             */
@@ -153,7 +164,7 @@ function unwrapData(value: unknown): unknown {
     return value;
 }
 
-function normalizeCommonDTO(value: unknown): CommonDTO | null {
+export function normalizeCommonDTO(value: unknown): CommonDTO | null {
     if (!value || typeof value !== "object") return null;
 
     const item = value as Record<string, unknown>;
@@ -168,7 +179,7 @@ function normalizeCommonDTO(value: unknown): CommonDTO | null {
     };
 }
 
-function normalizeDTOList(value: unknown): CommonDTO[] {
+export function normalizeDTOList(value: unknown): CommonDTO[] {
     const data = unwrapData(value);
 
     if (!Array.isArray(data)) return [];
@@ -200,7 +211,6 @@ function normalizeSpecialization(value: unknown): SpecializationResponse {
         subjects: normalizeDTOList(item.subjects),
         sectionGroups: normalizeDTOList(item.sectionGroups),
         course: normalizeCommonDTO(item.course),
-        academicYear: normalizeCommonDTO(item.academicYear),
         department: normalizeCommonDTO(item.department),
         school: normalizeCommonDTO(item.school),
         university: normalizeCommonDTO(item.university),
@@ -210,6 +220,10 @@ function normalizeSpecialization(value: unknown): SpecializationResponse {
                 (action): action is string => typeof action === "string"
             )
             : [],
+        createdBy: normalizeCommonDTO(item.createdBy),
+        updatedBy: normalizeCommonDTO(item.updatedBy),
+        createdAt: typeof item.createdAt === "string" ? item.createdAt : null,
+        updatedAt: typeof item.updatedAt === "string" ? item.updatedAt : null,
     };
 }
 
@@ -218,9 +232,9 @@ function normalizeSpecialization(value: unknown): SpecializationResponse {
 /* -------------------------------------------------------------------------- */
 
 /**
- * GET /admin/specializations
+ * GET /{role}/specializations
  *
- * Loads all specializations. Table filtering is performed in the frontend.
+ * Fetches all specializations authorized for the logged-in user.
  */
 export async function getAllSpecializations(): Promise<SpecializationResponse[]> {
     const response = await api.get(getSpecializationUrl());
@@ -234,9 +248,9 @@ export async function getAllSpecializations(): Promise<SpecializationResponse[]>
 }
 
 /**
- * GET /filter/courses
+ * GET /{role}/filter/courses
  *
- * Supplies available courses for the creation form.
+ * Supplies available courses for the creation form via CommonController.
  */
 export async function getCourseFilter(): Promise<CommonDTO[]> {
     const response = await api.get(getCourseFilterUrl());
@@ -244,9 +258,9 @@ export async function getCourseFilter(): Promise<CommonDTO[]> {
 }
 
 /**
- * GET /admin/specializations/prefix?courseId={courseId}
+ * GET /{role}/specializations/prefix?courseId={courseId}&specializationId={id}
  *
- * The server returns the fixed prefix as a string.
+ * The server returns the course code prefix as a plain string.
  */
 export async function getSpecializationPrefix(
     courseId: number,
@@ -277,10 +291,10 @@ export async function getSpecializationPrefix(
 }
 
 /**
- * POST /admin/specializations?courseId={courseId}
+ * POST /{role}/specializations?courseId={courseId}
  *
  * The backend accepts CommonRequest: { name, code }.
- * Send only the code suffix, without the fixed prefix.
+ * The code suffix without the course prefix is sent.
  */
 export async function createSpecialization(
     courseId: number,
@@ -305,10 +319,10 @@ export async function createSpecialization(
 }
 
 /**
- * PUT /admin/specializations
+ * PUT /{role}/specializations
  *
  * The backend accepts SpecializationRequest: { id, name, code, activeStatus }.
- * Send the code suffix without the fixed prefix.
+ * The code suffix without the course prefix is sent.
  */
 export async function updateSpecialization(
     request: SpecializationRequest
@@ -324,7 +338,7 @@ export async function updateSpecialization(
 }
 
 /**
- * DELETE /admin/specializations?specializationId={id}
+ * DELETE /{role}/specializations?specializationId={id}
  */
 export async function deleteSpecialization(
     specializationId: number
@@ -369,8 +383,10 @@ export function hasPermission(
     specialization: SpecializationResponse,
     action: PermissionAction
 ): boolean {
-    return Array.isArray(specialization.permissionActions) &&
-        specialization.permissionActions.includes(action);
+    return (
+        Array.isArray(specialization.permissionActions) &&
+        specialization.permissionActions.includes(action)
+    );
 }
 
 export function removePrefix(
@@ -385,6 +401,15 @@ export function removePrefix(
         ? value.slice(prefix.length).trim()
         : value;
 }
+
+export const formatAuditActor = (
+    actor?: CommonDTO | null,
+    fallback = "System Administrator"
+): string => {
+    if (!actor) return fallback;
+    if (actor.name && actor.code) return `${actor.name} (${actor.code})`;
+    return actor.name || fallback;
+};
 
 export function normalizeText(value: unknown): string {
     return typeof value === "string"

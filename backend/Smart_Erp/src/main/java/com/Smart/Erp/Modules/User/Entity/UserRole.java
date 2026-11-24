@@ -66,6 +66,7 @@ public class UserRole extends BaseAuditableEntity {
     @ToString.Exclude
     private User assignedBy;
 
+    @Builder.Default
     @Column(nullable = false)
     private Boolean active = true;
 }

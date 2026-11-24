@@ -4,7 +4,7 @@ import com.Smart.Erp.Modules.Academic.DTO.AcademicYear.AcademicYearRequest;
 import com.Smart.Erp.Modules.Academic.DTO.AcademicYear.AcademicYearResponse;
 import com.Smart.Erp.Core.Exception.OperationNotAllowedException;
 import com.Smart.Erp.Modules.Academic.Entity.AcademicYear;
-import com.Smart.Erp.Modules.Academic.Entity.Department;
+import com.Smart.Erp.Modules.Academic.Entity.University;
 import com.Smart.Erp.Modules.Academic.Repo.AcademicYearRepository;
 import com.Smart.Erp.Modules.User.Enum.PermissionAction;
 import com.Smart.Erp.Modules.User.Enum.ResourceType;
@@ -28,35 +28,32 @@ public class AcademicYearService {
     public @Nullable List<AcademicYearResponse> getAcademicYears() {
         Map<Long, List<PermissionAction>> all = authorizationService.getAll(ResourceType.ACADEMIC_YEAR);
         List<AcademicYear> academicYears = academicYearRepository.findAllById(all.keySet());
-
         return academicYears.stream()
                 .map(
                         academicYear -> academicYear.mapToResponse(authorizationService.getPermissionAction(ResourceType.ACADEMIC_YEAR,academicYear.getId()))
                 )
                 .toList();
     }
-    public @Nullable AcademicYearResponse createAcademicYear(Long departmentId, AcademicYearRequest academicYearRequest) {
+    public @Nullable AcademicYearResponse createAcademicYear(Long universityId, AcademicYearRequest academicYearRequest) {
 
         AcademicYear build = AcademicYear.builder()
                 .name(academicYearRequest.getName())
                 .current(false)
                 .startDate(academicYearRequest.getStartDate())
                 .endDate(academicYearRequest.getEndDate())
-                .department(academicCommonService.getDepartment(departmentId))
+                .university(academicCommonService.getUniversity(universityId))
                 .build();
 
         build.setCodeWithPrefix(academicYearRequest.getCode());
 
         AcademicYear save = academicYearRepository.save(build);
 
-        authorizationService.createPermission(save.getId(), ResourceType.ACADEMIC_YEAR, departmentId, ResourceType.DEPARTMENT);
+        authorizationService.createPermission(save.getId(), ResourceType.ACADEMIC_YEAR, universityId, ResourceType.UNIVERSITY);
         return build.mapToResponse(authorizationService.getPermissionAction(ResourceType.ACADEMIC_YEAR,save.getId()));
     }
     public @Nullable AcademicYearResponse updateAcademicYear(Long academicYearId, AcademicYearRequest academicYearRequest) {
         AcademicYear academicYear = academicCommonService.getAcademicYear(academicYearId);
-        if (academicYear.getActiveStatus() != academicYearRequest.getActiveStatus()){
-            academicYear = academicCommonService.handleActiveStatusUpdate(academicYear,academicYearRequest.getActiveStatus());
-        }
+        academicYear.setActiveStatus(academicYearRequest.getActiveStatus());
         academicYear.setName(academicYearRequest.getName());
         academicYear.setCodeWithPrefix(academicYearRequest.getCode());
         academicYear.setEndDate(academicYearRequest.getEndDate());
@@ -66,7 +63,7 @@ public class AcademicYearService {
     }
     public @Nullable String deleteAcademicYear(Long academicYearId ) {
         AcademicYear academicYear = academicCommonService.getAcademicYear(academicYearId);
-        if (academicCommonService.getAcademicYear(academicYearId).getCourses().isEmpty()){
+        if (academicCommonService.getAcademicYear(academicYearId).getSections().isEmpty()){
             throw new OperationNotAllowedException("Delete its courses first");
         }
         academicYearRepository.deleteById(academicYearId);
@@ -75,12 +72,11 @@ public class AcademicYearService {
     }
 
 
-    public void switchAcademicYear(Long departmentId,Long academicYearId) {
-        Department department = academicCommonService.getDepartment(departmentId);
+    public void switchAcademicYear(Long universityId,Long academicYearId) {
+        University university = academicCommonService.getUniversity(universityId);
 
-        // Find OLD current academic year first
         AcademicYear oldCurrentAcademicYear =
-                department.getAcademicYears()
+                university.getAcademicYears()
                         .stream()
                         .filter(year ->
                                 Boolean.TRUE.equals(year.getCurrent())
@@ -109,7 +105,7 @@ public class AcademicYearService {
         }
     }
 
-    public String getPostfix(Long departmentId) {
-        return academicCommonService.getDepartment(departmentId).getCode();
+    public String getPostfix(Long universityId) {
+        return academicCommonService.getUniversity(universityId).getCode();
     }
 }

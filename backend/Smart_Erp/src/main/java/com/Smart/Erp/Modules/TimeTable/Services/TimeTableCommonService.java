@@ -11,10 +11,9 @@ import org.springframework.stereotype.Service;
 public class TimeTableCommonService {
     private final RoomRepo roomRepo;
 
-    public Room getRoom(Long id){
+    public Room getRoom(Long id) {
         return roomRepo.findById(id).orElseThrow(
-                () ->
-                        new ResourceNotFoundException("Room not found with id: " + id)
+                () -> new ResourceNotFoundException("Room not found with id: " + id)
         );
     }
 }

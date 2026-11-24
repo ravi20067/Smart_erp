@@ -42,6 +42,7 @@ public class Scholarship  extends BaseAuditableEntity implements CommonReference
     private ScholarshipType scholarshipType;
 
     @ToString.Exclude
+    @Builder.Default
     @ManyToMany(mappedBy = "scholarships")
     private Set<StudentFeeAccount> students = new HashSet<>();
 
@@ -88,6 +89,10 @@ public class Scholarship  extends BaseAuditableEntity implements CommonReference
                 .university(this.getUniversity().toCommonDTO())
                 .scholarshipType(this.getScholarshipType())
                 .permissionActions(permissionActions)
+                .createdAt(this.getCreatedAt())
+                .updatedAt(this.getUpdatedAt())
+                .createdBy(this.getCreatedBy().toCommonDTO())
+                .updatedBy(this.getUpdatedBy().toCommonDTO())
                 .build();
     }
 

@@ -4,13 +4,12 @@ package com.Smart.Erp.Modules.Student.Entity;
 import com.Smart.Erp.Config.BaseAuditableEntity;
 import com.Smart.Erp.Modules.Student.DTO.Student.StudentResponse;
 import com.Smart.Erp.Modules.User.Entity.User;
-import com.Smart.Erp.Modules.User.Enum.PermissionAction;
 import jakarta.persistence.*;
 import lombok.*;
+import org.apache.commons.lang3.builder.ToStringExclude;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.stream.Collectors;
 
 @Entity
 @Table(name = "students")
@@ -46,7 +45,7 @@ public class Student  extends BaseAuditableEntity {
     )
     private User user;
 
-    @ToString.Exclude
+    @ToStringExclude
     @Builder.Default
     @OneToMany(
             mappedBy = "student",
@@ -70,6 +69,10 @@ public class Student  extends BaseAuditableEntity {
                 .id(this.getId())
                 .registrationNumber(this.getRegistrationNumber())
                 .basicDetailRequest(this.getUser().getBasicDetail().mapToResponse())
+                .createdAt(this.getCreatedAt())
+                .updatedAt(this.getUpdatedAt())
+                .createdBy(this.getCreatedBy() != null ? this.getCreatedBy().toCommonDTO() : null)
+                .updatedBy(this.getUpdatedBy() != null ? this.getUpdatedBy().toCommonDTO() : null)
                 .build();
     }
 }

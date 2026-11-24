@@ -59,6 +59,7 @@ public class Role extends BaseAuditableEntity {
     // =========================
     // ACTIVE
     // =========================
+    @Builder.Default
     @Column(nullable = false)
     private Boolean active = true;
 
@@ -138,6 +139,10 @@ public class Role extends BaseAuditableEntity {
                                 .toList()
                 )
                 .permissionActions(permissions)
+                .createdAt(this.getCreatedAt())
+                .updatedAt(this.getUpdatedAt())
+                .updatedBy(this.getUpdatedBy().toCommonDTO())
+                .createdBy(this.getCreatedBy().toCommonDTO())
                 .build();
     }
 }

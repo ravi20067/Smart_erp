@@ -1,18 +1,14 @@
 package com.Smart.Erp.Modules.Academic.Services;
 
+import com.Smart.Erp.Config.CommonReference;
+import com.Smart.Erp.Core.Common.CommonDTO;
 import com.Smart.Erp.Modules.Academic.DTO.Sections.SectionRequest;
 import com.Smart.Erp.Modules.Academic.DTO.Sections.SectionResponse;
+import com.Smart.Erp.Modules.Academic.Entity.*;
 import com.Smart.Erp.Modules.Academic.Repo.SectionGroupRepo;
-import com.Smart.Erp.Modules.Teacher.Entity.Teacher;
-import com.Smart.Erp.Modules.Teacher.Services.TeacherCommonService;
 import com.Smart.Erp.Modules.User.Enum.PermissionAction;
 import com.Smart.Erp.Modules.User.Enum.ResourceType;
-import com.Smart.Erp.Modules.User.Enum.UserRoles;
 import com.Smart.Erp.Core.Exception.OperationNotAllowedException;
-import com.Smart.Erp.Modules.Academic.Entity.Course;
-import com.Smart.Erp.Modules.Academic.Entity.Section;
-import com.Smart.Erp.Modules.Academic.Entity.SectionGroup;
-import com.Smart.Erp.Modules.Academic.Entity.Specialization;
 import com.Smart.Erp.Modules.Academic.Repo.SectionRepo;
 import com.Smart.Erp.Security.AuthorizationService;
 import jakarta.transaction.Transactional;
@@ -44,9 +40,10 @@ public class SectionService {
                 .toList();
     }
 
-    public SectionResponse create(Long courseId, SectionRequest request) {
+    public SectionResponse create(Long courseId, SectionRequest request, Long academicYearId) {
 
         Course course = academicCommonService.getCourse(courseId);
+        AcademicYear academicYear = academicCommonService.getAcademicYear(academicYearId);
 
         List<Specialization> specializations =
                 academicCommonService.getSpecialization(request.getSpecializationId());
@@ -54,10 +51,11 @@ public class SectionService {
         Section section = Section.builder()
                 .name(request.getName())
                 .capacity(request.getCapacity())
+                .academicYear(academicYear)
                 .course(course)
                 .build();
 
-        section.setCodeWithPrefix(request.getCode());
+        section.setCodeWithPrefix(academicYear.getCode().replace(academicYear.getUniversity().getCode(),"") + "-" + course.getCode() + request.getCode());
 
         List<SectionGroup> groups = specializations.stream()
                 .map(specialization ->
@@ -72,7 +70,7 @@ public class SectionService {
                     }
                     return SectionGroup.builder()
                             .name(request.getName() + "-" + specialization.getName())
-                            .code(SectionGroup.mergeForCode(section.getCode(), specialization.getCode()))
+                            .code(section.getCode() + specialization.getCode().replace(section.getCourse().getCode(),""))
                             .specialization(specialization)
                             .section(section)
                             .build();
@@ -109,7 +107,7 @@ public class SectionService {
             section.setName(request.getName());
         }
 
-        section.setCodeWithPrefix(request.getCode());
+        section.setCodeWithPrefix(section.getAcademicYear().getCode().replace(section.getAcademicYear().getUniversity().getCode(),"") + "-" + section.getCourse().getCode() + request.getCode());
 
         // Capture newly created groups from the helper method
         List<SectionGroup> newlyAddedGroups = handleUpdateSpecialization(section, request, nameChanged);
@@ -209,7 +207,7 @@ public class SectionService {
                                                     + "-"
                                                     + specialization.getName()
                                     )
-                                    .code(SectionGroup.mergeForCode(finalSection.getCode(), specialization.getCode()))
+                                    .code(finalSection.getCode() + specialization.getCode().replace(finalSection.getCourse().getCode(),""))
                                     .specialization(specialization)
                                     .section(finalSection)
                                     .build();
@@ -235,7 +233,17 @@ public class SectionService {
         }
     }
 
-    public String getPrefix(Long courseId) {
-        return academicCommonService.getCourse(courseId).getCode();
+    public String getPrefix(Long academicYearId, Long courseId) {
+        AcademicYear academicYear = academicCommonService.getAcademicYear(academicYearId);
+        return academicYear.getCode().replace(academicYear.getUniversity().getCode(),"") + "-" + academicCommonService.getCourse(courseId).getCode();
+    }
+
+    public List<CommonDTO> getAcademicYearFilter(Long courseId) {
+        return academicCommonService.getCourse(courseId).getDepartment().getSchool().getUniversity().getAcademicYears()
+                .stream()
+                .filter(academicYear ->
+                        authorizationService.can(PermissionAction.CREATE_CHILD, ResourceType.ACADEMIC_YEAR, academicYear.getId()))
+                .map(CommonReference::toCommonDTO)
+                .toList();
     }
 }

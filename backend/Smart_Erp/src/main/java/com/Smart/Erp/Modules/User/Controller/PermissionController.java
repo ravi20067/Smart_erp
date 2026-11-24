@@ -1,6 +1,5 @@
 package com.Smart.Erp.Modules.User.Controller;
 
-import com.Smart.Erp.Modules.User.DTO.Role.RoleRequest;
 import com.Smart.Erp.Modules.User.DTO.Role.RoleResponse;
 import com.Smart.Erp.Modules.User.Entity.Permission;
 import com.Smart.Erp.Modules.User.Services.RoleService;

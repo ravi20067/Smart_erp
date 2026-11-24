@@ -67,10 +67,8 @@ public class DepartmentService {
         return departmentRepo.save(department).mapToResponse(authorizationService.getPermissionAction(ResourceType.DEPARTMENT,department.getId()));
     }
     public @Nullable String delete(Long departmentId) {
-        if (!academicCommonService.getDepartment(departmentId)
-                .getAcademicYears().isEmpty()
-        ) {
-            throw new OperationNotAllowedException("Remove its academic Years first");
+        if (!academicCommonService.getDepartment(departmentId).getCourses().isEmpty()){
+            throw new OperationNotAllowedException("Department has courses, cannot delete");
         }
         departmentRepo.deleteById(departmentId);
         authorizationService.deletePermission(ResourceType.DEPARTMENT,departmentId);

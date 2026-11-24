@@ -1,16 +1,17 @@
 package com.Smart.Erp.Modules.Academic.DTO.School;
 
+import com.Smart.Erp.Core.Common.BaseDTO;
 import com.Smart.Erp.Core.Common.CommonDTO;
 import com.Smart.Erp.Modules.Academic.Enum.ActiveStatus;
 import com.Smart.Erp.Modules.User.Enum.PermissionAction;
-import lombok.Builder;
-import lombok.Data;
+import lombok.*;
+import lombok.experimental.SuperBuilder;
 
 import java.util.List;
 
-@Data
-@Builder
-public class SchoolResponse {
+@Getter
+@SuperBuilder
+public class SchoolResponse extends BaseDTO {
     private Long id;
     private String name;
     private ActiveStatus activeStatus;

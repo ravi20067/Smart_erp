@@ -1,3 +1,4 @@
+
 package com.Smart.Erp.Modules.Finance.Entity;
 
 import com.Smart.Erp.Config.BaseAuditableEntity;
@@ -8,10 +9,13 @@ import com.Smart.Erp.Modules.Finance.DTO.Fee.FeeStructureResponse;
 import com.Smart.Erp.Modules.Finance.DTO.Fee.FeeStructureUpdateRequest;
 import com.Smart.Erp.Modules.Finance.Enum.FeeCategoryType;
 import com.Smart.Erp.Modules.Finance.Enum.FeeFrequency;
-import com.Smart.Erp.Modules.User.Entity.User;
 import com.Smart.Erp.Modules.User.Enum.PermissionAction;
+
 import jakarta.persistence.*;
+
 import lombok.*;
+import lombok.experimental.SuperBuilder;
+
 import org.hibernate.annotations.BatchSize;
 
 import java.math.BigDecimal;
@@ -19,16 +23,23 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 @Entity
 @Table(
-        name = "fee_structures"
+        name = "fee_structures",
+        indexes = {
+                @Index(
+                        name = "idx_fee_structure_academic_year",
+                        columnList = "academic_year_id"
+                )
+        }
 )
 @Getter
 @Setter
+@ToString
 @NoArgsConstructor
-@AllArgsConstructor
-@Builder
+@SuperBuilder
 public class FeeStructure extends BaseAuditableEntity {
 
     @Id
@@ -42,11 +53,13 @@ public class FeeStructure extends BaseAuditableEntity {
     @Column(name = "frequency", nullable = false, length = 20)
     private FeeFrequency frequency;
 
-    // Added field for total number of installments
-    @Column(name = "total_installments", nullable = false)
     @Builder.Default
+    @Column(name = "total_installments", nullable = false)
     private Integer totalNoOfInstallments = 1;
 
+    // Fee components
+    @Builder.Default
+    @ToString.Exclude
     @OneToMany(
             mappedBy = "feeStructure",
             cascade = CascadeType.ALL,
@@ -54,77 +67,158 @@ public class FeeStructure extends BaseAuditableEntity {
             fetch = FetchType.LAZY
     )
     @BatchSize(size = 25)
-    @Builder.Default
     private List<FeeComponent> components = new ArrayList<>();
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "last_modified_by")
-    @ToString.Exclude
-    private User lastModifiedBy;
-
-    @ToString.Exclude
-    @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "course_id")
+    @ToString.Exclude
     private Course course;
 
-    @OneToMany(mappedBy = "feeStructure")
-    @Builder.Default
-    private List<Specialization> specializations = new ArrayList<>();
+    @ManyToOne(fetch = FetchType.LAZY, optional = false)
+    @JoinColumn(
+            name = "academic_year_id",
+            nullable = false,
+            foreignKey = @ForeignKey(
+                    name = "fk_fee_structure_academic_year"
+            )
+    )
+    @ToString.Exclude
+    private AcademicYear academicYear;
 
-    public static FeeStructure createFromRequest(FeeStructureRequest request, Course course, List<Specialization> specializations, User currentUser) {
+    // One fee structure can have multiple specializations
+    @Builder.Default
+    @ToString.Exclude
+    @OneToMany(
+            mappedBy = "feeStructure",
+            cascade = CascadeType.ALL,
+            orphanRemoval = true,
+            fetch = FetchType.LAZY
+    )
+    @BatchSize(size = 25)
+    private List<FeeStructureSpecialization> specializationAssignments =
+            new ArrayList<>();
+
+    // --------------------------------------------------
+    // CREATE
+    // --------------------------------------------------
+
+    public static FeeStructure createFromRequest(
+            FeeStructureRequest request,
+            Course course,
+            AcademicYear academicYear,
+            List<Specialization> specializations
+    ) {
+
         FeeStructure feeStructure = FeeStructure.builder()
                 .name(request.getName())
                 .frequency(request.getFrequency())
                 .course(course)
-                .lastModifiedBy(currentUser)
-                .totalNoOfInstallments(request.getTotalNoOfInstallments())
+                .academicYear(academicYear)
+                .totalNoOfInstallments(
+                        request.getTotalNoOfInstallments()
+                )
                 .build();
 
-        // Add components
-        for ( var componentRequest : request.getComponents()) {
-            FeeComponent component = FeeComponent.builder()
-                    .categoryType(componentRequest.getFeeCategoryType())
-                    .componentName(componentRequest.getComponentName())
-                    .amount(componentRequest.getAmount())
-                    .isMandatory(componentRequest.getIsMandatory())
-                    .isRefundable(componentRequest.getIsRefundable())
-                    .feeStructure(feeStructure)
-                    .build();
-            feeStructure.addComponent(component);
+        // Add fee components
+        if (request.getComponents() != null) {
+
+            for (var componentRequest : request.getComponents()) {
+
+                FeeComponent component = FeeComponent.builder()
+                        .categoryType(
+                                componentRequest.getFeeCategoryType()
+                        )
+                        .componentName(
+                                componentRequest.getComponentName()
+                        )
+                        .amount(componentRequest.getAmount())
+                        .isMandatory(componentRequest.getIsMandatory())
+                        .isRefundable(componentRequest.getIsRefundable())
+                        .feeStructure(feeStructure)
+                        .build();
+
+                feeStructure.addComponent(component);
+            }
         }
 
-        for (Specialization specialization : specializations) {
-            feeStructure.addSpecialization(specialization);
+        // Add specializations
+        if (specializations != null) {
+            for (Specialization specialization : specializations) {
+                feeStructure.addSpecialization(specialization);
+            }
         }
 
         return feeStructure;
     }
 
+    // --------------------------------------------------
+    // SPECIALIZATION MANAGEMENT
+    // --------------------------------------------------
+
     public void addSpecialization(Specialization specialization) {
+
         if (specialization == null) {
             return;
         }
 
-        if (!this.specializations.contains(specialization)) {
-            this.specializations.add(specialization);
+        boolean exists = specializationAssignments.stream()
+                .anyMatch(assignment ->
+                        sameSpecialization(
+                                assignment.getSpecialization(),
+                                specialization
+                        )
+                );
+
+        if (exists) {
+            return;
         }
 
-        specialization.setFeeStructure(this);
+        FeeStructureSpecialization assignment =
+                FeeStructureSpecialization.create(
+                        this,
+                        specialization
+                );
+
+        specializationAssignments.add(assignment);
     }
 
     public void removeSpecialization(Specialization specialization) {
+
         if (specialization == null) {
             return;
         }
 
-        this.specializations.remove(specialization);
-
-        if (specialization.getFeeStructure() == this) {
-            specialization.setFeeStructure(null);
-        }
+        specializationAssignments.removeIf(assignment ->
+                sameSpecialization(
+                        assignment.getSpecialization(),
+                        specialization
+                )
+        );
     }
 
+    private boolean sameSpecialization(
+            Specialization first,
+            Specialization second
+    ) {
+
+        if (first == second) {
+            return true;
+        }
+
+        if (first == null || second == null) {
+            return false;
+        }
+
+        return first.getId() != null
+                && Objects.equals(first.getId(), second.getId());
+    }
+
+    // --------------------------------------------------
+    // COMPONENT MANAGEMENT
+    // --------------------------------------------------
+
     public void addComponent(FeeComponent component) {
+
         if (component == null) {
             return;
         }
@@ -137,6 +231,7 @@ public class FeeStructure extends BaseAuditableEntity {
     }
 
     public void removeComponent(FeeComponent component) {
+
         if (component == null) {
             return;
         }
@@ -148,43 +243,59 @@ public class FeeStructure extends BaseAuditableEntity {
         }
     }
 
+    // --------------------------------------------------
+    // UPDATE
+    // --------------------------------------------------
+
     public void updateFromRequest(
             FeeStructureUpdateRequest request,
             List<Specialization> requestedSpecializations,
-            User currentUser,
             List<FeeComponent> componentsToRemove
     ) {
+
         this.setName(request.getName());
         this.setFrequency(request.getFrequency());
+
         this.setTotalNoOfInstallments(
                 request.getTotalNoOfInstallments()
         );
-        this.setLastModifiedBy(currentUser);
 
-        // Remove existing components requested for deletion.
-        for (FeeComponent component :
-                new ArrayList<>(componentsToRemove)) {
-            if (component.getFeeStructure().getId() == null || !component.getFeeStructure().getId().equals(this.getId())) {
-                throw new OperationNotAllowedException(
-                        "Fee component " + component.getId()
-                                + " does not belong to fee structure "
-                                + this.getId()
-                );
+        // Remove fee components
+        if (componentsToRemove != null) {
+
+            for (FeeComponent component :
+                    new ArrayList<>(componentsToRemove)) {
+
+                if (component.getFeeStructure() == null
+                        || !Objects.equals(
+                        component.getFeeStructure().getId(),
+                        this.getId()
+                )) {
+
+                    throw new OperationNotAllowedException(
+                            "Fee component " + component.getId()
+                                    + " does not belong to fee structure "
+                                    + this.getId()
+                    );
+                }
+
+                removeComponent(component);
             }
-            removeComponent(component);
         }
 
-        // Add new components.
-        // Add new components only if the category does not already exist.
+        // Add new fee components
         if (request.getComponentToAdd() != null) {
 
-            Set<FeeCategoryType> existingCategories = this.components.stream()
-                    .map(FeeComponent::getCategoryType)
-                    .collect(java.util.stream.Collectors.toSet());
+            Set<FeeCategoryType> existingCategories =
+                    this.components.stream()
+                            .map(FeeComponent::getCategoryType)
+                            .collect(Collectors.toSet());
 
-            for (var componentRequest : request.getComponentToAdd()) {
+            for (var componentRequest :
+                    request.getComponentToAdd()) {
 
-                FeeCategoryType category = componentRequest.getFeeCategoryType();
+                FeeCategoryType category =
+                        componentRequest.getFeeCategoryType();
 
                 if (category == null) {
                     throw new IllegalArgumentException(
@@ -201,7 +312,9 @@ public class FeeStructure extends BaseAuditableEntity {
 
                 FeeComponent component = FeeComponent.builder()
                         .categoryType(category)
-                        .componentName(componentRequest.getComponentName())
+                        .componentName(
+                                componentRequest.getComponentName()
+                        )
                         .amount(componentRequest.getAmount())
                         .isMandatory(componentRequest.getIsMandatory())
                         .isRefundable(componentRequest.getIsRefundable())
@@ -212,37 +325,44 @@ public class FeeStructure extends BaseAuditableEntity {
             }
         }
 
-        // Synchronize specializations without replacing the
-        // Hibernate-managed collection instance.
+        // Synchronize specialization assignments
         List<Specialization> desiredSpecializations =
                 requestedSpecializations == null
                         ? List.of()
                         : requestedSpecializations;
 
-        for (Specialization existing :
-                new ArrayList<>(this.specializations)) {
+        // Remove assignments no longer requested
+        for (FeeStructureSpecialization existing :
+                new ArrayList<>(this.specializationAssignments)) {
 
             boolean stillAssigned = desiredSpecializations.stream()
-                    .anyMatch(existing::equals);
+                    .anyMatch(specialization ->
+                            sameSpecialization(
+                                    existing.getSpecialization(),
+                                    specialization
+                            )
+                    );
 
             if (!stillAssigned) {
-                removeSpecialization(existing);
+                this.specializationAssignments.remove(existing);
             }
         }
 
+        // Add new assignments
         for (Specialization specialization :
                 desiredSpecializations) {
 
-            if (!this.specializations.contains(specialization)) {
-                addSpecialization(specialization);
-            } else {
-                specialization.setFeeStructure(this);
-            }
+            addSpecialization(specialization);
         }
     }
 
+    // --------------------------------------------------
+    // CALCULATIONS
+    // --------------------------------------------------
+
     @Transient
     public BigDecimal getTotalAmount() {
+
         return components.stream()
                 .filter(FeeComponent::getIsMandatory)
                 .map(FeeComponent::getAmount)
@@ -250,10 +370,21 @@ public class FeeStructure extends BaseAuditableEntity {
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
     }
 
+    // --------------------------------------------------
+    // EQUALS / HASHCODE
+    // --------------------------------------------------
+
     @Override
     public boolean equals(Object o) {
-        if (this == o) return true;
-        if (!(o instanceof FeeStructure that)) return false;
+
+        if (this == o) {
+            return true;
+        }
+
+        if (!(o instanceof FeeStructure that)) {
+            return false;
+        }
+
         return id != null && id.equals(that.id);
     }
 
@@ -262,24 +393,32 @@ public class FeeStructure extends BaseAuditableEntity {
         return getClass().hashCode();
     }
 
-    public FeeStructureResponse mapToResponse(List<PermissionAction> permissionActions) {
+    // --------------------------------------------------
+    // RESPONSE MAPPING
+    // --------------------------------------------------
 
-        AcademicYear academicYear = course.getAcademicYear();
-        Department department = academicYear.getDepartment();
+    public FeeStructureResponse mapToResponse(
+            List<PermissionAction> permissionActions
+    ) {
+
+        Department department = course.getDepartment();
         School school = department.getSchool();
 
         return FeeStructureResponse.builder()
                 .id(this.getId())
                 .name(this.getName())
                 .frequency(this.getFrequency())
-                .totalNoOfInstallments(this.getTotalNoOfInstallments())
+                .totalNoOfInstallments(
+                        this.getTotalNoOfInstallments()
+                )
                 .feeComponent(
                         this.getComponents().stream()
                                 .map(FeeComponent::mapToResponse)
                                 .toList()
                 )
                 .specialization(
-                        this.getSpecializations().stream()
+                        this.getSpecializationAssignments().stream()
+                                .map(FeeStructureSpecialization::getSpecialization)
                                 .map(Specialization::toCommonDTO)
                                 .toList()
                 )
@@ -287,9 +426,20 @@ public class FeeStructure extends BaseAuditableEntity {
                 .department(department.toCommonDTO())
                 .school(school.toCommonDTO())
                 .university(school.getUniversity().toCommonDTO())
-                .academicYear(academicYear.toCommonDTO())
-                .lastModifiedBy(this.getLastModifiedBy() != null ? this.getLastModifiedBy().toCommonDTO() : null)
+                .academicYear(this.academicYear.toCommonDTO())
                 .permissionActions(permissionActions)
+                .createdAt(this.getCreatedAt())
+                .updatedAt(this.getUpdatedAt())
+                .createdBy(
+                        this.getCreatedBy() == null
+                                ? null
+                                : this.getCreatedBy().toCommonDTO()
+                )
+                .updatedBy(
+                        this.getUpdatedBy() == null
+                                ? null
+                                : this.getUpdatedBy().toCommonDTO()
+                )
                 .build();
     }
 }

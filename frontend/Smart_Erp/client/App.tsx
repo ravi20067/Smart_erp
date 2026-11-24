@@ -35,7 +35,6 @@ import SuperAdminLayout from "./pages/super-admin/Layout";
 import TeacherLayout from "./pages/teacher/TeacherLayout";
 import AttendenceAuthenticator from "./pages/teacher/AttendenceAuthenticator";
 import DeviceDashboard from "./pages/Devices/dashboard";
-
 import { AuthProvider } from "@/services/authContext";
 import ProtectedRoute from "@/services/protectedRoute";
 import Blog from "./pages/Blog";
@@ -53,6 +52,9 @@ import FeeStructure from "./pages/financial/FeeStructure";
 import Scholarship from "./pages/financial/Scholarship";
 import Rooms from "./pages/timeTable/Room";
 import Student from "./pages/userMangement/Student";
+import Teacher from "./pages/userMangement/Teacher";
+import TeacherEnrollment from "./pages/userMangement/TeacherEnrollment";
+import TeacherAssignRole from "./pages/userMangement/TeacherAssignRole";
 
 const queryClient = new QueryClient();
 
@@ -140,6 +142,10 @@ const App = () => (
               <Route path="scholarships" element={<Scholarship />} />
               <Route path="rooms" element={<Rooms />} />
               <Route path="students" element={<Student />} />
+              <Route path="teachers" element={<Teacher />} />
+              <Route path="teachers/assign-role" element={<TeacherAssignRole />} />
+              <Route path="teachers/subject-enrollment" element={<TeacherEnrollment />} />
+              <Route path="teacher-enrollments" element={<TeacherEnrollment />} />
             </Route>
 
             <Route

@@ -13,6 +13,7 @@ import java.util.List;
 
 
 
+@EqualsAndHashCode(callSuper = true)
 @Data
 @Builder
 @NoArgsConstructor
@@ -42,7 +43,7 @@ public class Department extends BaseAuditableEntity implements CommonReference {
             cascade = CascadeType.ALL,
             orphanRemoval = true
     )
-    private List<AcademicYear> academicYears = new ArrayList<>();
+    private List<Course> courses = new ArrayList<>();
 
 
     public void setCodeWithPrefix(String code){
@@ -56,13 +57,17 @@ public class Department extends BaseAuditableEntity implements CommonReference {
                 .name(this.getName())
                 .code(this.getCode())
                 .activeStatus(this.getActiveStatus())
-                .academicYears(this.academicYears.stream()
-                        .map(AcademicYear::toCommonDTO)
+                .courses(this.courses.stream()
+                        .map(Course::toCommonDTO)
                         .toList()
                 )
                 .school(school.toCommonDTO())
                 .university(school.getUniversity().toCommonDTO())
                 .permissionActions(permissionActions)
+                .createdAt(this.getCreatedAt())
+                .updatedAt(this.getUpdatedAt())
+                .createdBy(this.getCreatedBy().toCommonDTO())
+                .updatedBy(this.getUpdatedBy().toCommonDTO())
                 .build();
     }
 }

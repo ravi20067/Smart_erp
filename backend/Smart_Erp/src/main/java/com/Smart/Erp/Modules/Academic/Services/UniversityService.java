@@ -45,15 +45,16 @@ public class UniversityService {
                 university
         ).mapToResponse();
 
-        authorizationService.createPermission(universityResponse.getId(),ResourceType.UNIVERSITY);
+        authorizationService.createPermission(university.getId(),ResourceType.UNIVERSITY);
         return universityResponse;
     }
     public @Nullable UniversityResponse updateUniversity(Long universityId, UniversityUpdateRequest request) {
         University university = academicCommonService.getUniversity(universityId);
         university.setName(request.getName());
-        if (university.getActiveStatus() != request.getActiveStatus())
+        if (university.getActiveStatus() != request.getActiveStatus()){
             university.setActiveStatus(request.getActiveStatus());
             university = academicCommonService.handleActiveStatusUpdate(university,request.getActiveStatus());
+        }
         return universityRepo.save(university).mapToResponse();
     }
 
@@ -66,6 +67,15 @@ public class UniversityService {
         }
         if (!university.getUsers().isEmpty()){
             throw new OperationNotAllowedException("Remove its users ");
+        }
+        if (!university.getAcademicYears().isEmpty()){
+            throw new OperationNotAllowedException("Remove its academic years first");
+        }
+        if (!university.getScholarships().isEmpty()){
+            throw new OperationNotAllowedException("Remove its scholarships first");
+        }
+        if (university.getRoles() != null && !university.getRoles().isEmpty()){
+            throw new OperationNotAllowedException("Remove its roles first");
         }
         universityRepo.deleteById(universityId);
         authorizationService.deletePermission(ResourceType.UNIVERSITY,universityId);

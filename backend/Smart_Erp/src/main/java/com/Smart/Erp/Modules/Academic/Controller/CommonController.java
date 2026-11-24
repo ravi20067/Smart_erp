@@ -15,27 +15,34 @@ public class CommonController {
 
     private final AcademicCommonService academicCommonService;
 
-    //It can be empty
-    @GetMapping("/super-admin/filter/university")
+    //It is used by school,academic-year,roles,scholarship pages to get the university filter for the logged-in user for creating the new entity.
+    @GetMapping({
+            "/super-admin/filter/university",
+            "/{role:head-of-department|school-dean|admin|dean|super-admin}/filter/university"
+    })
     public ResponseEntity<List<CommonDTO>> getUniversityFilter(){
         return ResponseEntity.ok(academicCommonService.getUniversityFilter());
     }
 
+    //It is used by department,room pages to get the school filter for the logged-in user for creating the new entity.
     @GetMapping("/{role:admin|dean|super-admin}/filter/school")
     public ResponseEntity<List<CommonDTO>> getSchoolFilter(){
         return ResponseEntity.ok(academicCommonService.getSchoolFilter());
     }
 
-    @GetMapping("/{role:school-dean|admin|dean|super-admin}/filter/department")
+    //It is used by courses page to get the department filter for the logged-in user for creating the new entity.
+    @GetMapping("/{role:head-of-department|school-dean|admin|dean|super-admin}/filter/department")
     public ResponseEntity<List<CommonDTO>> getDepartmentFilter(){
         return ResponseEntity.ok(academicCommonService.getDepartmentFilter());
     }
 
+    //It is used by section page to get the academic year filter for the logged-in user for creating the new entity.
     @GetMapping("/{role:head-of-department|school-dean|admin|dean|super-admin}/filter/academic-year")
     public ResponseEntity<List<CommonDTO>> getAcademicYearFilter(){
         return ResponseEntity.ok(academicCommonService.getAcademicYearFilter());
     }
 
+    //It is used by section page to get the course filter for the logged-in user for creating the new entity.
     @GetMapping("{role:program-coordinator|head-of-department|school-dean|admin|dean|super-admin}/filter/courses")
     public ResponseEntity<List<CommonDTO>> getCourseFilter(){
         return ResponseEntity.ok(academicCommonService.getCourseFilter());

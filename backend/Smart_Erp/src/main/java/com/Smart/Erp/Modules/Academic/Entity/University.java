@@ -1,5 +1,6 @@
 package com.Smart.Erp.Modules.Academic.Entity;
 
+import com.Smart.Erp.Config.BaseAuditableEntity;
 import com.Smart.Erp.Config.CommonReference;
 import com.Smart.Erp.Modules.Academic.DTO.University.UniversityResponse;
 import com.Smart.Erp.Modules.Academic.Enum.ActiveStatus;
@@ -19,9 +20,9 @@ import java.util.Locale;
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-@EqualsAndHashCode(onlyExplicitlyIncluded = true)
+@EqualsAndHashCode(onlyExplicitlyIncluded = true, callSuper = false)
 @ToString(onlyExplicitlyIncluded = true)
-public class University implements CommonReference {
+public class University extends BaseAuditableEntity implements CommonReference {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
@@ -56,6 +57,15 @@ public class University implements CommonReference {
             orphanRemoval = true
     )
     private List<School> schools = new ArrayList<>();
+
+
+    @Builder.Default
+    @OneToMany(
+            mappedBy = "university",
+            cascade = CascadeType.ALL,
+            orphanRemoval = true
+    )
+    private List<AcademicYear> academicYears = new ArrayList<>();
 
     @Builder.Default
     @OneToMany(
@@ -94,6 +104,14 @@ public class University implements CommonReference {
                         .map(School::toCommonDTO)
                         .toList()
                 )
+                .createdAt(this.getCreatedAt())
+                .updatedAt(this.getUpdatedAt())
+                .createdBy(this.getCreatedBy() != null
+                        ? this.getCreatedBy().toCommonDTO()
+                        : null)
+                .updatedBy(this.getUpdatedBy() != null
+                        ? this.getUpdatedBy().toCommonDTO()
+                        : null)
                 .build();
     }
 }

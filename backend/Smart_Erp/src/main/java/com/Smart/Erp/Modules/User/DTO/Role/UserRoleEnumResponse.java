@@ -8,5 +8,5 @@ import lombok.Data;
 @Data
 public class UserRoleEnumResponse {
     private String name;
-    private UserRoles enumValue;//for sending enum value to frontend and frontend to backend
+    private UserRoles enumValue;
 }

@@ -20,6 +20,7 @@ import java.util.Set;
 @Entity
 @Table(name = "subjects")
 @Data
+@EqualsAndHashCode(onlyExplicitlyIncluded = true, callSuper = false)
 @NoArgsConstructor
 @Builder
 @AllArgsConstructor
@@ -27,6 +28,7 @@ public class Subject  extends BaseAuditableEntity implements CommonReference {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
+    @EqualsAndHashCode.Include
     private Long id;
 
     private String name;
@@ -70,17 +72,6 @@ public class Subject  extends BaseAuditableEntity implements CommonReference {
     )
     private List<ExamResult> examResults = new ArrayList<>();
 
-
-    // Subject → Chapters
-    @Builder.Default
-    @OneToMany(
-            mappedBy = "subject",
-            cascade = CascadeType.ALL,
-            orphanRemoval = true
-    )
-    private List<Chapter> chapters = new ArrayList<>();
-
-
     @Builder.Default
     @ManyToMany
     @JoinTable(
@@ -91,21 +82,13 @@ public class Subject  extends BaseAuditableEntity implements CommonReference {
     @ToString.Exclude
     private Set<TeacherEnrollment> subjectTeachers = new HashSet<>();
 
-
-    // Teacher assigned for question bank
-    @OneToOne
-    @JoinColumn(name = "question_bank_teacher_id")
-    private Teacher questionBankTeacher;
-
-    private LocalDate lastDateQuestionBankSummit;
-
-
-    // Teacher assigned for study material
-    @OneToOne
-    @JoinColumn(name = "study_material_teacher_id")
-    private Teacher studyMaterialTeacher;
-
-    private LocalDate lastDateStudyMaterialSummit;
+    @Builder.Default
+    @OneToMany(
+            mappedBy = "subject",
+            cascade = CascadeType.ALL,
+            orphanRemoval = true
+    )
+    private List<Assignment> assignments = new ArrayList<>();
 
     public void setCodeWithPrefix(String code){
         this.code = course.getCode() + code;
@@ -114,12 +97,8 @@ public class Subject  extends BaseAuditableEntity implements CommonReference {
 
     public SubjectResponse mapToResponse(List<PermissionAction> permissionActions) {
 
-        AcademicYear academicYear = course != null
-                ? course.getAcademicYear()
-                : null;
-
-        Department department = academicYear != null
-                ? academicYear.getDepartment()
+        Department department = course != null
+                ? course.getDepartment()
                 : null;
 
         School school = department != null
@@ -146,19 +125,6 @@ public class Subject  extends BaseAuditableEntity implements CommonReference {
                                 .map(CommonReference::toCommonDTO)
                                 .toList()
                 )
-
-                .questionBankTeacher(
-                        this.getQuestionBankTeacher() == null
-                                ? null
-                                : this.getQuestionBankTeacher().toCommonDTO()
-                )
-
-                .studyMaterialTeacher(
-                        this.getStudyMaterialTeacher() == null
-                                ? null
-                                : this.getStudyMaterialTeacher().toCommonDTO()
-                )
-
                 .subjectTeachers(
                         this.getSubjectTeachers() == null
                                 ? List.of()
@@ -168,19 +134,18 @@ public class Subject  extends BaseAuditableEntity implements CommonReference {
                                 .map(enrollment -> enrollment.getTeacher().toCommonDTO())
                                 .toList()
                 )
-
-                .lastDateQuestionBankSummit(this.getLastDateQuestionBankSummit())
-                .lastDateStudyMaterialSummit(this.getLastDateStudyMaterialSummit())
                 .permissionActions(
                         permissionActions == null ? List.of() : permissionActions
                 )
 
                 .course(course == null ? null : course.toCommonDTO())
-                .academicYear(academicYear == null ? null : academicYear.toCommonDTO())
                 .department(department == null ? null : department.toCommonDTO())
                 .school(school == null ? null : school.toCommonDTO())
                 .university(university == null ? null : university.toCommonDTO())
-
+                .createdAt(this.getCreatedAt())
+                .updatedAt(this.getUpdatedAt())
+                .createdBy(this.getCreatedBy() == null ? null : this.getCreatedBy().toCommonDTO())
+                .updatedBy(this.getUpdatedBy() == null ? null : this.getUpdatedBy().toCommonDTO())
                 .build();
     }
 }

@@ -29,6 +29,8 @@ import {
     Presentation,
     ScanLine,
     School,
+    UserCog,
+    BookUser,
     Settings,
     ShieldCheck,
     Sparkles,
@@ -153,6 +155,8 @@ const menu: MenuGroup[] = [
             { label: "Teachers", path: "/super-admin/teachers", icon: Users },
             { label: "Devices", path: "/super-admin/devices", icon: ScanLine },
             { label: "Roles & Permissions", path: "/super-admin/role-permissions", icon: ShieldCheck },
+            { label: "Assign Role to Teacher", path: "/super-admin/teachers/assign-role", icon: UserCog },
+            { label: "Teacher & Subject Enrollment", path: "/super-admin/teachers/subject-enrollment", icon: BookUser },
         ],
     },
     {

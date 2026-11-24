@@ -28,6 +28,8 @@ public class User  extends BaseAuditableEntity {
     @Column(unique = true)
     private String username;
     private String password;
+
+    @Builder.Default
     private Boolean enabled = false;
 
     @Enumerated(EnumType.STRING)
@@ -100,6 +102,7 @@ public class User  extends BaseAuditableEntity {
         return CommonDTO.builder()
                 .id(this.getId())
                 .name(this.getName())
+                .code(this.getUsername())
                 .build();
     }
 }

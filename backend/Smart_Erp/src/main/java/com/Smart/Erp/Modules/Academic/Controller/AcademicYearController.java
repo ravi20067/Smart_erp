@@ -25,14 +25,14 @@ public class AcademicYearController {
 
     @PreAuthorize("@authVerifier.can(" +
             "T(com.Smart.Erp.Modules.User.Enum.PermissionAction).CREATE_CHILD, " +
-            "T(com.Smart.Erp.Modules.User.Enum.ResourceType).DEPARTMENT, " +
-            "#departmentId)")
+            "T(com.Smart.Erp.Modules.User.Enum.ResourceType).UNIVERSITY, " +
+            "#universityId)")
     @PostMapping
     public ResponseEntity<AcademicYearResponse> createAcademicYear(
-            @RequestParam Long departmentId,
+            @RequestParam Long universityId,
             @RequestBody AcademicYearRequest academicYearRequest
     ){
-        return ResponseEntity.ok(academicYearService.createAcademicYear(departmentId,academicYearRequest));
+        return ResponseEntity.ok(academicYearService.createAcademicYear(universityId,academicYearRequest));
     }
 
     @PreAuthorize("@authVerifier.can(" +
@@ -65,18 +65,18 @@ public class AcademicYearController {
             "#academicYearId)")
     @PostMapping("/switch")
     public ResponseEntity<String> switchToCurrentYear(
-            @RequestParam Long departmentId,
+            @RequestParam Long universityId,
             @RequestParam Long academicYearId
     ){
-        academicYearService.switchAcademicYear(departmentId,academicYearId);
+        academicYearService.switchAcademicYear(universityId,academicYearId);
         return ResponseEntity.ok("Academic Year switched successfully");
     }
 
     @PreAuthorize(
             "@authVerifier.can(" +
                     "T(com.Smart.Erp.Modules.User.Enum.PermissionAction).CREATE_CHILD, " +
-                    "T(com.Smart.Erp.Modules.User.Enum.ResourceType).DEPARTMENT, " +
-                    "#departmentId) || " +
+                    "T(com.Smart.Erp.Modules.User.Enum.ResourceType).UNIVERSITY, " +
+                    "#universityId) || " +
                     "(#academicYearId != null && " +
                     "@authVerifier.can(" +
                     "T(com.Smart.Erp.Modules.User.Enum.PermissionAction).UPDATE, " +
@@ -86,8 +86,8 @@ public class AcademicYearController {
     @GetMapping("/postfix")
     public ResponseEntity<String> getPostfix(
             @RequestParam(required = false) Long academicYearId,
-            @RequestParam Long departmentId
+            @RequestParam Long universityId
     ) {
-        return ResponseEntity.ok(academicYearService.getPostfix(departmentId));
+        return ResponseEntity.ok(academicYearService.getPostfix(universityId));
     }
 }

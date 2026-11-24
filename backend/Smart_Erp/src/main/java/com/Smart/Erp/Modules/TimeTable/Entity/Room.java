@@ -34,8 +34,10 @@ public class Room extends BaseAuditableEntity {
     @Enumerated(EnumType.STRING)
     @Column(name = "room_type", nullable = false, length = 30)
     private RoomType roomType;
+    @Builder.Default
     @Column(name = "has_projector")
     private Boolean hasProjector = false;
+    @Builder.Default
     @Column(name = "has_computers")
     private Boolean hasComputers = false;
 
@@ -81,6 +83,10 @@ public class Room extends BaseAuditableEntity {
                 .hasProjector(this.hasProjector)
                 .hasComputers(this.hasComputers)
                 .permissionActions(permissionActions)
+                .createdAt(this.getCreatedAt())
+                .updatedAt(this.getUpdatedAt())
+                .createdBy(this.getCreatedBy() != null ? this.getCreatedBy().toCommonDTO() : null)
+                .updatedBy(this.getUpdatedBy() != null ? this.getUpdatedBy().toCommonDTO() : null)
                 .build();
     }
 }

@@ -14,6 +14,7 @@ import {
     AlertCircle,
     AlertTriangle,
     ArrowDownUp,
+    BookOpen,
     Building2,
     CheckCircle2,
     ChevronDown,
@@ -21,8 +22,10 @@ import {
     ChevronRight,
     ChevronsLeft,
     ChevronsRight,
+    Clock,
     Eye,
     GraduationCap,
+    Library,
     LoaderCircle,
     Pencil,
     Plus,
@@ -31,6 +34,7 @@ import {
     Search,
     ShieldCheck,
     Trash2,
+    UserCheck,
     X,
 } from "lucide-react";
 
@@ -38,6 +42,7 @@ import {
     createDepartment,
     deleteDepartment,
     extractErrorMessage,
+    formatAuditActor,
     getAllDepartments,
     getDepartmentPrefix,
     getSchoolFilter,
@@ -86,7 +91,7 @@ interface DepartmentDialogProps {
     onDelete: (departmentId: number) => Promise<void>;
 }
 
-const PAGE_SIZE = 5;
+const PAGE_SIZE = 8;
 
 const EMPTY_FORM: DepartmentForm = {
     schoolId: "",
@@ -105,6 +110,46 @@ function formatNumber(value: number | null | undefined): string {
     }
 
     return new Intl.NumberFormat("en-IN").format(value);
+}
+
+function formatDate(dateStr?: string | null): string {
+    if (!dateStr) return "—";
+    try {
+        const d = new Date(dateStr);
+        if (isNaN(d.getTime())) return "—";
+        return new Intl.DateTimeFormat("en-IN", {
+            day: "2-digit",
+            month: "short",
+            year: "numeric",
+        }).format(d);
+    } catch {
+        return "—";
+    }
+}
+
+function formatDateTime(dateStr?: string | null): string {
+    if (!dateStr) return "—";
+    try {
+        const d = new Date(dateStr);
+        if (isNaN(d.getTime())) return "—";
+        return new Intl.DateTimeFormat("en-IN", {
+            day: "2-digit",
+            month: "short",
+            year: "numeric",
+            hour: "2-digit",
+            minute: "2-digit",
+        }).format(d);
+    } catch {
+        return "—";
+    }
+}
+
+function getInitials(name?: string): string {
+    if (!name) return "DP";
+    const parts = name.trim().split(/\s+/).filter(Boolean);
+    if (parts.length === 0) return "DP";
+    if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+    return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
 }
 
 function normalizeText(value: unknown): string {
@@ -141,14 +186,14 @@ function removePrefix(code: string | null | undefined, prefix: string): string {
 }
 
 /**
- * The response DTO may include multiple academic years.
+ * The response DTO includes courses.
  * Normalize absent or malformed values to an empty array.
  */
-function getAcademicYears(
+function getCourses(
     department: DepartmentResponse
 ): CommonDTO[] {
-    return Array.isArray(department.academicYears)
-        ? department.academicYears.filter(
+    return Array.isArray(department.courses)
+        ? department.courses.filter(
             (item): item is CommonDTO =>
                 !!item &&
                 typeof item.id === "number" &&
@@ -545,11 +590,8 @@ function DepartmentDialog({
 
         const name = form.name.trim();
 
-        /*
-         * IMPORTANT:
-         * Only the suffix is submitted, never prefix + suffix.
-         */
-        const code = form.code.trim();
+        const rawCode = form.code.trim();
+        const code = prefix && rawCode.startsWith(prefix) ? rawCode.slice(prefix.length) : rawCode;
 
         try {
             if (isCreate) {
@@ -875,76 +917,191 @@ function DepartmentDialog({
                             )}
 
                             {isView && department && (
-                                <div className="space-y-3">
-                                    <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">
-                                        Department Information
-                                    </p>
+                                <div className="space-y-3.5">
+                                    <div className="flex items-center justify-between">
+                                        <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">
+                                            Department Information
+                                        </p>
+                                        <StatusBadge status={department.activeStatus} />
+                                    </div>
 
-                                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                                    {/* School & University card */}
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                                        <div className="rounded-xl border border-white/10 bg-slate-950/40 p-3">
+                                            <p className="text-[10px] text-slate-400 uppercase">Affiliated School</p>
+                                            <p className="mt-1 font-semibold text-white text-sm">
+                                                {department.school?.name || "—"}
+                                            </p>
+                                            {department.school?.code && (
+                                                <p className="mt-0.5 text-xs font-mono text-cyan-400">
+                                                    Code: {department.school.code}
+                                                </p>
+                                            )}
+                                        </div>
+
+                                        <div className="rounded-xl border border-white/10 bg-slate-950/40 p-3">
+                                            <p className="text-[10px] text-slate-400 uppercase">Affiliated University</p>
+                                            <p className="mt-1 font-semibold text-white text-sm">
+                                                {department.university?.name || "—"}
+                                            </p>
+                                            {department.university?.code && (
+                                                <p className="mt-0.5 text-xs font-mono text-cyan-400">
+                                                    Code: {department.university.code}
+                                                </p>
+                                            )}
+                                        </div>
+                                    </div>
+
+                                    <div className="grid grid-cols-2 gap-3">
                                         <div className="rounded-xl border border-white/10 bg-white/[0.03] p-3">
                                             <p className="text-xs text-slate-500">
                                                 Department ID
                                             </p>
-                                            <p className="mt-1 font-semibold text-white">
-                                                {department.id}
+                                            <p className="mt-1 font-semibold text-white font-mono">
+                                                #{department.id}
                                             </p>
                                         </div>
 
                                         <div className="rounded-xl border border-white/10 bg-white/[0.03] p-3">
                                             <p className="text-xs text-slate-500">
-                                                Status
+                                                Courses
                                             </p>
-                                            <div className="mt-2">
-                                                <StatusBadge
-                                                    status={department.activeStatus}
-                                                />
-                                            </div>
-                                        </div>
-
-                                        <div className="rounded-xl border border-white/10 bg-white/[0.03] p-3">
-                                            <p className="text-xs text-slate-500">
-                                                University
-                                            </p>
-                                            <p className="mt-1 font-medium text-white">
-                                                {department.university?.name ?? "—"}
-                                            </p>
-                                        </div>
-
-                                        <div className="rounded-xl border border-white/10 bg-white/[0.03] p-3">
-                                            <p className="text-xs text-slate-500">
-                                                Academic Years
-                                            </p>
-                                            <p className="mt-1 font-medium text-white">
-                                                {getAcademicYears(department)
-                                                    .map((year) => year.name)
-                                                    .join(", ") || "—"}
+                                            <p className="mt-1 font-semibold text-cyan-300">
+                                                {formatNumber(getCourses(department).length)}
                                             </p>
                                         </div>
                                     </div>
 
+                                    {/* Courses list */}
+                                    <div className="rounded-xl border border-white/10 bg-white/[0.03] p-3">
+                                        <p className="mb-2 text-xs text-slate-500 flex items-center gap-1.5">
+                                            <BookOpen size={12} className="text-cyan-400" />
+                                            Offered Courses
+                                        </p>
+                                        {getCourses(department).length ? (
+                                            <div className="flex flex-wrap gap-2 max-h-32 overflow-y-auto">
+                                                {getCourses(department).map((course) => (
+                                                    <span
+                                                        key={course.id}
+                                                        className="rounded-lg border border-white/10 bg-white/5 px-2.5 py-1.5 text-xs text-slate-300"
+                                                    >
+                                                        {course.name}
+                                                        {course.code ? ` (${course.code})` : ""}
+                                                    </span>
+                                                ))}
+                                            </div>
+                                        ) : (
+                                            <p className="text-xs text-slate-500">
+                                                No courses linked to this department yet.
+                                            </p>
+                                        )}
+                                    </div>
+
+                                    {/* Permissions */}
                                     <div className="rounded-xl border border-white/10 bg-white/[0.03] p-3">
                                         <p className="mb-2 text-xs text-slate-500">
                                             Available permissions
                                         </p>
-
                                         <div className="flex flex-wrap gap-2">
                                             {getDepartmentActions(department).length ? (
-                                                getDepartmentActions(department).map(
-                                                    (action) => (
-                                                        <span
-                                                            key={action}
-                                                            className="rounded-lg border border-cyan-400/20 bg-cyan-400/10 px-2.5 py-1 font-mono text-xs text-cyan-300"
-                                                        >
-                                                            {action}
-                                                        </span>
-                                                    )
-                                                )
+                                                getDepartmentActions(department).map((action) => (
+                                                    <span
+                                                        key={action}
+                                                        className="rounded-lg border border-cyan-400/20 bg-cyan-400/10 px-2.5 py-1 font-mono text-xs text-cyan-300"
+                                                    >
+                                                        {action}
+                                                    </span>
+                                                ))
                                             ) : (
                                                 <span className="text-xs text-slate-500">
-                                                    No update or delete permissions
-                                                    were returned.
+                                                    No update or delete permissions were returned.
                                                 </span>
                                             )}
+                                        </div>
+                                    </div>
+
+                                    {/* Audit & Governance Showcase */}
+                                    <div className="rounded-xl border border-white/10 bg-slate-950/40 p-3 space-y-2.5">
+                                        <div className="flex items-center justify-between">
+                                            <span className="text-xs font-semibold text-slate-300 flex items-center gap-1.5">
+                                                <ShieldCheck size={13} className="text-emerald-400" />
+                                                Audit Trail & Governance
+                                            </span>
+                                            <span className="text-[10px] uppercase tracking-wider text-slate-500 font-mono">
+                                                System Records
+                                            </span>
+                                        </div>
+
+                                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
+                                            {/* Created By Card */}
+                                            <div className="rounded-lg border border-emerald-500/20 bg-emerald-500/5 p-2.5 space-y-1.5">
+                                                <div className="flex items-center justify-between text-[10px] text-emerald-400 font-medium">
+                                                    <span className="flex items-center gap-1">
+                                                        <UserCheck size={11} /> Created By
+                                                    </span>
+                                                    {department.createdAt && (
+                                                        <span className="text-slate-400 font-mono text-[10px]">
+                                                            {formatDate(department.createdAt)}
+                                                        </span>
+                                                    )}
+                                                </div>
+                                                <div className="flex items-center gap-2">
+                                                    <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-emerald-500/20 text-[10px] font-bold text-emerald-300">
+                                                        {getInitials(department.createdBy?.name || "System")}
+                                                    </div>
+                                                    <div className="min-w-0 flex-1">
+                                                        <p className="truncate font-semibold text-slate-200 text-xs">
+                                                            {department.createdBy?.name || "System Administrator"}
+                                                        </p>
+                                                        {(department.createdBy?.code || department.createdBy?.id) && (
+                                                            <p className="text-[10px] text-slate-400 font-mono truncate">
+                                                                {department.createdBy.code ? `Code: ${department.createdBy.code}` : `ID: #${department.createdBy.id}`}
+                                                            </p>
+                                                        )}
+                                                    </div>
+                                                </div>
+                                                {department.createdAt && (
+                                                    <div className="text-[10px] text-slate-500 flex items-center gap-1 pt-0.5 border-t border-emerald-500/10">
+                                                        <Clock size={10} className="text-slate-400 shrink-0" />
+                                                        <span className="truncate">Timestamp: {formatDateTime(department.createdAt)}</span>
+                                                    </div>
+                                                )}
+                                            </div>
+
+                                            {/* Updated By Card */}
+                                            <div className="rounded-lg border border-cyan-500/20 bg-cyan-500/5 p-2.5 space-y-1.5">
+                                                <div className="flex items-center justify-between text-[10px] text-cyan-400 font-medium">
+                                                    <span className="flex items-center gap-1">
+                                                        <RotateCcw size={11} /> Last Modified By
+                                                    </span>
+                                                    {(department.updatedAt || department.createdAt) && (
+                                                        <span className="text-slate-400 font-mono text-[10px]">
+                                                            {formatDate(department.updatedAt || department.createdAt)}
+                                                        </span>
+                                                    )}
+                                                </div>
+                                                <div className="flex items-center gap-2">
+                                                    <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-cyan-500/20 text-[10px] font-bold text-cyan-300">
+                                                        {getInitials(department.updatedBy?.name || department.createdBy?.name || "System")}
+                                                    </div>
+                                                    <div className="min-w-0 flex-1">
+                                                        <p className="truncate font-semibold text-slate-200 text-xs">
+                                                            {department.updatedBy?.name || department.createdBy?.name || "System Administrator"}
+                                                        </p>
+                                                        {(department.updatedBy?.code || department.updatedBy?.id) && (
+                                                            <p className="text-[10px] text-slate-400 font-mono truncate">
+                                                                {department.updatedBy.code ? `Code: ${department.updatedBy.code}` : `ID: #${department.updatedBy.id}`}
+                                                            </p>
+                                                        )}
+                                                    </div>
+                                                </div>
+                                                {(department.updatedAt || department.createdAt) && (
+                                                    <div className="text-[10px] text-slate-500 flex items-center gap-1 pt-0.5 border-t border-cyan-500/10">
+                                                        <Clock size={10} className="text-slate-400 shrink-0" />
+                                                        <span className="truncate">Timestamp: {formatDateTime(department.updatedAt || department.createdAt)}</span>
+                                                    </div>
+                                                )}
+                                            </div>
                                         </div>
                                     </div>
                                 </div>
@@ -1185,14 +1342,14 @@ export default function Departments() {
                 department.university?.code
             );
 
-            const academicYears = getAcademicYears(department);
+            const courses = getCourses(department);
 
-            const academicYearNames = academicYears.map((year) =>
-                normalizeText(year.name)
+            const courseNames = courses.map((course) =>
+                normalizeText(course.name)
             );
 
-            const academicYearCodes = academicYears.map((year) =>
-                normalizeText(year.code)
+            const courseCodes = courses.map((course) =>
+                normalizeText(course.code)
             );
 
             const matchesSearch =
@@ -1204,8 +1361,8 @@ export default function Departments() {
                 schoolCode.includes(query) ||
                 universityName.includes(query) ||
                 universityCode.includes(query) ||
-                academicYearNames.some((value) => value.includes(query)) ||
-                academicYearCodes.some((value) => value.includes(query));
+                courseNames.some((value) => value.includes(query)) ||
+                courseCodes.some((value) => value.includes(query));
 
             const matchesStatus =
                 statusFilter === "ALL" ||
@@ -1742,8 +1899,8 @@ export default function Departments() {
                     )}
                 </div>
 
-                {/* Table */}
-                <div className="w-full min-w-0 overflow-x-auto">
+                {/* Desktop Data Table */}
+                <div className="hidden md:block w-full min-w-0 overflow-x-auto">
                     <table className="w-full min-w-[1100px] border-collapse text-left text-sm">
                         <thead>
                             <tr className="border-b border-white/10 bg-white/[0.025] text-xs uppercase tracking-wider text-slate-400">
@@ -1759,7 +1916,7 @@ export default function Departments() {
                                     University
                                 </th>
                                 <th className="px-4 py-4 font-medium">
-                                    Academic Years
+                                    Courses
                                 </th>
                                 <th className="px-4 py-4 font-medium">
                                     Status
@@ -1840,10 +1997,7 @@ export default function Departments() {
                                                 "DELETE"
                                             );
 
-                                            const academicYearNames =
-                                                getAcademicYears(department)
-                                                    .map((year) => year.name)
-                                                    .filter(Boolean);
+                                            const courses = getCourses(department);
 
                                             return (
                                                 <motion.tr
@@ -1886,10 +2040,19 @@ export default function Departments() {
                                                                         "Unnamed Department"}
                                                                 </p>
 
-                                                                <p className="mt-0.5 text-xs text-slate-500">
-                                                                    ID:{" "}
-                                                                    {department.id}
-                                                                </p>
+                                                                <div className="flex flex-wrap items-center gap-1.5 text-xs text-slate-400">
+                                                                    <span className="font-mono text-[11px] text-slate-500">ID #{department.id}</span>
+                                                                    <span className="text-slate-600">·</span>
+                                                                    <span
+                                                                        className="inline-flex items-center gap-1 text-[11px] text-slate-400 group-hover:text-slate-300 transition-colors"
+                                                                        title={`Created by: ${formatAuditActor(department.createdBy)}${department.createdAt ? ` on ${formatDate(department.createdAt)}` : ""}${department.updatedBy?.name ? ` | Modified by: ${formatAuditActor(department.updatedBy)}` : ""}`}
+                                                                    >
+                                                                        <UserCheck size={11} className="text-emerald-400 shrink-0" />
+                                                                        <span className="truncate max-w-[120px] font-medium text-slate-300">
+                                                                            {department.createdBy?.name || "System"}
+                                                                        </span>
+                                                                    </span>
+                                                                </div>
                                                             </div>
                                                         </div>
                                                     </td>
@@ -1947,39 +2110,28 @@ export default function Departments() {
                                                     </td>
 
                                                     <td className="px-4 py-5">
-                                                        {academicYearNames.length >
-                                                            0 ? (
+                                                        {courses.length > 0 ? (
                                                             <div className="flex max-w-[230px] flex-wrap gap-1.5">
-                                                                {academicYearNames
+                                                                {courses
                                                                     .slice(0, 2)
-                                                                    .map(
-                                                                        (
-                                                                            yearName,
-                                                                            yearIndex
-                                                                        ) => (
-                                                                            <span
-                                                                                key={`${department.id}-${yearName}-${yearIndex}`}
-                                                                                className="rounded-lg border border-white/10 bg-white/[0.035] px-2 py-1 text-xs text-slate-300"
-                                                                            >
-                                                                                {
-                                                                                    yearName
-                                                                                }
-                                                                            </span>
-                                                                        )
-                                                                    )}
-
-                                                                {academicYearNames.length >
-                                                                    2 && (
-                                                                        <span className="rounded-lg border border-white/10 bg-white/[0.035] px-2 py-1 text-xs text-slate-400">
-                                                                            +
-                                                                            {academicYearNames.length -
-                                                                                2}
+                                                                    .map((course) => (
+                                                                        <span
+                                                                            key={course.id}
+                                                                            className="rounded-lg border border-cyan-400/20 bg-cyan-400/10 px-2 py-1 text-xs text-cyan-200"
+                                                                        >
+                                                                            {course.name}
                                                                         </span>
-                                                                    )}
+                                                                    ))}
+
+                                                                {courses.length > 2 && (
+                                                                    <span className="rounded-lg border border-white/10 bg-white/[0.035] px-2 py-1 text-xs text-slate-400">
+                                                                        +{courses.length - 2}
+                                                                    </span>
+                                                                )}
                                                             </div>
                                                         ) : (
-                                                            <span className="text-xs text-slate-500">
-                                                                Not linked
+                                                            <span className="text-xs text-slate-500 italic">
+                                                                No courses
                                                             </span>
                                                         )}
                                                     </td>
@@ -1992,8 +2144,8 @@ export default function Departments() {
                                                         />
                                                     </td>
 
-                                                    <td className="px-5 py-5">
-                                                        <div className="flex justify-end gap-2">
+                                                    <td className="px-5 py-4">
+                                                        <div className="flex items-center justify-end gap-1.5">
                                                             {/* View is read-only. */}
                                                             <button
                                                                 type="button"
@@ -2005,9 +2157,9 @@ export default function Departments() {
                                                                 }
                                                                 aria-label={`View ${department.name}`}
                                                                 title="View details"
-                                                                className="rounded-lg border border-white/10 bg-white/[0.04] p-2 text-sky-300 transition hover:border-sky-400/30 hover:bg-sky-400/10"
+                                                                className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-white/10 bg-white/[0.04] text-sky-300 transition hover:border-sky-400/30 hover:bg-sky-400/10"
                                                             >
-                                                                <Eye size={17} />
+                                                                <Eye size={15} />
                                                             </button>
 
                                                             {canUpdate && (
@@ -2021,10 +2173,10 @@ export default function Departments() {
                                                                     }
                                                                     aria-label={`Edit ${department.name}`}
                                                                     title="Edit department"
-                                                                    className="rounded-lg border border-white/10 bg-white/[0.04] p-2 text-cyan-300 transition hover:border-cyan-400/30 hover:bg-cyan-400/10"
+                                                                    className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-white/10 bg-white/[0.04] text-cyan-300 transition hover:border-cyan-400/30 hover:bg-cyan-400/10"
                                                                 >
                                                                     <Pencil
-                                                                        size={17}
+                                                                        size={15}
                                                                     />
                                                                 </button>
                                                             )}
@@ -2040,10 +2192,10 @@ export default function Departments() {
                                                                     }
                                                                     aria-label={`Delete ${department.name}`}
                                                                     title="Delete department"
-                                                                    className="rounded-lg border border-white/10 bg-white/[0.04] p-2 text-rose-400 transition hover:border-rose-400/30 hover:bg-rose-400/10"
+                                                                    className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-rose-500/20 bg-rose-500/10 text-rose-300 transition hover:border-rose-400/30 hover:bg-rose-500/20"
                                                                 >
                                                                     <Trash2
-                                                                        size={17}
+                                                                        size={15}
                                                                     />
                                                                 </button>
                                                             )}
@@ -2051,8 +2203,7 @@ export default function Departments() {
                                                             {!canUpdate &&
                                                                 !canDelete && (
                                                                     <span className="self-center text-xs text-slate-500">
-                                                                        View
-                                                                        only
+                                                                        View only
                                                                     </span>
                                                                 )}
                                                         </div>
@@ -2114,6 +2265,158 @@ export default function Departments() {
                             )}
                         </tbody>
                     </table>
+                </div>
+
+                {/* Mobile Cards Layout */}
+                <div className="block md:hidden divide-y divide-white/5">
+                    {loading ? (
+                        Array.from({ length: 4 }).map((_, i) => (
+                            <div key={i} className="animate-pulse space-y-3 p-4">
+                                <div className="h-5 w-40 rounded bg-white/10" />
+                                <div className="h-4 w-56 rounded bg-white/5" />
+                                <div className="h-10 rounded bg-white/5" />
+                            </div>
+                        ))
+                    ) : visibleDepartments.length === 0 ? (
+                        <div className="p-8 text-center text-slate-500">
+                            <Building2 size={36} className="mx-auto mb-2 opacity-30 text-slate-400" />
+                            <p className="text-sm font-semibold text-slate-300">
+                                {hasActiveFilters ? "No matching departments found" : "No departments registered yet"}
+                            </p>
+                        </div>
+                    ) : (
+                        visibleDepartments.map((department) => {
+                            const initials = getInitials(department.name);
+                            const canUpdate = hasPermission(department, "UPDATE");
+                            const canDelete = hasPermission(department, "DELETE");
+                            const courses = getCourses(department);
+
+                            return (
+                                <article key={department.id} className="min-w-0 space-y-3 p-4 sm:p-5">
+                                    {/* Header */}
+                                    <div className="flex items-start gap-3">
+                                        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-blue-300/20 bg-gradient-to-br from-blue-500/25 to-violet-500/20 text-xs font-bold text-cyan-200">
+                                            {initials}
+                                        </div>
+                                        <div className="min-w-0 flex-1">
+                                            <div className="flex flex-wrap items-center gap-1.5">
+                                                <h3 className="text-sm font-bold text-white break-words">
+                                                    {department.name}
+                                                </h3>
+                                                <StatusBadge status={department.activeStatus} />
+                                            </div>
+                                            <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-slate-400 font-mono">
+                                                <span>Code: <strong className="text-cyan-300">{department.code}</strong></span>
+                                                <span>·</span>
+                                                <span>ID #{department.id}</span>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    {/* School & University */}
+                                    <div className="grid grid-cols-2 gap-2 rounded-xl border border-white/5 bg-slate-950/40 p-2.5 text-xs">
+                                        <div>
+                                            <p className="text-[10px] text-slate-400 uppercase">School</p>
+                                            <p className="font-semibold text-white mt-0.5 truncate">{department.school?.name || "—"}</p>
+                                            {department.school?.code && (
+                                                <p className="text-[10px] font-mono text-cyan-400 truncate">{department.school.code}</p>
+                                            )}
+                                        </div>
+                                        <div>
+                                            <p className="text-[10px] text-slate-400 uppercase">University</p>
+                                            <p className="font-semibold text-white mt-0.5 truncate">{department.university?.name || "—"}</p>
+                                            {department.university?.code && (
+                                                <p className="text-[10px] font-mono text-cyan-400 truncate">{department.university.code}</p>
+                                            )}
+                                        </div>
+                                    </div>
+
+                                    {/* Courses Preview */}
+                                    <div className="rounded-xl border border-white/5 bg-slate-950/30 p-2.5 text-xs">
+                                        <div className="flex items-center justify-between text-[11px] text-slate-400 mb-1.5">
+                                            <span className="flex items-center gap-1">
+                                                <BookOpen size={11} className="text-cyan-400" /> Courses Offered
+                                            </span>
+                                            <span className="font-mono text-cyan-300 text-[10px] font-bold">
+                                                {courses.length}
+                                            </span>
+                                        </div>
+                                        {courses.length > 0 ? (
+                                            <div className="flex flex-wrap gap-1 max-h-16 overflow-y-auto">
+                                                {courses.map((course) => (
+                                                    <span
+                                                        key={course.id}
+                                                        className="rounded-md border border-cyan-400/20 bg-cyan-400/10 px-2 py-0.5 text-[10px] text-cyan-200"
+                                                    >
+                                                        {course.name}
+                                                    </span>
+                                                ))}
+                                            </div>
+                                        ) : (
+                                            <p className="text-[11px] text-slate-500 italic">No courses linked yet</p>
+                                        )}
+                                    </div>
+
+                                    {/* Audit & Governance Showcase */}
+                                    <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 rounded-xl border border-white/5 bg-slate-950/30 px-3 py-2 text-[11px] text-slate-400">
+                                        <div className="flex items-center gap-1.5 min-w-0">
+                                            <UserCheck size={12} className="text-emerald-400 shrink-0" />
+                                            <span className="text-slate-500">Created:</span>
+                                            <span className="font-medium text-slate-200 truncate max-w-[120px]">
+                                                {department.createdBy?.name || "System"}
+                                            </span>
+                                            {department.createdAt && (
+                                                <span className="text-slate-500 font-mono text-[10px]">
+                                                    · {formatDate(department.createdAt)}
+                                                </span>
+                                            )}
+                                        </div>
+                                        {department.updatedBy?.name && (
+                                            <div className="flex items-center gap-1.5 min-w-0">
+                                                <RotateCcw size={11} className="text-cyan-400 shrink-0" />
+                                                <span className="text-slate-500">Updated:</span>
+                                                <span className="font-medium text-slate-200 truncate max-w-[120px]">
+                                                    {department.updatedBy.name}
+                                                </span>
+                                            </div>
+                                        )}
+                                    </div>
+
+                                    {/* Action buttons */}
+                                    <div className="flex flex-wrap items-center gap-2 pt-1 border-t border-white/5">
+                                        <button
+                                            type="button"
+                                            onClick={() => openDialog("VIEW", department)}
+                                            className="flex-1 inline-flex items-center justify-center gap-1.5 rounded-lg border border-cyan-500/20 bg-cyan-500/10 px-3 py-1.5 text-xs font-semibold text-cyan-300 hover:bg-cyan-500/20 transition"
+                                        >
+                                            <Eye size={13} /> Details
+                                        </button>
+                                        {canUpdate && (
+                                            <button
+                                                type="button"
+                                                onClick={() => openDialog("EDIT", department)}
+                                                className="flex-1 inline-flex items-center justify-center gap-1.5 rounded-lg border border-white/10 bg-slate-800/80 px-3 py-1.5 text-xs font-semibold text-slate-200 hover:bg-white/10 transition"
+                                            >
+                                                <Pencil size={13} /> Edit
+                                            </button>
+                                        )}
+                                        {canDelete && (
+                                            <button
+                                                type="button"
+                                                onClick={() => openDialog("DELETE", department)}
+                                                className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-rose-500/20 bg-rose-500/10 px-3 py-1.5 text-xs font-semibold text-rose-300 hover:bg-rose-500/20 transition"
+                                            >
+                                                <Trash2 size={13} />
+                                            </button>
+                                        )}
+                                        {!canUpdate && !canDelete && (
+                                            <span className="text-xs text-slate-500 italic py-1">View only</span>
+                                        )}
+                                    </div>
+                                </article>
+                            );
+                        })
+                    )}
                 </div>
 
                 {/* Pagination */}

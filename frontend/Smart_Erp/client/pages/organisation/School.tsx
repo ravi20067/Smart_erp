@@ -19,16 +19,20 @@ import {
     ChevronRight,
     ChevronsLeft,
     ChevronsRight,
+    Clock,
     Eye,
     GraduationCap,
+    Library,
     LoaderCircle,
     Pencil,
     Plus,
     RefreshCw,
     RotateCcw,
     Search,
+    ShieldAlert,
     ShieldCheck,
     Trash2,
+    UserCheck,
     X,
 } from "lucide-react";
 
@@ -36,6 +40,7 @@ import {
     createSchool,
     deleteSchool,
     extractErrorMessage,
+    formatAuditActor,
     getSchoolPrefix,
     getSchools,
     getUniversityFilter,
@@ -75,7 +80,7 @@ const EMPTY_FORM: SchoolForm = {
     activeStatus: "ENABLE",
 };
 
-const PAGE_SIZE = 5;
+const PAGE_SIZE = 8;
 
 /* -------------------------------------------------------------------------- */
 /* Helpers                                                                    */
@@ -85,6 +90,46 @@ function formatNumber(value: number | null | undefined): string {
     return typeof value === "number" && Number.isFinite(value)
         ? new Intl.NumberFormat("en-IN").format(value)
         : "—";
+}
+
+function formatDate(dateStr?: string | null): string {
+    if (!dateStr) return "—";
+    try {
+        const d = new Date(dateStr);
+        if (isNaN(d.getTime())) return "—";
+        return new Intl.DateTimeFormat("en-IN", {
+            day: "2-digit",
+            month: "short",
+            year: "numeric",
+        }).format(d);
+    } catch {
+        return "—";
+    }
+}
+
+function formatDateTime(dateStr?: string | null): string {
+    if (!dateStr) return "—";
+    try {
+        const d = new Date(dateStr);
+        if (isNaN(d.getTime())) return "—";
+        return new Intl.DateTimeFormat("en-IN", {
+            day: "2-digit",
+            month: "short",
+            year: "numeric",
+            hour: "2-digit",
+            minute: "2-digit",
+        }).format(d);
+    } catch {
+        return "—";
+    }
+}
+
+function getInitials(name?: string): string {
+    if (!name) return "SC";
+    const parts = name.trim().split(/\s+/).filter(Boolean);
+    if (parts.length === 0) return "SC";
+    if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+    return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
 }
 
 function getSchoolActions(school: SchoolResponse): PermissionAction[] {
@@ -399,16 +444,18 @@ function SchoolDialog({
         const code = form.code.trim();
 
         try {
+            const cleanCode = prefix && code.startsWith(prefix) ? code.slice(prefix.length) : code;
+
             if (isCreate) {
                 await onCreate(Number(form.universityId), {
                     name,
-                    code,
+                    code: cleanCode,
                 });
             } else if (isEdit && school) {
                 await onUpdate({
                     id: school.id,
                     name,
-                    code,
+                    code: cleanCode,
                     activeStatus: form.activeStatus,
                 });
             }
@@ -722,18 +769,34 @@ function SchoolDialog({
                             )}
 
                             {isView && school && (
-                                <div className="space-y-3">
-                                    <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">
-                                        School Information
-                                    </p>
+                                <div className="space-y-3.5">
+                                    <div className="flex items-center justify-between">
+                                        <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">
+                                            School Information
+                                        </p>
+                                        <StatusBadge status={school.activeStatus} />
+                                    </div>
 
-                                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                                    {/* University info card */}
+                                    <div className="rounded-xl border border-white/10 bg-slate-950/40 p-3">
+                                        <p className="text-[10px] text-slate-400 uppercase">Affiliated University</p>
+                                        <p className="mt-1 font-semibold text-white text-sm">
+                                            {school.university?.name || "—"}
+                                        </p>
+                                        {school.university?.code && (
+                                            <p className="mt-0.5 text-xs font-mono text-cyan-400">
+                                                Code: {school.university.code}
+                                            </p>
+                                        )}
+                                    </div>
+
+                                    <div className="grid grid-cols-2 gap-3">
                                         <div className="rounded-xl border border-white/10 bg-white/[0.03] p-3">
                                             <p className="text-xs text-slate-500">
                                                 School ID
                                             </p>
-                                            <p className="mt-1 font-semibold text-white">
-                                                {school.id}
+                                            <p className="mt-1 font-semibold text-white font-mono">
+                                                #{school.id}
                                             </p>
                                         </div>
 
@@ -741,7 +804,7 @@ function SchoolDialog({
                                             <p className="text-xs text-slate-500">
                                                 Departments
                                             </p>
-                                            <p className="mt-1 font-semibold text-white">
+                                            <p className="mt-1 font-semibold text-cyan-300">
                                                 {formatNumber(
                                                     school.departments?.length ?? 0
                                                 )}
@@ -779,7 +842,7 @@ function SchoolDialog({
                                             Departments
                                         </p>
                                         {school.departments?.length ? (
-                                            <div className="flex flex-wrap gap-2">
+                                            <div className="flex flex-wrap gap-2 max-h-32 overflow-y-auto">
                                                 {school.departments.map(
                                                     (department) => (
                                                         <span
@@ -799,6 +862,91 @@ function SchoolDialog({
                                                 No departments linked.
                                             </p>
                                         )}
+                                    </div>
+
+                                    {/* Audit & Governance Showcase */}
+                                    <div className="rounded-xl border border-white/10 bg-slate-950/40 p-3 space-y-2.5">
+                                        <div className="flex items-center justify-between">
+                                            <span className="text-xs font-semibold text-slate-300 flex items-center gap-1.5">
+                                                <ShieldCheck size={13} className="text-emerald-400" />
+                                                Audit Trail & Governance
+                                            </span>
+                                            <span className="text-[10px] uppercase tracking-wider text-slate-500 font-mono">
+                                                System Records
+                                            </span>
+                                        </div>
+
+                                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
+                                            {/* Created By Card */}
+                                            <div className="rounded-lg border border-emerald-500/20 bg-emerald-500/5 p-2.5 space-y-1.5">
+                                                <div className="flex items-center justify-between text-[10px] text-emerald-400 font-medium">
+                                                    <span className="flex items-center gap-1">
+                                                        <UserCheck size={11} /> Created By
+                                                    </span>
+                                                    {school.createdAt && (
+                                                        <span className="text-slate-400 font-mono text-[10px]">
+                                                            {formatDate(school.createdAt)}
+                                                        </span>
+                                                    )}
+                                                </div>
+                                                <div className="flex items-center gap-2">
+                                                    <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-emerald-500/20 text-[10px] font-bold text-emerald-300">
+                                                        {getInitials(school.createdBy?.name || "System")}
+                                                    </div>
+                                                    <div className="min-w-0 flex-1">
+                                                        <p className="truncate font-semibold text-slate-200 text-xs">
+                                                            {school.createdBy?.name || "System Administrator"}
+                                                        </p>
+                                                        {(school.createdBy?.code || school.createdBy?.id) && (
+                                                            <p className="text-[10px] text-slate-400 font-mono truncate">
+                                                                {school.createdBy.code ? `Code: ${school.createdBy.code}` : `ID: #${school.createdBy.id}`}
+                                                            </p>
+                                                        )}
+                                                    </div>
+                                                </div>
+                                                {school.createdAt && (
+                                                    <div className="text-[10px] text-slate-500 flex items-center gap-1 pt-0.5 border-t border-emerald-500/10">
+                                                        <Clock size={10} className="text-slate-400 shrink-0" />
+                                                        <span className="truncate">Timestamp: {formatDateTime(school.createdAt)}</span>
+                                                    </div>
+                                                )}
+                                            </div>
+
+                                            {/* Updated By Card */}
+                                            <div className="rounded-lg border border-cyan-500/20 bg-cyan-500/5 p-2.5 space-y-1.5">
+                                                <div className="flex items-center justify-between text-[10px] text-cyan-400 font-medium">
+                                                    <span className="flex items-center gap-1">
+                                                        <RotateCcw size={11} /> Last Modified By
+                                                    </span>
+                                                    {(school.updatedAt || school.createdAt) && (
+                                                        <span className="text-slate-400 font-mono text-[10px]">
+                                                            {formatDate(school.updatedAt || school.createdAt)}
+                                                        </span>
+                                                    )}
+                                                </div>
+                                                <div className="flex items-center gap-2">
+                                                    <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-cyan-500/20 text-[10px] font-bold text-cyan-300">
+                                                        {getInitials(school.updatedBy?.name || school.createdBy?.name || "System")}
+                                                    </div>
+                                                    <div className="min-w-0 flex-1">
+                                                        <p className="truncate font-semibold text-slate-200 text-xs">
+                                                            {school.updatedBy?.name || school.createdBy?.name || "System Administrator"}
+                                                        </p>
+                                                        {(school.updatedBy?.code || school.updatedBy?.id) && (
+                                                            <p className="text-[10px] text-slate-400 font-mono truncate">
+                                                                {school.updatedBy.code ? `Code: ${school.updatedBy.code}` : `ID: #${school.updatedBy.id}`}
+                                                            </p>
+                                                        )}
+                                                    </div>
+                                                </div>
+                                                {(school.updatedAt || school.createdAt) && (
+                                                    <div className="text-[10px] text-slate-500 flex items-center gap-1 pt-0.5 border-t border-cyan-500/10">
+                                                        <Clock size={10} className="text-slate-400 shrink-0" />
+                                                        <span className="truncate">Timestamp: {formatDateTime(school.updatedAt || school.createdAt)}</span>
+                                                    </div>
+                                                )}
+                                            </div>
+                                        </div>
                                     </div>
                                 </div>
                             )}
@@ -1534,7 +1682,8 @@ export default function Schools() {
                     )}
                 </div>
 
-                <div className="w-full min-w-0 overflow-x-auto">
+                {/* Desktop Data Table */}
+                <div className="hidden md:block w-full min-w-0 overflow-x-auto">
                     <table className="w-full min-w-[1000px] border-collapse text-left text-sm">
                         <thead>
                             <tr className="border-b border-white/10 bg-white/[0.025] text-xs uppercase tracking-wider text-slate-400">
@@ -1655,9 +1804,19 @@ export default function Schools() {
                                                                 {school.name ||
                                                                     "Unnamed School"}
                                                             </p>
-                                                            <p className="mt-0.5 text-xs text-slate-500">
-                                                                ID: {school.id}
-                                                            </p>
+                                                            <div className="flex flex-wrap items-center gap-1.5 text-xs text-slate-400">
+                                                                <span className="font-mono text-[11px] text-slate-500">ID #{school.id}</span>
+                                                                <span className="text-slate-600">·</span>
+                                                                <span
+                                                                    className="inline-flex items-center gap-1 text-[11px] text-slate-400 group-hover:text-slate-300 transition-colors"
+                                                                    title={`Created by: ${formatAuditActor(school.createdBy)}${school.createdAt ? ` on ${formatDate(school.createdAt)}` : ""}${school.updatedBy?.name ? ` | Modified by: ${formatAuditActor(school.updatedBy)}` : ""}`}
+                                                                >
+                                                                    <UserCheck size={11} className="text-emerald-400 shrink-0" />
+                                                                    <span className="truncate max-w-[120px] font-medium text-slate-300">
+                                                                        {school.createdBy?.name || "System"}
+                                                                    </span>
+                                                                </span>
+                                                            </div>
                                                         </div>
                                                     </div>
                                                 </td>
@@ -1702,8 +1861,8 @@ export default function Schools() {
                                                     )}
                                                 </td>
 
-                                                <td className="px-5 py-5">
-                                                    <div className="flex justify-end gap-2">
+                                                <td className="px-5 py-4">
+                                                    <div className="flex items-center justify-end gap-1.5">
                                                         {/* View is read-only and does not need UPDATE/DELETE permission. */}
                                                         <button
                                                             type="button"
@@ -1715,9 +1874,9 @@ export default function Schools() {
                                                             }
                                                             aria-label={`View ${school.name}`}
                                                             title="View details"
-                                                            className="rounded-lg border border-white/10 bg-white/[0.04] p-2 text-sky-300 transition hover:border-sky-400/30 hover:bg-sky-400/10"
+                                                            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-white/10 bg-white/[0.04] text-sky-300 transition hover:border-sky-400/30 hover:bg-sky-400/10"
                                                         >
-                                                            <Eye size={17} />
+                                                            <Eye size={15} />
                                                         </button>
 
                                                         {canUpdate && (
@@ -1731,10 +1890,10 @@ export default function Schools() {
                                                                 }
                                                                 aria-label={`Edit ${school.name}`}
                                                                 title="Edit school"
-                                                                className="rounded-lg border border-white/10 bg-white/[0.04] p-2 text-cyan-300 transition hover:border-cyan-400/30 hover:bg-cyan-400/10"
+                                                                className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-white/10 bg-white/[0.04] text-cyan-300 transition hover:border-cyan-400/30 hover:bg-cyan-400/10"
                                                             >
                                                                 <Pencil
-                                                                    size={17}
+                                                                    size={15}
                                                                 />
                                                             </button>
                                                         )}
@@ -1750,10 +1909,10 @@ export default function Schools() {
                                                                 }
                                                                 aria-label={`Delete ${school.name}`}
                                                                 title="Delete school"
-                                                                className="rounded-lg border border-white/10 bg-white/[0.04] p-2 text-rose-400 transition hover:border-rose-400/30 hover:bg-rose-400/10"
+                                                                className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-rose-500/20 bg-rose-500/10 text-rose-300 transition hover:border-rose-400/30 hover:bg-rose-500/20"
                                                             >
                                                                 <Trash2
-                                                                    size={17}
+                                                                    size={15}
                                                                 />
                                                             </button>
                                                         )}
@@ -1820,6 +1979,129 @@ export default function Schools() {
                             )}
                         </tbody>
                     </table>
+                </div>
+
+                {/* Mobile Cards Layout */}
+                <div className="block md:hidden divide-y divide-white/5">
+                    {loading ? (
+                        Array.from({ length: 4 }).map((_, i) => (
+                            <div key={i} className="animate-pulse space-y-3 p-4">
+                                <div className="h-5 w-40 rounded bg-white/10" />
+                                <div className="h-4 w-56 rounded bg-white/5" />
+                                <div className="h-10 rounded bg-white/5" />
+                            </div>
+                        ))
+                    ) : visibleSchools.length === 0 ? (
+                        <div className="p-8 text-center text-slate-500">
+                            <Building2 size={36} className="mx-auto mb-2 opacity-30 text-slate-400" />
+                            <p className="text-sm font-semibold text-slate-300">
+                                {hasActiveFilters ? "No matching schools found" : "No schools registered yet"}
+                            </p>
+                        </div>
+                    ) : (
+                        visibleSchools.map((school) => {
+                            const initials = getInitials(school.name);
+                            const canUpdate = hasPermission(school, "UPDATE");
+                            const canDelete = hasPermission(school, "DELETE");
+                            const deptsCount = school.departments?.length ?? 0;
+
+                            return (
+                                <article key={school.id} className="min-w-0 space-y-3 p-4 sm:p-5">
+                                    {/* Header */}
+                                    <div className="flex items-start gap-3">
+                                        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-blue-300/20 bg-gradient-to-br from-blue-500/25 to-violet-500/20 text-xs font-bold text-cyan-200">
+                                            {initials}
+                                        </div>
+                                        <div className="min-w-0 flex-1">
+                                            <div className="flex flex-wrap items-center gap-1.5">
+                                                <h3 className="text-sm font-bold text-white break-words">
+                                                    {school.name}
+                                                </h3>
+                                                <StatusBadge status={school.activeStatus} />
+                                            </div>
+                                            <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-slate-400 font-mono">
+                                                <span>Code: <strong className="text-cyan-300">{school.code}</strong></span>
+                                                <span>·</span>
+                                                <span>ID #{school.id}</span>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    {/* University & Departments */}
+                                    <div className="grid grid-cols-2 gap-2 rounded-xl border border-white/5 bg-slate-950/40 p-2.5 text-xs">
+                                        <div>
+                                            <p className="text-[10px] text-slate-400 uppercase">University</p>
+                                            <p className="font-semibold text-white mt-0.5 truncate">{school.university?.name || "—"}</p>
+                                            {school.university?.code && (
+                                                <p className="text-[10px] font-mono text-cyan-400 truncate">{school.university.code}</p>
+                                            )}
+                                        </div>
+                                        <div>
+                                            <p className="text-[10px] text-slate-400 uppercase">Departments</p>
+                                            <p className="font-semibold text-cyan-300 mt-0.5">{deptsCount} linked</p>
+                                        </div>
+                                    </div>
+
+                                    {/* Audit & Governance Showcase */}
+                                    <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 rounded-xl border border-white/5 bg-slate-950/30 px-3 py-2 text-[11px] text-slate-400">
+                                        <div className="flex items-center gap-1.5 min-w-0">
+                                            <UserCheck size={12} className="text-emerald-400 shrink-0" />
+                                            <span className="text-slate-500">Created:</span>
+                                            <span className="font-medium text-slate-200 truncate max-w-[120px]">
+                                                {school.createdBy?.name || "System"}
+                                            </span>
+                                            {school.createdAt && (
+                                                <span className="text-slate-500 font-mono text-[10px]">
+                                                    · {formatDate(school.createdAt)}
+                                                </span>
+                                            )}
+                                        </div>
+                                        {school.updatedBy?.name && (
+                                            <div className="flex items-center gap-1.5 min-w-0">
+                                                <RotateCcw size={11} className="text-cyan-400 shrink-0" />
+                                                <span className="text-slate-500">Updated:</span>
+                                                <span className="font-medium text-slate-200 truncate max-w-[120px]">
+                                                    {school.updatedBy.name}
+                                                </span>
+                                            </div>
+                                        )}
+                                    </div>
+
+                                    {/* Action buttons */}
+                                    <div className="flex flex-wrap items-center gap-2 pt-1 border-t border-white/5">
+                                        <button
+                                            type="button"
+                                            onClick={() => openDialog("VIEW", school)}
+                                            className="flex-1 inline-flex items-center justify-center gap-1.5 rounded-lg border border-cyan-500/20 bg-cyan-500/10 px-3 py-1.5 text-xs font-semibold text-cyan-300 hover:bg-cyan-500/20 transition"
+                                        >
+                                            <Eye size={13} /> Details
+                                        </button>
+                                        {canUpdate && (
+                                            <button
+                                                type="button"
+                                                onClick={() => openDialog("EDIT", school)}
+                                                className="flex-1 inline-flex items-center justify-center gap-1.5 rounded-lg border border-white/10 bg-slate-800/80 px-3 py-1.5 text-xs font-semibold text-slate-200 hover:bg-white/10 transition"
+                                            >
+                                                <Pencil size={13} /> Edit
+                                            </button>
+                                        )}
+                                        {canDelete && (
+                                            <button
+                                                type="button"
+                                                onClick={() => openDialog("DELETE", school)}
+                                                className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-rose-500/20 bg-rose-500/10 px-3 py-1.5 text-xs font-semibold text-rose-300 hover:bg-rose-500/20 transition"
+                                            >
+                                                <Trash2 size={13} />
+                                            </button>
+                                        )}
+                                        {!canUpdate && !canDelete && (
+                                            <span className="text-xs text-slate-500 italic py-1">View only</span>
+                                        )}
+                                    </div>
+                                </article>
+                            );
+                        })
+                    )}
                 </div>
 
                 {/* Pagination */}

@@ -3,6 +3,7 @@ package com.Smart.Erp.Modules.Subject.Entity;
 
 
 import com.Smart.Erp.Config.BaseAuditableEntity;
+import com.Smart.Erp.Modules.Exam.Entity.ExamResult;
 import jakarta.persistence.*;
 import lombok.*;
 
@@ -26,9 +27,8 @@ public class Chapter extends BaseAuditableEntity {
     private Integer chapterNumber;
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "subject_id")
-    private Subject subject;
-
+    @JoinColumn(name = "assignment_id")
+    private Assignment assignment;
 
     @Builder.Default
     @OneToMany(
