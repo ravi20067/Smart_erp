@@ -1,71 +1,50 @@
 import { useState } from "react";
-import { MessageCircle, X } from "lucide-react";
+import { Banknote, CreditCard, MessageCircle, X } from "lucide-react";
+import { motion } from "framer-motion";
 
-import Header from "@/components/CommonHeader";
-import Sidebar from "@/components/finance/Sidebar";
 import Copilot from "@/components/finance/Copilot";
 import StatsCards from "@/components/finance/StatsCards";
 import RecentNotifications from "@/components/finance/RecentNotifications";
+import { useAuth } from "@/services/authContext";
 
 export default function Dashboard() {
+    const { user } = useAuth();
     const [chatOpen, setChatOpen] = useState(false);
+
     return (
-        <div className="h-screen overflow-hidden bg-slate-50 dark:bg-slate-950">
-
-            {/* Header */}
-            <Header />
-
-            {/* Main Layout */}
-            <div className="flex h-[calc(100vh-80px)]">
-
-                {/* Sidebar */}
-                <aside
-                    className="
-                    hidden lg:block
-                    w-72
-                    shrink-0
-                    overflow-y-auto
-                    border-r
-                    border-slate-200
-                    dark:border-slate-800
-                    bg-white
-                    dark:bg-slate-900
-                "
-                >
-                    <Sidebar />
-                </aside>
-
-                {/* Main Content */}
-                <main
-                    className="
-                    flex-1
-                    overflow-y-auto
-                    p-4 md:p-6
-                "
-                >
-                    <div className="space-y-6">
-
-                        {/* Welcome */}
-                        <div>
-                            <h1 className="text-3xl font-bold text-slate-900 dark:text-white">
-                                Finance Dashboard
-                            </h1>
-
-                            <p className="text-slate-500 mt-2">
-                                Welcome back, Ravi 👋
-                            </p>
-                        </div>
-
-                        {/* Stats */}
-                        <StatsCards />
-
-                        {/* Content */}
-                        <div className="grid xl:grid-cols-2 gap-6">
-                            <RecentNotifications />
-                        </div>
-
+        <div className="space-y-6">
+            {/* Finance Welcome Banner */}
+            <motion.section
+                initial={{ opacity: 0, y: 12 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.35 }}
+                className="relative isolate overflow-hidden rounded-3xl border border-emerald-400/20 bg-gradient-to-br from-[#0c2419] via-[#091526] to-[#121028] p-5 sm:p-7 lg:p-8"
+            >
+                <div className="max-w-2xl">
+                    <div className="mb-3.5 inline-flex items-center gap-2 rounded-full border border-emerald-400/30 bg-emerald-400/10 px-3 py-1 text-xs font-semibold text-emerald-300">
+                        <Banknote size={14} />
+                        Finance &amp; Treasury Administration
                     </div>
-                </main>
+
+                    <h1 className="text-2xl font-bold tracking-tight text-white sm:text-3xl">
+                        Welcome,{" "}
+                        <span className="bg-gradient-to-r from-emerald-300 via-cyan-300 to-blue-300 bg-clip-text text-transparent">
+                            {user?.firstName ? `${user.firstName} ${user.lastName || ""}` : "Finance Officer"}
+                        </span>
+                    </h1>
+
+                    <p className="mt-2.5 max-w-xl text-xs sm:text-sm text-slate-400 leading-relaxed">
+                        Real-time student fee collection ledger, outstanding dues tracking, scholarship concession approvals, and daily bank reconciliations.
+                    </p>
+                </div>
+            </motion.section>
+
+            {/* Stats */}
+            <StatsCards />
+
+            {/* Content */}
+            <div className="grid xl:grid-cols-2 gap-6">
+                <RecentNotifications />
             </div>
 
             {/* Floating Chat Button */}

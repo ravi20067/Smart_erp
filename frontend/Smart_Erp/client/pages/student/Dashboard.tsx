@@ -1,73 +1,53 @@
 import { useState } from "react";
-import { MessageCircle, X } from "lucide-react";
+import { GraduationCap, MessageCircle, Sparkles, X } from "lucide-react";
+import { motion } from "framer-motion";
 
-import Header from "@/components/CommonHeader";
-import StudentSidebar from "@/components/student/StudentSidebar";
 import StudentCopilot from "@/components/student/StudentCopilot";
 import StatsCards from "@/components/student/StatsCards";
 import UpcomingExams from "@/components/student/UpcomingExams";
 import RecentNotifications from "@/components/student/RecentNotifications";
+import { useAuth } from "@/services/authContext";
 
 export default function Dashboard() {
+    const { user } = useAuth();
     const [chatOpen, setChatOpen] = useState(false);
+
     return (
-        <div className="h-screen overflow-hidden bg-slate-50 dark:bg-slate-950">
-
-            {/* Header */}
-            <Header />
-
-            {/* Main Layout */}
-            <div className="flex h-[calc(100vh-80px)]">
-
-                {/* Sidebar */}
-                <aside
-                    className="
-                    hidden lg:block
-                    w-72
-                    shrink-0
-                    overflow-y-auto
-                    border-r
-                    border-slate-200
-                    dark:border-slate-800
-                    bg-white
-                    dark:bg-slate-900
-                "
-                >
-                    <StudentSidebar />
-                </aside>
-
-                {/* Main Content */}
-                <main
-                    className="
-                    flex-1
-                    overflow-y-auto
-                    p-4 md:p-6
-                "
-                >
-                    <div className="space-y-6">
-
-                        {/* Welcome */}
-                        <div>
-                            <h1 className="text-3xl font-bold text-slate-900 dark:text-white">
-                                Student Dashboard
-                            </h1>
-
-                            <p className="text-slate-500 mt-2">
-                                Welcome back, Ravi 👋
-                            </p>
-                        </div>
-
-                        {/* Stats */}
-                        <StatsCards />
-
-                        {/* Content */}
-                        <div className="grid xl:grid-cols-2 gap-6">
-                            <UpcomingExams />
-                            <RecentNotifications />
-                        </div>
-
+        <div className="space-y-6">
+            {/* Student Welcome Banner */}
+            <motion.section
+                initial={{ opacity: 0, y: 12 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.35 }}
+                className="relative isolate overflow-hidden rounded-3xl border border-blue-400/20 bg-gradient-to-br from-[#0a1e36] via-[#091526] to-[#141028] p-5 sm:p-7 lg:p-8"
+            >
+                <div className="max-w-2xl">
+                    <div className="mb-3.5 inline-flex items-center gap-2 rounded-full border border-blue-400/30 bg-blue-400/10 px-3 py-1 text-xs font-semibold text-blue-300">
+                        <GraduationCap size={14} />
+                        Student Academic Learning Center
                     </div>
-                </main>
+
+                    <h1 className="text-2xl font-bold tracking-tight text-white sm:text-3xl">
+                        Welcome back,{" "}
+                        <span className="bg-gradient-to-r from-blue-300 via-cyan-300 to-indigo-300 bg-clip-text text-transparent">
+                            {user?.firstName ? `${user.firstName} ${user.lastName || ""}` : "Student"}
+                        </span>{" "}
+                        👋
+                    </h1>
+
+                    <p className="mt-2.5 max-w-xl text-xs sm:text-sm text-slate-400 leading-relaxed">
+                        Track your semester attendance, view today's timetable schedule, check upcoming exam dates, and stay informed on campus notices.
+                    </p>
+                </div>
+            </motion.section>
+
+            {/* Stats */}
+            <StatsCards />
+
+            {/* Content */}
+            <div className="grid xl:grid-cols-2 gap-6">
+                <UpcomingExams />
+                <RecentNotifications />
             </div>
 
             {/* Floating Chat Button */}

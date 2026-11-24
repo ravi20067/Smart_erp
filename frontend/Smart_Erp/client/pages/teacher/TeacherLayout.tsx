@@ -1,5 +1,5 @@
-import { Outlet } from "react-router-dom";
+import RoleDashboardLayout from "@/components/RoleDashboardLayout";
 
-export default function AdminLayout() {
-    return <Outlet />;
+export default function TeacherLayout() {
+    return <RoleDashboardLayout role="TEACHER" />;
 }

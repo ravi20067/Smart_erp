@@ -1,71 +1,50 @@
 import { useState } from "react";
-import { MessageCircle, X } from "lucide-react";
+import { CalendarRange, FileBadge, MessageCircle, X } from "lucide-react";
+import { motion } from "framer-motion";
 
-import Header from "@/components/CommonHeader";
-import Sidebar from "@/components/examination_department/Sidebar";
 import Copilot from "@/components/examination_department/Copilot";
 import StatsCards from "@/components/examination_department/StatsCards";
 import RecentNotifications from "@/components/examination_department/RecentNotifications";
+import { useAuth } from "@/services/authContext";
 
 export default function Dashboard() {
+    const { user } = useAuth();
     const [chatOpen, setChatOpen] = useState(false);
+
     return (
-        <div className="h-screen overflow-hidden bg-slate-50 dark:bg-slate-950">
-
-            {/* Header */}
-            <Header />
-
-            {/* Main Layout */}
-            <div className="flex h-[calc(100vh-80px)]">
-
-                {/* Sidebar */}
-                <aside
-                    className="
-                    hidden lg:block
-                    w-72
-                    shrink-0
-                    overflow-y-auto
-                    border-r
-                    border-slate-200
-                    dark:border-slate-800
-                    bg-white
-                    dark:bg-slate-900
-                "
-                >
-                    <Sidebar />
-                </aside>
-
-                {/* Main Content */}
-                <main
-                    className="
-                    flex-1
-                    overflow-y-auto
-                    p-4 md:p-6
-                "
-                >
-                    <div className="space-y-6">
-
-                        {/* Welcome */}
-                        <div>
-                            <h1 className="text-3xl font-bold text-slate-900 dark:text-white">
-                                Examination Department Dashboard
-                            </h1>
-
-                            <p className="text-slate-500 mt-2">
-                                Welcome back, Ravi 👋
-                            </p>
-                        </div>
-
-                        {/* Stats */}
-                        <StatsCards />
-
-                        {/* Content */}
-                        <div className="grid xl:grid-cols-2 gap-6">
-                            <RecentNotifications />
-                        </div>
-
+        <div className="space-y-6">
+            {/* Examination Welcome Banner */}
+            <motion.section
+                initial={{ opacity: 0, y: 12 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.35 }}
+                className="relative isolate overflow-hidden rounded-3xl border border-rose-400/20 bg-gradient-to-br from-[#220c15] via-[#091526] to-[#141028] p-5 sm:p-7 lg:p-8"
+            >
+                <div className="max-w-2xl">
+                    <div className="mb-3.5 inline-flex items-center gap-2 rounded-full border border-rose-400/30 bg-rose-400/10 px-3 py-1 text-xs font-semibold text-rose-300">
+                        <FileBadge size={14} />
+                        Office of Controller of Examinations
                     </div>
-                </main>
+
+                    <h1 className="text-2xl font-bold tracking-tight text-white sm:text-3xl">
+                        Welcome,{" "}
+                        <span className="bg-gradient-to-r from-rose-300 via-pink-300 to-cyan-300 bg-clip-text text-transparent">
+                            {user?.firstName ? `${user.firstName} ${user.lastName || ""}` : "Examination Controller"}
+                        </span>
+                    </h1>
+
+                    <p className="mt-2.5 max-w-xl text-xs sm:text-sm text-slate-400 leading-relaxed">
+                        Semester exam cycle scheduling, hall ticket generation, invigilator allocations, answer script tracking, and result tabulation registers.
+                    </p>
+                </div>
+            </motion.section>
+
+            {/* Stats */}
+            <StatsCards />
+
+            {/* Content */}
+            <div className="grid xl:grid-cols-2 gap-6">
+                <RecentNotifications />
             </div>
 
             {/* Floating Chat Button */}

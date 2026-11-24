@@ -30,8 +30,16 @@ import LibraryDashboard from "./pages/library/Dashboard";
 import AdmissionDashboard from "./pages/admission/Dashboard";
 import ExaminationDeptDashboard from "./pages/examination/Dashboard";
 import FinanceDashboard from "./pages/finance/Dashboard";
+import SecurityGuardDashboard from "./pages/security-guard/Dashboard";
+import DeanDashboard from "./pages/dean/Dashboard";
+import HODDashboard from "./pages/hod/Dashboard";
+import ProgramCoordinatorDashboard from "./pages/coordinator/Dashboard";
+import MentorDashboard from "./pages/mentor/Dashboard";
+import HRDashboard from "./pages/hr/Dashboard";
+import CounselorDashboard from "./pages/counselor/Dashboard";
 import SuperAdminDashboard from "./pages/super-admin/Dashboard";
 import SuperAdminLayout from "./pages/super-admin/Layout";
+import RoleDashboardLayout from "./components/RoleDashboardLayout";
 import TeacherLayout from "./pages/teacher/TeacherLayout";
 import AttendenceAuthenticator from "./pages/teacher/AttendenceAuthenticator";
 import DeviceDashboard from "./pages/Devices/dashboard";
@@ -190,28 +198,24 @@ const App = () => (
               {/* Add your other existing admin routes here */}
             </Route>
 
+            {/* Student */}
             <Route
               path="/student"
               element={
                 <ProtectedRoute allowedRoles={["STUDENT"]}>
-                  <StudentDashboard />
+                  <RoleDashboardLayout role="STUDENT" />
                 </ProtectedRoute>
               }
-            />
-            <Route
-              path="/devices"
-              element={
-                <ProtectedRoute allowedRoles={["DEVICES"]}>
-                  <DeviceDashboard />
-                </ProtectedRoute>
-              }
-            />
+            >
+              <Route index element={<StudentDashboard />} />
+            </Route>
 
+            {/* Teacher */}
             <Route
               path="/teacher"
               element={
                 <ProtectedRoute allowedRoles={["TEACHER"]}>
-                  <TeacherLayout />
+                  <RoleDashboardLayout role="TEACHER" />
                 </ProtectedRoute>
               }
             >
@@ -219,41 +223,159 @@ const App = () => (
               <Route path="attendance-authenticator" element={<AttendenceAuthenticator />} />
             </Route>
 
+            {/* Security Guard */}
+            <Route
+              path="/security-guard"
+              element={
+                <ProtectedRoute allowedRoles={["SECURITY_GUARD"]}>
+                  <RoleDashboardLayout role="SECURITY_GUARD" />
+                </ProtectedRoute>
+              }
+            >
+              <Route index element={<SecurityGuardDashboard />} />
+            </Route>
+
+            {/* Dean / School Dean */}
+            <Route
+              path="/dean"
+              element={
+                <ProtectedRoute allowedRoles={["DEAN", "SCHOOL_DEAN"]}>
+                  <RoleDashboardLayout role="DEAN" />
+                </ProtectedRoute>
+              }
+            >
+              <Route index element={<DeanDashboard />} />
+            </Route>
+            <Route
+              path="/school-dean"
+              element={
+                <ProtectedRoute allowedRoles={["DEAN", "SCHOOL_DEAN"]}>
+                  <RoleDashboardLayout role="SCHOOL_DEAN" />
+                </ProtectedRoute>
+              }
+            >
+              <Route index element={<DeanDashboard />} />
+            </Route>
+
+            {/* Head of Department */}
+            <Route
+              path="/head-of-department"
+              element={
+                <ProtectedRoute allowedRoles={["HEAD_OF_DEPARTMENT"]}>
+                  <RoleDashboardLayout role="HEAD_OF_DEPARTMENT" />
+                </ProtectedRoute>
+              }
+            >
+              <Route index element={<HODDashboard />} />
+            </Route>
+
+            {/* Program Coordinator */}
+            <Route
+              path="/program-coordinator"
+              element={
+                <ProtectedRoute allowedRoles={["PROGRAM_COORDINATOR"]}>
+                  <RoleDashboardLayout role="PROGRAM_COORDINATOR" />
+                </ProtectedRoute>
+              }
+            >
+              <Route index element={<ProgramCoordinatorDashboard />} />
+            </Route>
+
+            {/* Mentor */}
+            <Route
+              path="/mentor"
+              element={
+                <ProtectedRoute allowedRoles={["MENTOR"]}>
+                  <RoleDashboardLayout role="MENTOR" />
+                </ProtectedRoute>
+              }
+            >
+              <Route index element={<MentorDashboard />} />
+            </Route>
+
+            {/* Library / Librarian */}
             <Route
               path="/library"
               element={
-                <ProtectedRoute allowedRoles={["LIBRARY"]}>
-                  <LibraryDashboard />
+                <ProtectedRoute allowedRoles={["LIBRARY", "LIBRARIAN"]}>
+                  <RoleDashboardLayout role="LIBRARY" />
                 </ProtectedRoute>
               }
-            />
+            >
+              <Route index element={<LibraryDashboard />} />
+            </Route>
 
+            {/* Admission */}
             <Route
               path="/admission"
               element={
                 <ProtectedRoute allowedRoles={["ADMISSION"]}>
-                  <AdmissionDashboard />
+                  <RoleDashboardLayout role="ADMISSION" />
                 </ProtectedRoute>
               }
-            />
+            >
+              <Route index element={<AdmissionDashboard />} />
+            </Route>
 
+            {/* Examination Dept / Exam Controller */}
             <Route
               path="/examination-dept"
               element={
-                <ProtectedRoute allowedRoles={["EXAMINATION"]}>
-                  <ExaminationDeptDashboard />
+                <ProtectedRoute allowedRoles={["EXAMINATION", "EXAM_CONTROLLER"]}>
+                  <RoleDashboardLayout role="EXAMINATION" />
                 </ProtectedRoute>
               }
-            />
+            >
+              <Route index element={<ExaminationDeptDashboard />} />
+            </Route>
 
+            {/* Finance / Accountant */}
             <Route
               path="/finance"
               element={
-                <ProtectedRoute allowedRoles={["FINANCE"]}>
-                  <FinanceDashboard />
+                <ProtectedRoute allowedRoles={["FINANCE", "ACCOUNTANT"]}>
+                  <RoleDashboardLayout role="FINANCE" />
                 </ProtectedRoute>
               }
-            />
+            >
+              <Route index element={<FinanceDashboard />} />
+            </Route>
+
+            {/* HR */}
+            <Route
+              path="/hr"
+              element={
+                <ProtectedRoute allowedRoles={["HR"]}>
+                  <RoleDashboardLayout role="HR" />
+                </ProtectedRoute>
+              }
+            >
+              <Route index element={<HRDashboard />} />
+            </Route>
+
+            {/* Counselor */}
+            <Route
+              path="/counselor"
+              element={
+                <ProtectedRoute allowedRoles={["COUNSELOR"]}>
+                  <RoleDashboardLayout role="COUNSELOR" />
+                </ProtectedRoute>
+              }
+            >
+              <Route index element={<CounselorDashboard />} />
+            </Route>
+
+            {/* Devices / Hardware Terminal */}
+            <Route
+              path="/devices"
+              element={
+                <ProtectedRoute allowedRoles={["DEVICES"]}>
+                  <RoleDashboardLayout role="SUPER_ADMIN" />
+                </ProtectedRoute>
+              }
+            >
+              <Route index element={<DeviceDashboard />} />
+            </Route>
 
             <Route path="*" element={<NotFound />} />
 
