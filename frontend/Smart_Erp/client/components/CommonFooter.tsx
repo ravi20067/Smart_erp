@@ -12,7 +12,7 @@ export default function CommonFooter() {
             className="mt-auto border-t border-white/[0.08] bg-[#081223]/60 backdrop-blur-xl px-4 py-4 sm:px-6 lg:px-8"
         >
 
-//hello
+
             <div className="mx-auto flex max-w-[1600px] flex-col items-center justify-between gap-3 text-xs text-slate-500 sm:flex-row">
                 <div className="flex items-center gap-2">
                     <span className="flex h-6 w-6 items-center justify-center rounded-lg border border-cyan-300/20 bg-cyan-300/[0.08] text-cyan-200">
