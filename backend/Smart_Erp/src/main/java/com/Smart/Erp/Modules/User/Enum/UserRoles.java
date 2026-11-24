@@ -21,7 +21,8 @@ public enum UserRoles {
     ADMIN("ADM", 10, "College Administrator","admin"),
     SUPER_ADMIN("SAD", 11, "University Super Admin","super-admin"),
     HR("HR", 12, "Hiring_Department","hr"),
-    COUNSELOR("CNS", 13, "Student Counselor","counselor");
+    COUNSELOR("CNS", 13, "Student Counselor","counselor"),
+    SECURITY_GUARD("SEC", 14, "Security Guard","security-guard");
 
     private final String code;
     private final int value;

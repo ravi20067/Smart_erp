@@ -1,6 +1,7 @@
 package com.Smart.Erp.Modules.User.Entity;
 import com.Smart.Erp.Config.BaseAuditableEntity;
 import com.Smart.Erp.Core.Common.CommonDTO;
+import com.Smart.Erp.Modules.SecurityGuard.Entity.SecurityGuard;
 import com.Smart.Erp.Modules.Student.Entity.Student;
 import com.Smart.Erp.Modules.Teacher.Entity.Teacher;
 import com.Smart.Erp.Modules.User.Enum.UserRoles;
@@ -33,6 +34,7 @@ public class User  extends BaseAuditableEntity {
     private Boolean enabled = false;
 
     @Enumerated(EnumType.STRING)
+    @Column(name = "user_role", length = 50)
     private UserRoles userRole;
 
     @ToString.Exclude
@@ -50,6 +52,15 @@ public class User  extends BaseAuditableEntity {
             orphanRemoval = true
     )
     private Teacher teacher;
+
+    // User 1 : 1 SecurityGuard
+    @ToString.Exclude
+    @OneToOne(
+            mappedBy = "user",
+            cascade = CascadeType.ALL,
+            orphanRemoval = true
+    )
+    private SecurityGuard securityGuard;
 
     @ToString.Exclude
     @OneToOne(

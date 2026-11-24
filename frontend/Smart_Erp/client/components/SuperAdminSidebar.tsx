@@ -32,6 +32,7 @@ import {
     UserCog,
     BookUser,
     Settings,
+    Shield,
     ShieldCheck,
     Sparkles,
     TrendingDown,
@@ -153,6 +154,7 @@ const menu: MenuGroup[] = [
         items: [
             { label: "Students", path: "/super-admin/students", icon: GraduationCap },
             { label: "Teachers", path: "/super-admin/teachers", icon: Users },
+            { label: "Security Guards", path: "/super-admin/security-guards", icon: Shield },
             { label: "Devices", path: "/super-admin/devices", icon: ScanLine },
             { label: "Roles & Permissions", path: "/super-admin/role-permissions", icon: ShieldCheck },
             { label: "Assign Role to Teacher", path: "/super-admin/teachers/assign-role", icon: UserCog },

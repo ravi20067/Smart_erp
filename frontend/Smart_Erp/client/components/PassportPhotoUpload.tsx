@@ -103,8 +103,18 @@ export function PassportPhotoUpload({
                 {loadingPhoto ? <LoaderCircle className="animate-spin text-cyan-300" /> : displayUrl ? <img src={displayUrl} alt={`${studentName} passport photo`} className="h-full w-full object-cover" /> : <div className="flex flex-col items-center gap-2 text-slate-500"><Camera size={25} /><span className="text-xs">No photo</span></div>}
             </div>
             <div className="flex min-w-0 flex-col justify-center gap-2">
-                {displayUrl ? <div className="flex items-center gap-2 text-xs font-semibold text-emerald-300"><ImageIcon size={14} /> {file ? "Cropped photo ready" : "Current photo on file"}</div> : <p className="text-sm font-semibold text-slate-200">Upload student photograph</p>}
-                <p className="text-xs leading-5 text-slate-400">Choose or drop a portrait. Adjust zoom and rotation in the crop preview before it is submitted with the student record.</p>
+                {displayUrl ? (
+                    <div className="flex items-center gap-2 text-xs font-semibold text-emerald-300">
+                        <ImageIcon size={14} /> {file ? "Cropped photo ready" : "Current photo on file"}
+                    </div>
+                ) : (
+                    <p className="text-sm font-semibold text-slate-200">
+                        Upload {studentName && studentName !== "Student" ? `${studentName}'s` : ""} photograph
+                    </p>
+                )}
+                <p className="text-xs leading-5 text-slate-400">
+                    Choose or drop a portrait. Adjust zoom and rotation in the crop preview before saving.
+                </p>
                 <input ref={inputRef} type="file" accept="image/jpeg,image/png,image/webp" onChange={onInput} disabled={disabled} className="hidden" />
                 <div className="flex flex-wrap gap-2">
                     <button type="button" onClick={() => inputRef.current?.click()} disabled={disabled} className="inline-flex items-center gap-2 rounded-xl border border-cyan-400/25 bg-cyan-500/10 px-3 py-2 text-xs font-semibold text-cyan-200 hover:bg-cyan-500/20 disabled:opacity-50"><Upload size={14} />{displayUrl ? "Change photo" : "Select & crop photo"}</button>

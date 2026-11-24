@@ -68,7 +68,7 @@ public class UserCommonService {
     public User createUser(UserProfileRequest detail, String userName, MultipartFile file, UserRoles userRole, String password, University university) {
         FileMetadata metadata = null;
 
-        if (!file.isEmpty()) {
+        if (file != null && !file.isEmpty()) {
             metadata = fileService.upload(file, FileType.PHOTO);
         }
         User user = User.builder()

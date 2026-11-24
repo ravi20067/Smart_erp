@@ -57,6 +57,7 @@ import TimetableBuilder from "./pages/timeTable/TimetableBuilder";
 import TimetableOverrides from "./pages/timeTable/TimetableOverrides";
 import Student from "./pages/userMangement/Student";
 import Teacher from "./pages/userMangement/Teacher";
+import SecurityGuard from "./pages/userMangement/SecurityGuard";
 import TeacherEnrollment from "./pages/userMangement/TeacherEnrollment";
 import TeacherAssignRole from "./pages/userMangement/TeacherAssignRole";
 
@@ -163,6 +164,7 @@ const App = () => (
 
               <Route path="students" element={<Student />} />
               <Route path="teachers" element={<Teacher />} />
+              <Route path="security-guards" element={<SecurityGuard />} />
               <Route path="teachers/assign-role" element={<TeacherAssignRole />} />
               <Route path="teachers/subject-enrollment" element={<TeacherEnrollment />} />
               <Route path="teacher-enrollments" element={<TeacherEnrollment />} />

@@ -53,6 +53,7 @@ public class Role extends BaseAuditableEntity {
 
 
     @Enumerated(EnumType.STRING)
+    @Column(name = "user_role", length = 50)
     private UserRoles userRole;
 
 
