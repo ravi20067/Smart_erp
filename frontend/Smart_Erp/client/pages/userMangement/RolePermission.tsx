@@ -6,6 +6,7 @@ import {
     type FormEvent,
     type ReactNode,
 } from "react";
+import { createPortal } from "react-dom";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { toast } from "sonner";
 import {
@@ -26,13 +27,16 @@ import {
     ChevronsLeft,
     ChevronsRight,
     ClipboardList,
+    Clock,
     ContactRound,
     Eye,
     FileCheck,
     FileText,
     GraduationCap,
+    Info,
     KeyRound,
     Layers3,
+    LayoutGrid,
     Library,
     LoaderCircle,
     Network,
@@ -45,7 +49,9 @@ import {
     Shield,
     ShieldAlert,
     ShieldCheck,
+    SlidersHorizontal,
     Square,
+    Table as TableIcon,
     Target,
     Trash2,
     UserCheck,
@@ -57,7 +63,11 @@ import {
     createRole,
     deleteRole,
     extractErrorMessage,
+    formatAuditActor,
+    formatDate,
+    formatDateTime,
     getAllRoles,
+    getInitials,
     getRoleBasePermissions,
     getRoleEnums,
     getUniversityFilter,
@@ -542,8 +552,8 @@ function BasePermissionAnalysisDialog({ permissions, onClose }: { permissions: P
         { label: "Data warnings", value: report.missingIds + report.missingResourceIds + report.duplicateIds, icon: AlertTriangle, tone: "text-amber-300 border-amber-400/20 bg-amber-500/10" },
     ];
 
-    return (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center p-3 sm:p-6">
+    return createPortal(
+        <div className="fixed inset-0 z-[200] flex items-center justify-center p-3 sm:p-6">
             <button type="button" aria-label="Close hierarchy analysis" onClick={onClose} className="absolute inset-0 bg-slate-950/85 backdrop-blur-sm" />
             <section role="dialog" aria-modal="true" aria-labelledby="base-hierarchy-title" className="relative z-10 flex max-h-[92vh] w-full max-w-6xl flex-col overflow-hidden rounded-2xl border border-white/10 bg-slate-900 shadow-2xl">
                 <header className="flex items-start justify-between gap-4 border-b border-white/10 bg-gradient-to-r from-slate-900 via-slate-900 to-violet-950/40 p-5 sm:p-6">
@@ -597,7 +607,8 @@ function BasePermissionAnalysisDialog({ permissions, onClose }: { permissions: P
                 </div>
                 <footer className="flex justify-end border-t border-white/10 bg-slate-900/95 p-4"><button type="button" onClick={onClose} className="rounded-xl border border-white/10 bg-slate-800 px-4 py-2.5 text-sm font-semibold text-slate-200 transition hover:bg-white/10">Close analysis</button></footer>
             </section>
-        </div>
+        </div>,
+        document.body
     );
 }
 
@@ -627,6 +638,9 @@ function PermissionMatrixDialog({
 
     // Track collapsed resource rows
     const [collapsedKeys, setCollapsedKeys] = useState<Set<string>>(new Set());
+    const [searchQuery, setSearchQuery] = useState("");
+    const [viewMode, setViewMode] = useState<"tree" | "table">(() => (typeof window !== "undefined" && window.innerWidth >= 1024 ? "table" : "tree"));
+    const [showLegend, setShowLegend] = useState(false);
 
 
     /**
@@ -770,8 +784,28 @@ function PermissionMatrixDialog({
         });
     }, [nodes, ancestorMap, collapsedKeys]);
 
-    return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center overflow-hidden p-2 sm:p-3 md:p-4">
+    const filteredNodes = useMemo(() => {
+        if (!searchQuery.trim()) return visibleNodes;
+        const q = searchQuery.toLowerCase().trim();
+        return visibleNodes.filter(
+            (node) =>
+                node.name.toLowerCase().includes(q) ||
+                String(node.resourceType).toLowerCase().includes(q) ||
+                (node.id > 0 && String(node.id).includes(q))
+        );
+    }, [visibleNodes, searchQuery]);
+
+    const activeCount = useMemo(() => {
+        return Object.values(allowedState).filter(Boolean).length;
+    }, [allowedState]);
+
+    const handleExpandAll = () => setCollapsedKeys(new Set());
+    const handleCollapseAll = () => {
+        setCollapsedKeys(new Set(nodes.filter((n) => n.childKeys.length > 0).map((n) => n.key)));
+    };
+
+    return createPortal(
+        <div className="fixed inset-0 z-[200] flex items-center justify-center overflow-hidden p-0 sm:p-3 md:p-4">
             <motion.div
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
@@ -787,29 +821,29 @@ function PermissionMatrixDialog({
                 animate={{ opacity: 1, scale: 1, y: 0 }}
                 exit={{ opacity: 0, scale: 0.96, y: 15 }}
                 transition={{ duration: 0.2 }}
-                className="relative z-10 flex h-[92dvh] max-h-[92dvh] w-[96vw] max-w-[1440px] min-w-0 flex-col overflow-hidden rounded-2xl border border-white/10 bg-slate-900 shadow-2xl"
+                className="relative z-10 flex h-full sm:h-[92dvh] max-h-full sm:max-h-[92dvh] w-full sm:w-[96vw] max-w-[1440px] min-w-0 flex-col overflow-hidden rounded-none sm:rounded-2xl border-0 sm:border border-white/10 bg-slate-900 shadow-2xl"
             >
                 {/* Header */}
                 <div className="flex shrink-0 items-start justify-between gap-3 border-b border-white/10 bg-slate-900/95 px-3 py-3 backdrop-blur-md sm:px-5 sm:py-4">
-                    <div className="flex min-w-0 items-start gap-3">
-                        <div className="shrink-0 rounded-xl bg-gradient-to-br from-violet-500/20 to-cyan-500/20 p-2.5 text-cyan-400 border border-cyan-500/20">
-                            <KeyRound size={22} />
+                    <div className="flex min-w-0 items-start gap-2.5 sm:gap-3">
+                        <div className="shrink-0 rounded-xl bg-gradient-to-br from-violet-500/20 to-cyan-500/20 p-2 sm:p-2.5 text-cyan-400 border border-cyan-500/20">
+                            <KeyRound size={20} className="sm:w-[22px] sm:h-[22px]" />
                         </div>
                         <div className="min-w-0">
-                            <div className="flex flex-wrap items-center gap-2">
-                                <h2 className="break-words text-base font-bold text-white sm:text-lg">
+                            <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
+                                <h2 className="break-words text-sm font-bold text-white sm:text-lg">
                                     Resource Hierarchy & Permission Matrix
                                 </h2>
                                 <span className="rounded-md border border-cyan-400/30 bg-cyan-500/10 px-2 py-0.5 text-xs font-semibold text-cyan-300">
                                     {role.name}
                                 </span>
                             </div>
-                            <p className="mt-1 break-words text-[11px] leading-4 text-slate-400 sm:text-xs">
+                            <p className="mt-0.5 break-words text-[11px] leading-4 text-slate-400 sm:text-xs">
                                 University:{" "}
                                 <span className="text-white font-medium">
                                     {role.university?.name || "Global / Institution"}
                                 </span>{" "}
-                                • Check each action for this resource. Inherited access depends on backend authorization rules.
+                                • Parent permissions automatically cascade access to children.
                             </p>
                         </div>
                     </div>
@@ -817,279 +851,644 @@ function PermissionMatrixDialog({
                         type="button"
                         onClick={onClose}
                         disabled={busy}
-                        className="rounded-lg p-1.5 text-slate-400 hover:bg-white/10 hover:text-white disabled:opacity-50 transition"
+                        aria-label="Close dialog"
+                        className="rounded-lg p-1.5 text-slate-400 hover:bg-white/10 hover:text-white disabled:opacity-50 transition shrink-0"
                     >
                         <X size={18} />
                     </button>
                 </div>
 
                 {dialogError && (
-                    <div className="mx-6 mt-4 flex items-start gap-2.5 rounded-xl border border-rose-400/30 bg-rose-500/10 p-3.5 text-xs text-rose-300">
+                    <div className="mx-3 mt-3 sm:mx-5 sm:mt-4 flex items-start gap-2.5 rounded-xl border border-rose-400/30 bg-rose-500/10 p-3 text-xs text-rose-300">
                         <AlertCircle size={16} className="mt-0.5 shrink-0 text-rose-400" />
                         <span>{dialogError}</span>
                     </div>
                 )}
 
-                {/* Compact legend: explain IDs before users interact with the matrix */}
-                <div className="grid shrink-0 gap-2 border-b border-white/5 bg-slate-950/30 px-3 py-3 sm:grid-cols-3 sm:px-5">
-                    <div className="flex items-start gap-2 rounded-lg border border-sky-400/10 bg-sky-500/[0.04] p-2.5"><span className="mt-0.5 rounded border border-sky-400/20 bg-sky-500/10 px-1.5 py-0.5 font-mono text-[10px] text-sky-200">Resource ID</span><p className="text-[11px] leading-4 text-slate-400">The real record being controlled, for example a specific School or Course.</p></div>
-                    <div className="flex items-start gap-2 rounded-lg border border-cyan-400/10 bg-cyan-500/[0.04] p-2.5"><span className="mt-0.5 rounded border border-cyan-400/20 bg-cyan-500/10 px-1.5 py-0.5 font-mono text-[10px] text-cyan-200">Permission ID</span><p className="text-[11px] leading-4 text-slate-400">Hover an action checkbox to see the permission-definition ID submitted to the API.</p></div>
-                    <div className="flex items-start gap-2 rounded-lg border border-violet-400/10 bg-violet-500/[0.04] p-2.5"><span className="mt-0.5 rounded border border-violet-400/20 bg-violet-500/10 px-1.5 py-0.5 text-[10px] text-violet-200">Parent</span><p className="text-[11px] leading-4 text-slate-400">Shown under each resource name. The tree follows relationships available in the permission response.</p></div>
-                </div>
-                {/* Permission matrix */}
-                <div className="min-h-0 min-w-0 flex-1 overflow-auto overscroll-contain p-2 sm:p-4">
-                    <div className="w-full min-w-[980px] rounded-2xl border border-white/10 bg-slate-950/60 shadow-xl">
-                        <table className="w-full min-w-[980px] table-fixed border-collapse text-left text-sm text-slate-300">
-                            {/* Table Header */}
-                            <thead className="border-b border-white/10 bg-slate-950/80 text-xs font-semibold uppercase tracking-wider text-slate-400">
-                                <tr>
-                                    <th scope="col" className="w-[34%] px-4 py-4">
-                                        <span className="block">Resource hierarchy</span>
-                                        <span className="mt-1 block text-[10px] font-normal normal-case tracking-normal text-slate-500">Name, type and parent record</span>
-                                    </th>
-                                    <th scope="col" className="w-24 px-3 py-4 text-center">
-                                        <span className="block">Resource ID</span>
-                                        <span className="mt-1 block text-[10px] font-normal normal-case tracking-normal text-slate-500">Target record</span>
-                                    </th>
-                                    <th scope="col" className="w-20 px-2 py-4 text-center">
-                                        <div className="inline-flex items-center gap-1.5 text-emerald-400">
-                                            <Eye size={14} />
-                                            <span>READ</span>
-                                        </div>
-                                    </th>
-                                    <th scope="col" className="w-20 px-2 py-4 text-center">
-                                        <div className="inline-flex items-center gap-1.5 text-sky-400">
-                                            <Pencil size={14} />
-                                            <span>UPDATE</span>
-                                        </div>
-                                    </th>
-                                    <th scope="col" className="w-20 px-2 py-4 text-center">
-                                        <div className="inline-flex items-center gap-1.5 text-rose-400">
-                                            <Trash2 size={14} />
-                                            <span>DELETE</span>
-                                        </div>
-                                    </th>
-                                    <th scope="col" className="w-28 px-2 py-4 text-center">
-                                        <div className="inline-flex items-center gap-1.5 text-purple-400">
-                                            <Plus size={14} />
-                                            <span>CREATE_CHILD</span>
-                                        </div>
-                                    </th>
-                                    <th scope="col" className="px-4 py-4 min-w-[190px]">
-                                        <span className="block">Assignment details</span>
-                                        <span className="mt-1 block text-[10px] font-normal normal-case tracking-normal text-slate-500">Status and assigned by</span>
-                                    </th>
-                                </tr>
-                            </thead>
+                {/* Interactive Matrix Toolbar */}
+                <div className="shrink-0 flex flex-wrap items-center justify-between gap-2 border-b border-white/5 bg-slate-950/40 px-3 py-2.5 sm:px-5">
+                    {/* Search in hierarchy */}
+                    <div className="relative flex-1 min-w-[180px] max-w-xs">
+                        <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" />
+                        <input
+                            type="text"
+                            value={searchQuery}
+                            onChange={(e) => setSearchQuery(e.target.value)}
+                            placeholder="Filter resources..."
+                            className="w-full rounded-lg border border-white/10 bg-slate-900/90 pl-8 pr-7 py-1.5 text-xs text-white placeholder-slate-500 focus:border-cyan-400 focus:outline-none transition"
+                        />
+                        {searchQuery && (
+                            <button
+                                type="button"
+                                onClick={() => setSearchQuery("")}
+                                className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white"
+                            >
+                                <X size={12} />
+                            </button>
+                        )}
+                    </div>
 
-                            {/* Table Body */}
-                            <tbody className="divide-y divide-white/5">
-                                {visibleNodes.map((node) => {
-                                    const Icon = node.icon;
-                                    const hasChildren = node.childKeys.length > 0;
-                                    const isCollapsed = collapsedKeys.has(node.key);
+                    <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
+                        {/* Expand / Collapse All */}
+                        <div className="inline-flex rounded-lg border border-white/10 bg-slate-900/80 p-0.5 text-xs">
+                            <button
+                                type="button"
+                                onClick={handleExpandAll}
+                                className="rounded-md px-2 py-1 text-[11px] font-medium text-slate-300 hover:bg-white/10 hover:text-white transition"
+                                title="Expand all branches"
+                            >
+                                Expand All
+                            </button>
+                            <button
+                                type="button"
+                                onClick={handleCollapseAll}
+                                className="rounded-md px-2 py-1 text-[11px] font-medium text-slate-300 hover:bg-white/10 hover:text-white transition"
+                                title="Collapse all branches"
+                            >
+                                Collapse All
+                            </button>
+                        </div>
 
-                                    return (
-                                        <tr
-                                            key={node.key}
-                                            className="group transition-colors hover:bg-white/[0.02]"
-                                        >
-                                            {/* Resource (Hierarchy) Column */}
-                                            <td className="px-5 py-3.5">
-                                                <div
-                                                    className="flex items-center gap-2"
-                                                    style={{ paddingLeft: `${Math.min(node.level, 4) * 12}px` }}
-                                                >
-                                                    {/* Tree guide connector lines for nested children */}
-                                                    {node.level > 0 && (
-                                                        <span className="text-slate-600 font-mono text-sm mr-1 select-none">
-                                                            └──
-                                                        </span>
-                                                    )}
+                        {/* View Switcher: Tree / Cards vs Full Table */}
+                        <div className="inline-flex rounded-lg border border-white/10 bg-slate-900/80 p-0.5 text-xs">
+                            <button
+                                type="button"
+                                onClick={() => setViewMode("tree")}
+                                className={`inline-flex items-center gap-1 rounded-md px-2.5 py-1 text-[11px] font-medium transition ${
+                                    viewMode === "tree"
+                                        ? "bg-cyan-500/20 text-cyan-300 font-semibold"
+                                        : "text-slate-400 hover:text-slate-200"
+                                }`}
+                                title="Responsive Card Tree View"
+                            >
+                                <LayoutGrid size={12} />
+                                <span>Cards</span>
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => setViewMode("table")}
+                                className={`inline-flex items-center gap-1 rounded-md px-2.5 py-1 text-[11px] font-medium transition ${
+                                    viewMode === "table"
+                                        ? "bg-cyan-500/20 text-cyan-300 font-semibold"
+                                        : "text-slate-400 hover:text-slate-200"
+                                }`}
+                                title="Full Matrix Table View"
+                            >
+                                <TableIcon size={12} />
+                                <span>Table</span>
+                            </button>
+                        </div>
 
-                                                    {/* Expand / Collapse toggle */}
-                                                    {hasChildren ? (
-                                                        <button
-                                                            type="button"
-                                                            onClick={() => toggleCollapse(node.key)}
-                                                            className="flex h-5 w-5 items-center justify-center rounded border border-white/10 bg-slate-800/80 text-slate-400 hover:text-white transition"
-                                                        >
-                                                            <ChevronDown
-                                                                size={13}
-                                                                className={`transform transition-transform duration-150 ${isCollapsed ? "-rotate-90" : "rotate-0"
-                                                                    }`}
-                                                            />
-                                                        </button>
-                                                    ) : (
-                                                        <span className="w-5" />
-                                                    )}
+                        {/* Legend Guide Toggle */}
+                        <button
+                            type="button"
+                            onClick={() => setShowLegend((prev) => !prev)}
+                            className={`inline-flex items-center gap-1 rounded-lg border px-2.5 py-1.5 text-[11px] font-medium transition ${
+                                showLegend
+                                    ? "border-cyan-400/30 bg-cyan-500/10 text-cyan-300"
+                                    : "border-white/10 bg-slate-900/80 text-slate-400 hover:text-white"
+                            }`}
+                        >
+                            <Info size={12} />
+                            <span className="hidden sm:inline">Guide</span>
+                        </button>
 
-                                                    {/* Icon */}
-                                                    <div
-                                                        className={`flex h-7 w-7 items-center justify-center rounded-lg border ${node.iconBg} ${node.iconColor} shrink-0`}
-                                                    >
-                                                        <Icon size={15} />
-                                                    </div>
-
-                                                    {/* Resource identity and relationship context */}
-                                                    <div className="min-w-0 flex-1">
-                                                        <div className="flex flex-wrap items-center gap-2">
-                                                            <span className="break-words font-semibold tracking-wide text-white">{node.name}</span>
-                                                            <span className="rounded-md border border-white/10 bg-slate-800/70 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-slate-400">{String(node.resourceType).replace(/_/g, " ")}</span>
-                                                        </div>
-                                                        <p className="mt-1 max-w-full truncate text-[11px] text-slate-500" title={node.parentId ? `Parent: ${nodes.find((candidate) => candidate.key === node.parentId)?.name ?? node.parentId} · ${node.parentId}` : "Root resource or parent not supplied by API"}>
-                                                            {node.parentId ? <>Parent: <span className="text-slate-400">{nodes.find((candidate) => candidate.key === node.parentId)?.name ?? "Unknown"}</span> <span className="text-slate-600">({nodes.find((candidate) => candidate.key === node.parentId)?.id || "ID unavailable"})</span></> : <span className="text-slate-600">Root resource / parent not supplied</span>}
-                                                        </p>
-                                                        <p className="mt-1 text-[10px] text-slate-600">Permission IDs are shown by action on hover.</p>
-                                                    </div>
-                                                </div>
-                                            </td>
-
-                                            {/* Actual target resource record ID; never confuse with permission-definition IDs */}
-                                            <td className="px-4 py-3.5 text-center">
-                                                <span className={`inline-flex items-center justify-center rounded-lg border px-2.5 py-1 text-xs font-semibold ${node.id > 0 ? "border-sky-400/20 bg-sky-500/10 text-sky-200" : "border-amber-400/20 bg-amber-500/10 text-amber-200"}`} title="Resource record ID from the base-permission response">
-                                                    {node.id > 0 ? node.id : "Not provided"}
-                                                </span>
-                                                <span className="mt-1 block text-[10px] text-slate-600">Resource record</span>
-                                            </td>
-
-                                            {/* READ Action Checkbox */}
-                                            <td className="px-4 py-3.5 text-center">
-                                                <button
-                                                    type="button"
-                                                    onClick={() => handleToggleCell(node.key, "READ")}
-                                                    disabled={!node.actionPermIds.READ}
-                                                    aria-pressed={Boolean(allowedState[`${node.key}_READ`])}
-                                                    aria-label={`${node.name} ${node.id || "base"} READ`}
-                                                    title={node.actionPermIds.READ ? `Permission ID: ${node.actionPermIds.READ} · Resource: ${node.resourceType} · Resource ID: ${node.id || "not provided"} · Action: READ` : "No matching READ permission ID was returned by the backend."}
-                                                    className={`inline-flex h-5 w-5 items-center justify-center rounded border transition disabled:cursor-not-allowed disabled:opacity-40 ${allowedState[`${node.key}_READ`]
-                                                        ? "border-sky-400 bg-sky-500 text-slate-950 shadow-sm shadow-sky-500/30"
-                                                        : "border-slate-700 bg-slate-900 hover:border-slate-500"
-                                                        }`}
-                                                >
-                                                    {allowedState[`${node.key}_READ`] && (
-                                                        <Check size={13} strokeWidth={3} />
-                                                    )}
-                                                </button>
-                                            </td>
-
-                                            {/* UPDATE Action Checkbox */}
-                                            <td className="px-4 py-3.5 text-center">
-                                                <button
-                                                    type="button"
-                                                    onClick={() => handleToggleCell(node.key, "UPDATE")}
-                                                    disabled={!node.actionPermIds.UPDATE}
-                                                    aria-pressed={Boolean(allowedState[`${node.key}_UPDATE`])}
-                                                    aria-label={`${node.name} ${node.id || "base"} UPDATE`}
-                                                    title={node.actionPermIds.UPDATE ? `Permission ID: ${node.actionPermIds.UPDATE} · Resource: ${node.resourceType} · Resource ID: ${node.id || "not provided"} · Action: UPDATE` : "No matching UPDATE permission ID was returned by the backend."}
-                                                    className={`inline-flex h-5 w-5 items-center justify-center rounded border transition disabled:cursor-not-allowed disabled:opacity-40 ${allowedState[`${node.key}_UPDATE`]
-                                                        ? "border-sky-400 bg-sky-500 text-slate-950 shadow-sm shadow-sky-500/30"
-                                                        : "border-slate-700 bg-slate-900 hover:border-slate-500"
-                                                        }`}
-                                                >
-                                                    {allowedState[`${node.key}_UPDATE`] && (
-                                                        <Check size={13} strokeWidth={3} />
-                                                    )}
-                                                </button>
-                                            </td>
-
-                                            {/* DELETE Action Checkbox */}
-                                            <td className="px-4 py-3.5 text-center">
-                                                <button
-                                                    type="button"
-                                                    onClick={() => handleToggleCell(node.key, "DELETE")}
-                                                    disabled={!node.actionPermIds.DELETE}
-                                                    aria-pressed={Boolean(allowedState[`${node.key}_DELETE`])}
-                                                    aria-label={`${node.name} ${node.id || "base"} DELETE`}
-                                                    title={node.actionPermIds.DELETE ? `Permission ID: ${node.actionPermIds.DELETE} · Resource: ${node.resourceType} · Resource ID: ${node.id || "not provided"} · Action: DELETE` : "No matching DELETE permission ID was returned by the backend."}
-                                                    className={`inline-flex h-5 w-5 items-center justify-center rounded border transition disabled:cursor-not-allowed disabled:opacity-40 ${allowedState[`${node.key}_DELETE`]
-                                                        ? "border-sky-400 bg-sky-500 text-slate-950 shadow-sm shadow-sky-500/30"
-                                                        : "border-slate-700 bg-slate-900 hover:border-slate-500"
-                                                        }`}
-                                                >
-                                                    {allowedState[`${node.key}_DELETE`] && (
-                                                        <Check size={13} strokeWidth={3} />
-                                                    )}
-                                                </button>
-                                            </td>
-
-                                            {/* CREATE_CHILD Action Checkbox */}
-                                            <td className="px-4 py-3.5 text-center">
-                                                <button
-                                                    type="button"
-                                                    onClick={() => handleToggleCell(node.key, "CREATE_CHILD")}
-                                                    disabled={!node.actionPermIds.CREATE_CHILD}
-                                                    aria-pressed={Boolean(allowedState[`${node.key}_CREATE_CHILD`])}
-                                                    aria-label={`${node.name} ${node.id || "base"} CREATE_CHILD`}
-                                                    title={node.actionPermIds.CREATE_CHILD ? `Permission ID: ${node.actionPermIds.CREATE_CHILD} · Resource: ${node.resourceType} · Resource ID: ${node.id || "not provided"} · Action: CREATE_CHILD` : "No matching CREATE_CHILD permission ID was returned by the backend."}
-                                                    className={`inline-flex h-5 w-5 items-center justify-center rounded border transition disabled:cursor-not-allowed disabled:opacity-40 ${allowedState[`${node.key}_CREATE_CHILD`]
-                                                        ? "border-sky-400 bg-sky-500 text-slate-950 shadow-sm shadow-sky-500/30"
-                                                        : "border-slate-700 bg-slate-900 hover:border-slate-500"
-                                                        }`}
-                                                >
-                                                    {allowedState[`${node.key}_CREATE_CHILD`] && (
-                                                        <Check size={13} strokeWidth={3} />
-                                                    )}
-                                                </button>
-                                            </td>
-
-                                            {/* Assignment status and assignedBy metadata from RolePermissionResponse */}
-                                            <td className="px-3 py-3.5">
-                                                {(() => {
-                                                    const assignments = (role.permissions ?? []).filter((assigned) =>
-                                                        assigned.id > 0 &&
-                                                        Object.values(node.actionPermIds).includes(assigned.id)
-                                                    );
-                                                    const activeAssignments = assignments.filter((assigned) => assigned.assignmentActive === true);
-                                                    const inactiveAssignments = assignments.filter((assigned) => assigned.assignmentActive === false);
-                                                    if (assignments.length === 0) {
-                                                        return <span className="text-xs text-slate-500">Not assigned</span>;
-                                                    }
-                                                    return (
-                                                        <div className="flex min-w-0 flex-col gap-1.5">
-                                                            {activeAssignments.length > 0 && (
-                                                                <span className="inline-flex w-fit items-center gap-1 rounded-md border border-emerald-400/20 bg-emerald-500/10 px-2 py-1 text-[10px] font-semibold text-emerald-300">
-                                                                    <CheckCircle2 size={11} /> Active assignment
-                                                                </span>
-                                                            )}
-                                                            {inactiveAssignments.length > 0 && (
-                                                                <span className="inline-flex w-fit items-center gap-1 rounded-md border border-amber-400/20 bg-amber-500/10 px-2 py-1 text-[10px] font-semibold text-amber-300">
-                                                                    <AlertCircle size={11} /> Inactive assignment
-                                                                </span>
-                                                            )}
-                                                            {Array.from(new Map(assignments.filter((a) => a.assignedBy).map((a) => [a.assignedBy!.id, a.assignedBy!])).values()).map((person) => (
-                                                                <span key={person.id} className="flex min-w-0 items-center gap-1.5 text-[11px] text-slate-300" title={`Assigned by ${person.name}${person.code ? ` (${person.code})` : ""}`}>
-                                                                    <Users size={11} className="shrink-0 text-cyan-400" />
-                                                                    <span className="truncate">{person.name}</span>
-                                                                    {person.code && <span className="truncate text-slate-500">· {person.code}</span>}
-                                                                </span>
-                                                            ))}
-                                                            {assignments.every((a) => !a.assignedBy) && (
-                                                                <span className="text-[10px] text-slate-500">Assigner not provided</span>
-                                                            )}
-                                                        </div>
-                                                    );
-                                                })()}
-                                            </td>
-                                        </tr>
-                                    );
-                                })}
-                            </tbody>
-                        </table>
+                        {/* Active permissions badge */}
+                        <span className="inline-flex items-center gap-1 rounded-lg border border-emerald-400/30 bg-emerald-500/10 px-2.5 py-1.5 text-[11px] font-semibold text-emerald-300">
+                            <CheckCircle2 size={12} />
+                            <span>{activeCount} active</span>
+                        </span>
                     </div>
                 </div>
 
-                {/* Footer Bar */}
-                <div className="flex shrink-0 flex-col gap-3 border-t border-white/10 bg-slate-900/95 px-3 py-3 backdrop-blur-md sm:px-5 sm:py-4 lg:flex-row lg:items-center lg:justify-between">
-                    <p className="min-w-0 flex-1 text-[11px] leading-4 text-slate-400 sm:text-xs">
-                        Checkboxes configure action permissions. The assignment column shows active status and the user who assigned each permission when returned by the backend.
+                {/* Collapsible legend: explain IDs & concepts */}
+                <AnimatePresence>
+                    {showLegend && (
+                        <motion.div
+                            initial={{ height: 0, opacity: 0 }}
+                            animate={{ height: "auto", opacity: 1 }}
+                            exit={{ height: 0, opacity: 0 }}
+                            className="overflow-hidden border-b border-white/5 bg-slate-950/50"
+                        >
+                            <div className="grid gap-2 p-3 sm:grid-cols-3 sm:p-4 text-xs">
+                                <div className="flex items-start gap-2 rounded-lg border border-sky-400/15 bg-sky-500/[0.04] p-2.5">
+                                    <span className="mt-0.5 rounded border border-sky-400/20 bg-sky-500/10 px-1.5 py-0.5 font-mono text-[10px] text-sky-200 shrink-0">Resource ID</span>
+                                    <p className="text-[11px] leading-4 text-slate-400">The specific database record being protected (e.g. School, Department, or Course ID).</p>
+                                </div>
+                                <div className="flex items-start gap-2 rounded-lg border border-cyan-400/15 bg-cyan-500/[0.04] p-2.5">
+                                    <span className="mt-0.5 rounded border border-cyan-400/20 bg-cyan-500/10 px-1.5 py-0.5 font-mono text-[10px] text-cyan-200 shrink-0">Cascading</span>
+                                    <p className="text-[11px] leading-4 text-slate-400">Selecting a parent automatically enables child access in the UI; only top parents are sent to the backend.</p>
+                                </div>
+                                <div className="flex items-start gap-2 rounded-lg border border-violet-400/15 bg-violet-500/[0.04] p-2.5">
+                                    <span className="mt-0.5 rounded border border-violet-400/20 bg-violet-500/10 px-1.5 py-0.5 text-[10px] text-violet-200 shrink-0">Permissions</span>
+                                    <p className="text-[11px] leading-4 text-slate-400">Four discrete operations (READ, UPDATE, DELETE, CREATE_CHILD) are assignable per resource level.</p>
+                                </div>
+                            </div>
+                        </motion.div>
+                    )}
+                </AnimatePresence>
+
+                {/* Permission Matrix Main Display */}
+                <div className="min-h-0 min-w-0 flex-1 overflow-auto overscroll-contain p-2 sm:p-4">
+                    {filteredNodes.length === 0 ? (
+                        <div className="p-8 text-center text-slate-500">
+                            <KeyRound size={32} className="mx-auto mb-2 opacity-40 text-slate-400" />
+                            <p className="text-sm font-semibold text-slate-300">No resources match your filter</p>
+                            <p className="text-xs text-slate-500 mt-1">Try clearing your search query &ldquo;{searchQuery}&rdquo;</p>
+                            <button
+                                type="button"
+                                onClick={() => setSearchQuery("")}
+                                className="mt-3 rounded-lg border border-white/10 bg-slate-800 px-3 py-1.5 text-xs text-slate-300 hover:text-white"
+                            >
+                                Clear search
+                            </button>
+                        </div>
+                    ) : viewMode === "tree" ? (
+                        /* RESPONSIVE HIERARCHICAL CARD / TREE VIEW */
+                        <div className="space-y-2.5">
+                            {filteredNodes.map((node) => {
+                                const Icon = node.icon;
+                                const hasChildren = node.childKeys.length > 0;
+                                const isCollapsed = collapsedKeys.has(node.key);
+                                const parentNode = node.parentId ? nodes.find((c) => c.key === node.parentId) : null;
+
+                                const assignments = (role.permissions ?? []).filter((assigned) =>
+                                    assigned.id > 0 &&
+                                    Object.values(node.actionPermIds).includes(assigned.id)
+                                );
+                                const activeAssignments = assignments.filter((assigned) => assigned.assignmentActive === true);
+                                const inactiveAssignments = assignments.filter((assigned) => assigned.assignmentActive === false);
+
+                                return (
+                                    <div
+                                        key={node.key}
+                                        className="rounded-xl border border-white/10 bg-slate-950/50 p-3 sm:p-4 transition hover:border-white/20"
+                                        style={{
+                                            marginLeft: `${Math.min(node.level, 4) * 8}px`,
+                                        }}
+                                    >
+                                        {/* Resource Header */}
+                                        <div className="flex items-start gap-2 sm:gap-3">
+                                            {node.level > 0 && (
+                                                <span className="text-slate-600 font-mono text-xs select-none shrink-0 mt-1.5 hidden sm:inline">
+                                                    └──
+                                                </span>
+                                            )}
+
+                                            {hasChildren ? (
+                                                <button
+                                                    type="button"
+                                                    onClick={() => toggleCollapse(node.key)}
+                                                    className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md border border-white/10 bg-slate-800/80 text-slate-400 hover:text-white transition mt-0.5"
+                                                    title={isCollapsed ? "Expand children" : "Collapse children"}
+                                                >
+                                                    <ChevronDown
+                                                        size={13}
+                                                        className={`transform transition-transform duration-150 ${
+                                                            isCollapsed ? "-rotate-90" : "rotate-0"
+                                                        }`}
+                                                    />
+                                                </button>
+                                            ) : (
+                                                <span className="w-6 shrink-0" />
+                                            )}
+
+                                            <div
+                                                className={`flex h-7 w-7 sm:h-8 sm:w-8 shrink-0 items-center justify-center rounded-lg border ${node.iconBg} ${node.iconColor} mt-0.5`}
+                                            >
+                                                <Icon size={15} />
+                                            </div>
+
+                                            <div className="min-w-0 flex-1">
+                                                <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
+                                                    <span className="font-semibold text-white text-xs sm:text-sm break-words">
+                                                        {node.name}
+                                                    </span>
+                                                    <span className="rounded-md border border-white/10 bg-slate-800/80 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-slate-300">
+                                                        {String(node.resourceType).replace(/_/g, " ")}
+                                                    </span>
+                                                    <span
+                                                        className={`rounded-md border px-1.5 py-0.5 text-[10px] font-mono font-medium ${
+                                                            node.id > 0
+                                                                ? "border-sky-400/20 bg-sky-500/10 text-sky-200"
+                                                                : "border-amber-400/20 bg-amber-500/10 text-amber-200"
+                                                        }`}
+                                                    >
+                                                        ID: {node.id > 0 ? node.id : "Base"}
+                                                    </span>
+                                                </div>
+
+                                                {parentNode && (
+                                                    <p className="mt-0.5 text-[11px] text-slate-400 truncate">
+                                                        Parent: <span className="text-slate-300 font-medium">{parentNode.name}</span>{" "}
+                                                        <span className="text-slate-500 font-mono">({parentNode.id || "Base"})</span>
+                                                    </p>
+                                                )}
+                                            </div>
+                                        </div>
+
+                                        {/* Actions Toggle Buttons Grid */}
+                                        <div className="mt-3 grid grid-cols-2 sm:grid-cols-4 gap-2 pt-2.5 border-t border-white/5 lg:max-w-3xl">
+                                            {/* READ */}
+                                            <button
+                                                type="button"
+                                                onClick={() => handleToggleCell(node.key, "READ")}
+                                                disabled={!node.actionPermIds.READ}
+                                                aria-pressed={Boolean(allowedState[`${node.key}_READ`])}
+                                                className={`flex items-center justify-between gap-2 rounded-lg border p-2 text-xs font-semibold transition ${
+                                                    allowedState[`${node.key}_READ`]
+                                                        ? "border-emerald-400/40 bg-emerald-500/15 text-emerald-300 shadow-sm shadow-emerald-500/10"
+                                                        : "border-white/10 bg-slate-900/70 text-slate-400 hover:border-white/20"
+                                                } disabled:opacity-30 disabled:cursor-not-allowed`}
+                                            >
+                                                <span className="flex items-center gap-1.5 truncate">
+                                                    <Eye size={13} className={allowedState[`${node.key}_READ`] ? "text-emerald-400" : "text-slate-500"} />
+                                                    <span>READ</span>
+                                                </span>
+                                                <span
+                                                    className={`flex h-4 w-4 shrink-0 items-center justify-center rounded border transition ${
+                                                        allowedState[`${node.key}_READ`]
+                                                            ? "border-emerald-400 bg-emerald-500 text-slate-950"
+                                                            : "border-slate-700 bg-slate-950"
+                                                    }`}
+                                                >
+                                                    {allowedState[`${node.key}_READ`] && <Check size={11} strokeWidth={3} />}
+                                                </span>
+                                            </button>
+
+                                            {/* UPDATE */}
+                                            <button
+                                                type="button"
+                                                onClick={() => handleToggleCell(node.key, "UPDATE")}
+                                                disabled={!node.actionPermIds.UPDATE}
+                                                aria-pressed={Boolean(allowedState[`${node.key}_UPDATE`])}
+                                                className={`flex items-center justify-between gap-2 rounded-lg border p-2 text-xs font-semibold transition ${
+                                                    allowedState[`${node.key}_UPDATE`]
+                                                        ? "border-sky-400/40 bg-sky-500/15 text-sky-300 shadow-sm shadow-sky-500/10"
+                                                        : "border-white/10 bg-slate-900/70 text-slate-400 hover:border-white/20"
+                                                } disabled:opacity-30 disabled:cursor-not-allowed`}
+                                            >
+                                                <span className="flex items-center gap-1.5 truncate">
+                                                    <Pencil size={13} className={allowedState[`${node.key}_UPDATE`] ? "text-sky-400" : "text-slate-500"} />
+                                                    <span>UPDATE</span>
+                                                </span>
+                                                <span
+                                                    className={`flex h-4 w-4 shrink-0 items-center justify-center rounded border transition ${
+                                                        allowedState[`${node.key}_UPDATE`]
+                                                            ? "border-sky-400 bg-sky-500 text-slate-950"
+                                                            : "border-slate-700 bg-slate-950"
+                                                    }`}
+                                                >
+                                                    {allowedState[`${node.key}_UPDATE`] && <Check size={11} strokeWidth={3} />}
+                                                </span>
+                                            </button>
+
+                                            {/* DELETE */}
+                                            <button
+                                                type="button"
+                                                onClick={() => handleToggleCell(node.key, "DELETE")}
+                                                disabled={!node.actionPermIds.DELETE}
+                                                aria-pressed={Boolean(allowedState[`${node.key}_DELETE`])}
+                                                className={`flex items-center justify-between gap-2 rounded-lg border p-2 text-xs font-semibold transition ${
+                                                    allowedState[`${node.key}_DELETE`]
+                                                        ? "border-rose-400/40 bg-rose-500/15 text-rose-300 shadow-sm shadow-rose-500/10"
+                                                        : "border-white/10 bg-slate-900/70 text-slate-400 hover:border-white/20"
+                                                } disabled:opacity-30 disabled:cursor-not-allowed`}
+                                            >
+                                                <span className="flex items-center gap-1.5 truncate">
+                                                    <Trash2 size={13} className={allowedState[`${node.key}_DELETE`] ? "text-rose-400" : "text-slate-500"} />
+                                                    <span>DELETE</span>
+                                                </span>
+                                                <span
+                                                    className={`flex h-4 w-4 shrink-0 items-center justify-center rounded border transition ${
+                                                        allowedState[`${node.key}_DELETE`]
+                                                            ? "border-rose-400 bg-rose-500 text-slate-950"
+                                                            : "border-slate-700 bg-slate-950"
+                                                    }`}
+                                                >
+                                                    {allowedState[`${node.key}_DELETE`] && <Check size={11} strokeWidth={3} />}
+                                                </span>
+                                            </button>
+
+                                            {/* CREATE_CHILD */}
+                                            <button
+                                                type="button"
+                                                onClick={() => handleToggleCell(node.key, "CREATE_CHILD")}
+                                                disabled={!node.actionPermIds.CREATE_CHILD}
+                                                aria-pressed={Boolean(allowedState[`${node.key}_CREATE_CHILD`])}
+                                                className={`flex items-center justify-between gap-2 rounded-lg border p-2 text-xs font-semibold transition ${
+                                                    allowedState[`${node.key}_CREATE_CHILD`]
+                                                        ? "border-purple-400/40 bg-purple-500/15 text-purple-300 shadow-sm shadow-purple-500/10"
+                                                        : "border-white/10 bg-slate-900/70 text-slate-400 hover:border-white/20"
+                                                } disabled:opacity-30 disabled:cursor-not-allowed`}
+                                            >
+                                                <span className="flex items-center gap-1.5 truncate">
+                                                    <Plus size={13} className={allowedState[`${node.key}_CREATE_CHILD`] ? "text-purple-400" : "text-slate-500"} />
+                                                    <span className="truncate">CREATE</span>
+                                                </span>
+                                                <span
+                                                    className={`flex h-4 w-4 shrink-0 items-center justify-center rounded border transition ${
+                                                        allowedState[`${node.key}_CREATE_CHILD`]
+                                                            ? "border-purple-400 bg-purple-500 text-slate-950"
+                                                            : "border-slate-700 bg-slate-950"
+                                                    }`}
+                                                >
+                                                    {allowedState[`${node.key}_CREATE_CHILD`] && <Check size={11} strokeWidth={3} />}
+                                                </span>
+                                            </button>
+                                        </div>
+
+                                        {/* Assignment Metadata (if exists) */}
+                                        {assignments.length > 0 && (
+                                            <div className="mt-2.5 flex flex-wrap items-center gap-1.5 pt-2 border-t border-white/5 text-[11px]">
+                                                {activeAssignments.length > 0 && (
+                                                    <span className="inline-flex items-center gap-1 rounded-md border border-emerald-400/20 bg-emerald-500/10 px-2 py-0.5 text-[10px] font-semibold text-emerald-300">
+                                                        <CheckCircle2 size={11} /> Active assignment
+                                                    </span>
+                                                )}
+                                                {inactiveAssignments.length > 0 && (
+                                                    <span className="inline-flex items-center gap-1 rounded-md border border-amber-400/20 bg-amber-500/10 px-2 py-0.5 text-[10px] font-semibold text-amber-300">
+                                                        <AlertCircle size={11} /> Inactive assignment
+                                                    </span>
+                                                )}
+                                                {Array.from(
+                                                    new Map(assignments.filter((a) => a.assignedBy).map((a) => [a.assignedBy!.id, a.assignedBy!])).values()
+                                                ).map((person) => (
+                                                    <span key={person.id} className="inline-flex items-center gap-1 text-slate-300 text-[10px]">
+                                                        <Users size={11} className="text-cyan-400" />
+                                                        <span>Assigned by {person.name}</span>
+                                                    </span>
+                                                ))}
+                                            </div>
+                                        )}
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    ) : (
+                        /* FULL MATRIX TABLE VIEW (WITH STICKY HEADER & STICKY COLUMN) */
+                        <div className="w-full min-w-[880px] rounded-2xl border border-white/10 bg-slate-950/60 shadow-xl overflow-x-auto">
+                            <table className="w-full min-w-[880px] table-fixed border-collapse text-left text-sm text-slate-300">
+                                {/* Table Header */}
+                                <thead className="sticky top-0 z-20 border-b border-white/10 bg-slate-950 text-xs font-semibold uppercase tracking-wider text-slate-400 shadow-sm backdrop-blur-md">
+                                    <tr>
+                                        <th scope="col" className="sticky left-0 z-30 w-[35%] bg-slate-950 px-4 py-3.5 shadow-[2px_0_6px_rgba(0,0,0,0.4)]">
+                                            <span className="block">Resource hierarchy</span>
+                                            <span className="mt-0.5 block text-[10px] font-normal normal-case tracking-normal text-slate-500">Name, type and parent</span>
+                                        </th>
+                                        <th scope="col" className="w-24 px-3 py-3.5 text-center">
+                                            <span className="block">Record ID</span>
+                                            <span className="mt-0.5 block text-[10px] font-normal normal-case tracking-normal text-slate-500">Target</span>
+                                        </th>
+                                        <th scope="col" className="w-20 px-2 py-3.5 text-center">
+                                            <div className="inline-flex items-center gap-1 text-emerald-400">
+                                                <Eye size={13} />
+                                                <span>READ</span>
+                                            </div>
+                                        </th>
+                                        <th scope="col" className="w-20 px-2 py-3.5 text-center">
+                                            <div className="inline-flex items-center gap-1 text-sky-400">
+                                                <Pencil size={13} />
+                                                <span>UPDATE</span>
+                                            </div>
+                                        </th>
+                                        <th scope="col" className="w-20 px-2 py-3.5 text-center">
+                                            <div className="inline-flex items-center gap-1 text-rose-400">
+                                                <Trash2 size={13} />
+                                                <span>DELETE</span>
+                                            </div>
+                                        </th>
+                                        <th scope="col" className="w-24 px-2 py-3.5 text-center">
+                                            <div className="inline-flex items-center gap-1 text-purple-400">
+                                                <Plus size={13} />
+                                                <span>CREATE</span>
+                                            </div>
+                                        </th>
+                                        <th scope="col" className="px-4 py-3.5 min-w-[170px]">
+                                            <span className="block">Assignment details</span>
+                                            <span className="mt-0.5 block text-[10px] font-normal normal-case tracking-normal text-slate-500">Status & metadata</span>
+                                        </th>
+                                    </tr>
+                                </thead>
+
+                                {/* Table Body */}
+                                <tbody className="divide-y divide-white/5">
+                                    {filteredNodes.map((node) => {
+                                        const Icon = node.icon;
+                                        const hasChildren = node.childKeys.length > 0;
+                                        const isCollapsed = collapsedKeys.has(node.key);
+
+                                        return (
+                                            <tr
+                                                key={node.key}
+                                                className="group transition-colors hover:bg-white/[0.02]"
+                                            >
+                                                {/* Resource (Hierarchy) Column - Sticky Left */}
+                                                <td className="sticky left-0 z-10 bg-slate-950/95 px-4 py-3 shadow-[2px_0_6px_rgba(0,0,0,0.4)] backdrop-blur-md">
+                                                    <div
+                                                        className="flex items-center gap-2"
+                                                        style={{ paddingLeft: `${Math.min(node.level, 4) * 12}px` }}
+                                                    >
+                                                        {node.level > 0 && (
+                                                            <span className="text-slate-600 font-mono text-sm mr-0.5 select-none">
+                                                                └──
+                                                            </span>
+                                                        )}
+
+                                                        {hasChildren ? (
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => toggleCollapse(node.key)}
+                                                                className="flex h-5 w-5 shrink-0 items-center justify-center rounded border border-white/10 bg-slate-800/80 text-slate-400 hover:text-white transition"
+                                                            >
+                                                                <ChevronDown
+                                                                    size={12}
+                                                                    className={`transform transition-transform duration-150 ${
+                                                                        isCollapsed ? "-rotate-90" : "rotate-0"
+                                                                    }`}
+                                                                />
+                                                            </button>
+                                                        ) : (
+                                                            <span className="w-5 shrink-0" />
+                                                        )}
+
+                                                        <div
+                                                            className={`flex h-7 w-7 items-center justify-center rounded-lg border ${node.iconBg} ${node.iconColor} shrink-0`}
+                                                        >
+                                                            <Icon size={14} />
+                                                        </div>
+
+                                                        <div className="min-w-0 flex-1">
+                                                            <div className="flex flex-wrap items-center gap-1.5">
+                                                                <span className="font-semibold tracking-wide text-white text-xs sm:text-sm break-words">
+                                                                    {node.name}
+                                                                </span>
+                                                                <span className="rounded border border-white/10 bg-slate-800/70 px-1 py-0.2 text-[9px] font-medium uppercase tracking-wide text-slate-400">
+                                                                    {String(node.resourceType).replace(/_/g, " ")}
+                                                                </span>
+                                                            </div>
+                                                            <p className="mt-0.5 max-w-full truncate text-[10px] text-slate-500">
+                                                                {node.parentId ? (
+                                                                    <>Parent: <span className="text-slate-400">{nodes.find((c) => c.key === node.parentId)?.name ?? "Unknown"}</span></>
+                                                                ) : (
+                                                                    <span className="text-slate-600">Root resource</span>
+                                                                )}
+                                                            </p>
+                                                        </div>
+                                                    </div>
+                                                </td>
+
+                                                {/* Target Resource ID */}
+                                                <td className="px-3 py-3 text-center">
+                                                    <span
+                                                        className={`inline-flex items-center justify-center rounded-md border px-2 py-0.5 text-xs font-mono font-semibold ${
+                                                            node.id > 0
+                                                                ? "border-sky-400/20 bg-sky-500/10 text-sky-200"
+                                                                : "border-amber-400/20 bg-amber-500/10 text-amber-200"
+                                                        }`}
+                                                    >
+                                                        {node.id > 0 ? node.id : "—"}
+                                                    </span>
+                                                </td>
+
+                                                {/* READ Action Checkbox */}
+                                                <td className="px-3 py-3 text-center">
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => handleToggleCell(node.key, "READ")}
+                                                        disabled={!node.actionPermIds.READ}
+                                                        aria-pressed={Boolean(allowedState[`${node.key}_READ`])}
+                                                        aria-label={`${node.name} READ`}
+                                                        title={node.actionPermIds.READ ? `Permission ID: ${node.actionPermIds.READ} · READ` : "Not available"}
+                                                        className={`inline-flex h-6 w-6 items-center justify-center rounded-md border transition disabled:cursor-not-allowed disabled:opacity-30 ${
+                                                            allowedState[`${node.key}_READ`]
+                                                                ? "border-emerald-400 bg-emerald-500 text-slate-950 shadow-sm"
+                                                                : "border-slate-700 bg-slate-900 hover:border-slate-500"
+                                                        }`}
+                                                    >
+                                                        {allowedState[`${node.key}_READ`] && (
+                                                            <Check size={13} strokeWidth={3} />
+                                                        )}
+                                                    </button>
+                                                </td>
+
+                                                {/* UPDATE Action Checkbox */}
+                                                <td className="px-3 py-3 text-center">
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => handleToggleCell(node.key, "UPDATE")}
+                                                        disabled={!node.actionPermIds.UPDATE}
+                                                        aria-pressed={Boolean(allowedState[`${node.key}_UPDATE`])}
+                                                        aria-label={`${node.name} UPDATE`}
+                                                        title={node.actionPermIds.UPDATE ? `Permission ID: ${node.actionPermIds.UPDATE} · UPDATE` : "Not available"}
+                                                        className={`inline-flex h-6 w-6 items-center justify-center rounded-md border transition disabled:cursor-not-allowed disabled:opacity-30 ${
+                                                            allowedState[`${node.key}_UPDATE`]
+                                                                ? "border-sky-400 bg-sky-500 text-slate-950 shadow-sm"
+                                                                : "border-slate-700 bg-slate-900 hover:border-slate-500"
+                                                        }`}
+                                                    >
+                                                        {allowedState[`${node.key}_UPDATE`] && (
+                                                            <Check size={13} strokeWidth={3} />
+                                                        )}
+                                                    </button>
+                                                </td>
+
+                                                {/* DELETE Action Checkbox */}
+                                                <td className="px-3 py-3 text-center">
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => handleToggleCell(node.key, "DELETE")}
+                                                        disabled={!node.actionPermIds.DELETE}
+                                                        aria-pressed={Boolean(allowedState[`${node.key}_DELETE`])}
+                                                        aria-label={`${node.name} DELETE`}
+                                                        title={node.actionPermIds.DELETE ? `Permission ID: ${node.actionPermIds.DELETE} · DELETE` : "Not available"}
+                                                        className={`inline-flex h-6 w-6 items-center justify-center rounded-md border transition disabled:cursor-not-allowed disabled:opacity-30 ${
+                                                            allowedState[`${node.key}_DELETE`]
+                                                                ? "border-rose-400 bg-rose-500 text-slate-950 shadow-sm"
+                                                                : "border-slate-700 bg-slate-900 hover:border-slate-500"
+                                                        }`}
+                                                    >
+                                                        {allowedState[`${node.key}_DELETE`] && (
+                                                            <Check size={13} strokeWidth={3} />
+                                                        )}
+                                                    </button>
+                                                </td>
+
+                                                {/* CREATE_CHILD Action Checkbox */}
+                                                <td className="px-3 py-3 text-center">
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => handleToggleCell(node.key, "CREATE_CHILD")}
+                                                        disabled={!node.actionPermIds.CREATE_CHILD}
+                                                        aria-pressed={Boolean(allowedState[`${node.key}_CREATE_CHILD`])}
+                                                        aria-label={`${node.name} CREATE_CHILD`}
+                                                        title={node.actionPermIds.CREATE_CHILD ? `Permission ID: ${node.actionPermIds.CREATE_CHILD} · CREATE_CHILD` : "Not available"}
+                                                        className={`inline-flex h-6 w-6 items-center justify-center rounded-md border transition disabled:cursor-not-allowed disabled:opacity-30 ${
+                                                            allowedState[`${node.key}_CREATE_CHILD`]
+                                                                ? "border-purple-400 bg-purple-500 text-slate-950 shadow-sm"
+                                                                : "border-slate-700 bg-slate-900 hover:border-slate-500"
+                                                        }`}
+                                                    >
+                                                        {allowedState[`${node.key}_CREATE_CHILD`] && (
+                                                            <Check size={13} strokeWidth={3} />
+                                                        )}
+                                                    </button>
+                                                </td>
+
+                                                {/* Assignment status */}
+                                                <td className="px-3 py-3">
+                                                    {(() => {
+                                                        const assignments = (role.permissions ?? []).filter((assigned) =>
+                                                            assigned.id > 0 &&
+                                                            Object.values(node.actionPermIds).includes(assigned.id)
+                                                        );
+                                                        const activeAssignments = assignments.filter((assigned) => assigned.assignmentActive === true);
+                                                        const inactiveAssignments = assignments.filter((assigned) => assigned.assignmentActive === false);
+                                                        if (assignments.length === 0) {
+                                                            return <span className="text-xs text-slate-500">Not assigned</span>;
+                                                        }
+                                                        return (
+                                                            <div className="flex min-w-0 flex-col gap-1">
+                                                                {activeAssignments.length > 0 && (
+                                                                    <span className="inline-flex w-fit items-center gap-1 rounded-md border border-emerald-400/20 bg-emerald-500/10 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-300">
+                                                                        <CheckCircle2 size={10} /> Active
+                                                                    </span>
+                                                                )}
+                                                                {inactiveAssignments.length > 0 && (
+                                                                    <span className="inline-flex w-fit items-center gap-1 rounded-md border border-amber-400/20 bg-amber-500/10 px-1.5 py-0.5 text-[10px] font-semibold text-amber-300">
+                                                                        <AlertCircle size={10} /> Inactive
+                                                                    </span>
+                                                                )}
+                                                                {Array.from(new Map(assignments.filter((a) => a.assignedBy).map((a) => [a.assignedBy!.id, a.assignedBy!])).values()).map((person) => (
+                                                                    <span key={person.id} className="flex min-w-0 items-center gap-1 text-[10px] text-slate-300">
+                                                                        <Users size={10} className="shrink-0 text-cyan-400" />
+                                                                        <span className="truncate">{person.name}</span>
+                                                                    </span>
+                                                                ))}
+                                                            </div>
+                                                        );
+                                                    })()}
+                                                </td>
+                                            </tr>
+                                        );
+                                    })}
+                                </tbody>
+                            </table>
+                        </div>
+                    )}
+                </div>
+
+                {/* Responsive Footer Bar */}
+                <div className="flex shrink-0 flex-col gap-2.5 border-t border-white/10 bg-slate-900/95 px-3 py-3 backdrop-blur-md sm:px-5 sm:py-3.5 sm:flex-row sm:items-center sm:justify-between">
+                    <p className="min-w-0 text-[11px] leading-4 text-slate-400 sm:text-xs">
+                        Showing <strong className="text-white">{filteredNodes.length}</strong> resources • <strong className="text-cyan-300">{activeCount}</strong> action permissions enabled
                     </p>
-                    <div className="flex shrink-0 flex-wrap items-center justify-end gap-2 sm:gap-3">
+                    <div className="flex shrink-0 items-center justify-end gap-2 sm:gap-3">
                         <button
                             type="button"
                             onClick={onClose}
                             disabled={busy}
-                            className="rounded-xl border border-white/10 bg-slate-800/60 px-4 py-2.5 text-sm font-semibold text-slate-300 hover:bg-white/10 hover:text-white transition disabled:opacity-50"
+                            className="flex-1 sm:flex-none rounded-xl border border-white/10 bg-slate-800/60 px-4 py-2 text-xs sm:text-sm font-semibold text-slate-300 hover:bg-white/10 hover:text-white transition disabled:opacity-50"
                         >
                             Cancel
                         </button>
@@ -1097,15 +1496,16 @@ function PermissionMatrixDialog({
                             type="button"
                             onClick={handleSaveMatrix}
                             disabled={busy}
-                            className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-violet-600 via-blue-600 to-cyan-500 px-5 py-2.5 text-sm font-semibold text-white shadow-lg shadow-blue-500/20 hover:brightness-110 transition disabled:opacity-50"
+                            className="flex-1 sm:flex-none inline-flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-violet-600 via-blue-600 to-cyan-500 px-4 sm:px-5 py-2 text-xs sm:text-sm font-semibold text-white shadow-lg shadow-blue-500/20 hover:brightness-110 transition disabled:opacity-50"
                         >
-                            {busy && <LoaderCircle size={15} className="animate-spin" />}
+                            {busy && <LoaderCircle size={14} className="animate-spin" />}
                             Apply & Save Hierarchy
                         </button>
                     </div>
                 </div>
             </motion.div>
-        </div>
+        </div>,
+        document.body
     );
 }
 
@@ -1248,8 +1648,8 @@ function RoleDialog({
         }
     };
 
-    return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6">
+    return createPortal(
+        <div className="fixed inset-0 z-[200] flex items-center justify-center p-2.5 sm:p-6">
             <motion.div
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
@@ -1265,27 +1665,27 @@ function RoleDialog({
                 animate={{ opacity: 1, scale: 1, y: 0 }}
                 exit={{ opacity: 0, scale: 0.95, y: 15 }}
                 transition={{ duration: 0.2 }}
-                className="relative z-10 w-full max-w-xl max-h-[90vh] overflow-y-auto rounded-2xl border border-white/10 bg-slate-900 shadow-2xl"
+                className="relative z-10 w-full max-w-xl max-h-[92vh] overflow-y-auto rounded-2xl border border-white/10 bg-slate-900 shadow-2xl"
             >
                 {/* Header */}
-                <div className="sticky top-0 z-10 flex items-center justify-between border-b border-white/10 bg-slate-900/90 px-6 py-4 backdrop-blur-md">
-                    <div className="flex items-center gap-3">
+                <div className="sticky top-0 z-10 flex items-center justify-between border-b border-white/10 bg-slate-900/90 px-4 py-3 sm:px-6 sm:py-4 backdrop-blur-md">
+                    <div className="flex items-center gap-2.5 sm:gap-3">
                         <div
-                            className={`rounded-xl p-2.5 ${isDelete
+                            className={`rounded-xl p-2 sm:p-2.5 ${isDelete
                                 ? "bg-rose-500/10 text-rose-400"
                                 : "bg-cyan-500/10 text-cyan-400"
                                 }`}
                         >
-                            {isDelete ? <ShieldAlert size={22} /> : <ShieldCheck size={22} />}
+                            {isDelete ? <ShieldAlert size={20} /> : <ShieldCheck size={20} />}
                         </div>
                         <div>
-                            <h2 className="text-lg font-bold text-white">
+                            <h2 className="text-base sm:text-lg font-bold text-white">
                                 {isCreate && "Create New Role"}
                                 {isEdit && "Edit Role Details"}
                                 {isView && "Role Profile & Overview"}
                                 {isDelete && "Delete Role"}
                             </h2>
-                            <p className="text-xs text-slate-400">
+                            <p className="text-[11px] sm:text-xs text-slate-400">
                                 {isCreate && "Add a new security role bound to a university"}
                                 {isEdit && "Update role properties, category and status"}
                                 {isView && "Inspect role metadata and granted permissions"}
@@ -1304,9 +1704,9 @@ function RoleDialog({
                 </div>
 
                 {/* Form or Info Content */}
-                <form onSubmit={handleSubmit} className="p-6 space-y-5">
+                <form onSubmit={handleSubmit} className="p-4 sm:p-6 space-y-4 sm:space-y-5">
                     {dialogError && (
-                        <div className="flex items-start gap-3 rounded-xl border border-rose-400/30 bg-rose-500/10 p-4 text-xs sm:text-sm text-rose-300">
+                        <div className="flex items-start gap-3 rounded-xl border border-rose-400/30 bg-rose-500/10 p-3 sm:p-4 text-xs sm:text-sm text-rose-300">
                             <AlertCircle size={18} className="mt-0.5 shrink-0 text-rose-400" />
                             <span>{dialogError}</span>
                         </div>
@@ -1351,7 +1751,7 @@ function RoleDialog({
                     {/* VIEW MODE DETAILS */}
                     {isView && role && (
                         <div className="space-y-4">
-                            <div className="grid grid-cols-2 gap-4">
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
                                 <div className="rounded-xl border border-white/5 bg-slate-800/40 p-4">
                                     <p className="text-xs text-slate-400">Role Name</p>
                                     <p className="mt-1 text-base font-semibold text-white">{role.name}</p>
@@ -1424,6 +1824,112 @@ function RoleDialog({
                                 <p className="text-xs text-slate-400">
                                     Click &quot;Manage Hierarchy Matrix&quot; above to configure parent-child resource permissions for this role.
                                 </p>
+                            </div>
+
+                            {/* EXACT Audit Trail & Governance Showcase Matching University.tsx */}
+                            <div className="rounded-xl border border-white/5 bg-slate-900/60 p-3 space-y-2.5">
+                                <div className="flex items-center justify-between">
+                                    <span className="text-xs font-semibold text-slate-300 flex items-center gap-1.5">
+                                        <ShieldCheck size={13} className="text-emerald-400" />
+                                        Audit Trail &amp; Governance
+                                    </span>
+                                    <span className="text-[10px] uppercase tracking-wider text-slate-500 font-mono">
+                                        System Records
+                                    </span>
+                                </div>
+
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
+                                    {/* Created By Card (Emerald) */}
+                                    <div className="rounded-lg border border-emerald-500/20 bg-emerald-500/5 p-2.5 space-y-1.5">
+                                        <div className="flex items-center justify-between text-[10px] text-emerald-400 font-medium">
+                                            <span className="flex items-center gap-1">
+                                                <UserCheck size={11} /> Created By
+                                            </span>
+                                            {role.createdAt && (
+                                                <span className="text-slate-400 font-mono text-[10px]">
+                                                    {formatDate(role.createdAt)}
+                                                </span>
+                                            )}
+                                        </div>
+                                        <div className="flex items-center gap-2">
+                                            <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-emerald-500/20 text-[10px] font-bold text-emerald-300">
+                                                {getInitials(role.createdBy?.name || "System")}
+                                            </div>
+                                            <div className="min-w-0 flex-1">
+                                                <p className="truncate font-semibold text-slate-200 text-xs">
+                                                    {role.createdBy?.name || "System Administrator"}
+                                                </p>
+                                                {(role.createdBy?.code || role.createdBy?.id) && (
+                                                    <p className="text-[10px] text-slate-400 font-mono truncate">
+                                                        {role.createdBy.code
+                                                            ? `Code: ${role.createdBy.code}`
+                                                            : `ID: #${role.createdBy.id}`}
+                                                    </p>
+                                                )}
+                                            </div>
+                                        </div>
+                                        {role.createdAt && (
+                                            <div className="text-[10px] text-slate-500 flex items-center gap-1 pt-0.5 border-t border-emerald-500/10">
+                                                <Clock size={10} className="text-slate-400 shrink-0" />
+                                                <span className="truncate">
+                                                    Timestamp: {formatDateTime(role.createdAt)}
+                                                </span>
+                                            </div>
+                                        )}
+                                    </div>
+
+                                    {/* Modified By Card (Cyan) */}
+                                    <div className="rounded-lg border border-cyan-500/20 bg-cyan-500/5 p-2.5 space-y-1.5">
+                                        <div className="flex items-center justify-between text-[10px] text-cyan-400 font-medium">
+                                            <span className="flex items-center gap-1">
+                                                <RotateCcw size={11} /> Last Modified By
+                                            </span>
+                                            {(role.updatedAt || role.createdAt) && (
+                                                <span className="text-slate-400 font-mono text-[10px]">
+                                                    {formatDate(role.updatedAt || role.createdAt)}
+                                                </span>
+                                            )}
+                                        </div>
+                                        <div className="flex items-center gap-2">
+                                            <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-cyan-500/20 text-[10px] font-bold text-cyan-300">
+                                                {getInitials(
+                                                    role.updatedBy?.name ||
+                                                        role.createdBy?.name ||
+                                                        "System"
+                                                )}
+                                            </div>
+                                            <div className="min-w-0 flex-1">
+                                                <p className="truncate font-semibold text-slate-200 text-xs">
+                                                    {role.updatedBy?.name ||
+                                                        role.createdBy?.name ||
+                                                        "System Administrator"}
+                                                </p>
+                                                {(role.updatedBy?.code ||
+                                                    role.updatedBy?.id ||
+                                                    role.createdBy?.code) && (
+                                                    <p className="text-[10px] text-slate-400 font-mono truncate">
+                                                        {role.updatedBy?.code
+                                                            ? `Code: ${role.updatedBy.code}`
+                                                            : role.updatedBy?.id
+                                                            ? `ID: #${role.updatedBy.id}`
+                                                            : `Code: ${role.createdBy?.code}`}
+                                                    </p>
+                                                )}
+                                            </div>
+                                        </div>
+                                        {(role.updatedAt || role.createdAt) && (
+                                            <div className="text-[10px] text-slate-500 flex items-center gap-1 pt-0.5 border-t border-cyan-500/10">
+                                                <Clock size={10} className="text-slate-400 shrink-0" />
+                                                <span className="truncate">
+                                                    Timestamp:{" "}
+                                                    {formatDateTime(
+                                                        role.updatedAt || role.createdAt
+                                                    )}
+                                                </span>
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
                             </div>
                         </div>
                     )}
@@ -1578,7 +2084,8 @@ function RoleDialog({
                     </div>
                 </form>
             </motion.div>
-        </div>
+        </div>,
+        document.body
     );
 }
 
@@ -1998,7 +2505,7 @@ export default function RolePermission() {
             {/* Statistics Row */}
             <section
                 aria-label="Role statistics"
-                className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-5"
+                className="grid grid-cols-1 gap-3 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-5 sm:gap-4"
             >
                 {stats.map((stat, index) => {
                     const Icon = stat.icon;
@@ -2013,14 +2520,14 @@ export default function RolePermission() {
                                 delay: reduceMotion ? 0 : index * 0.05,
                             }}
                             whileHover={reduceMotion ? undefined : { y: -3 }}
-                            className={`rounded-2xl border bg-gradient-to-br p-5 shadow-lg backdrop-blur-xl ${tones[stat.tone]}`}
+                            className={`rounded-2xl border bg-gradient-to-br p-4 sm:p-5 shadow-lg backdrop-blur-xl ${tones[stat.tone]}`}
                         >
                             <div className="flex items-start justify-between gap-3">
                                 <div>
-                                    <p className="text-sm font-medium text-slate-300">
+                                    <p className="text-xs sm:text-sm font-medium text-slate-300">
                                         {stat.label}
                                     </p>
-                                    <p className="mt-3 text-3xl font-bold tracking-tight text-white">
+                                    <p className="mt-2 sm:mt-3 text-2xl sm:text-3xl font-bold tracking-tight text-white">
                                         {loading ? (
                                             <span className="inline-block h-8 w-16 animate-pulse rounded bg-white/10" />
                                         ) : (
@@ -2028,11 +2535,11 @@ export default function RolePermission() {
                                         )}
                                     </p>
                                 </div>
-                                <div className="rounded-xl border border-white/10 bg-slate-950/30 p-3">
-                                    <Icon size={22} />
+                                <div className="rounded-xl border border-white/10 bg-slate-950/30 p-2.5 sm:p-3">
+                                    <Icon size={20} className="sm:w-[22px] sm:h-[22px]" />
                                 </div>
                             </div>
-                            <div className="mt-5 h-1 overflow-hidden rounded-full bg-white/10">
+                            <div className="mt-4 sm:mt-5 h-1 overflow-hidden rounded-full bg-white/10">
                                 <motion.div
                                     initial={{ width: "0%" }}
                                     animate={{ width: loading ? "30%" : "100%" }}
@@ -2048,7 +2555,7 @@ export default function RolePermission() {
             {/* Main Content Card (Filters + Table) */}
             <div className="overflow-hidden rounded-2xl border border-white/10 bg-slate-900/65 shadow-[0_12px_45px_rgba(0,0,0,0.18)] backdrop-blur-xl">
                 {/* Filter Toolbar */}
-                <div className="grid gap-4 border-b border-white/10 p-4 sm:p-5 lg:grid-cols-[1.5fr_repeat(4,1fr)_auto]">
+                <div className="grid gap-3 sm:gap-4 border-b border-white/10 p-3 sm:p-5 grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-[1.5fr_repeat(4,1fr)_auto]">
                     {/* Search */}
                     <div className="relative min-w-0">
                         <Search
@@ -2167,8 +2674,8 @@ export default function RolePermission() {
                 </div>
 
                 {/* Desktop Table View */}
-                <div className="hidden lg:block overflow-x-auto">
-                    <table className="w-full text-left text-sm text-slate-300">
+                <div className="hidden sm:block overflow-x-auto custom-scrollbar">
+                    <table className="w-full text-left text-sm text-slate-300 min-w-[950px]">
                         <thead className="border-b border-white/10 bg-slate-950/40 text-xs font-semibold uppercase tracking-wider text-slate-400">
                             <tr>
                                 <th scope="col" className="px-6 py-4">Role Title & Scope</th>
@@ -2176,6 +2683,7 @@ export default function RolePermission() {
                                 <th scope="col" className="px-6 py-4">University</th>
                                 <th scope="col" className="px-6 py-4">Assigned Users</th>
                                 <th scope="col" className="px-6 py-4">Hierarchy Permissions</th>
+                                <th scope="col" className="px-6 py-4">Governance</th>
                                 <th scope="col" className="px-6 py-4">Status</th>
                                 <th scope="col" className="px-6 py-4 text-right">Actions</th>
                             </tr>
@@ -2201,6 +2709,9 @@ export default function RolePermission() {
                                             <div className="h-6 w-28 rounded bg-white/10" />
                                         </td>
                                         <td className="px-6 py-4">
+                                            <div className="h-5 w-24 rounded bg-white/10" />
+                                        </td>
+                                        <td className="px-6 py-4">
                                             <div className="h-6 w-16 rounded-full bg-white/10" />
                                         </td>
                                         <td className="px-6 py-4 text-right">
@@ -2210,7 +2721,7 @@ export default function RolePermission() {
                                 ))
                             ) : visibleRoles.length === 0 ? (
                                 <tr>
-                                    <td colSpan={7} className="px-6 py-16 text-center text-slate-500">
+                                    <td colSpan={8} className="px-6 py-16 text-center text-slate-500">
                                         <Shield size={40} className="mx-auto mb-3 opacity-30 text-slate-400" />
                                         <p className="text-base font-semibold text-slate-300">No roles found</p>
                                         <p className="text-xs text-slate-500 mt-1 max-w-sm mx-auto">
@@ -2301,22 +2812,39 @@ export default function RolePermission() {
                                                 </button>
                                             </td>
 
+                                            {/* Governance / Creator Pill with Tooltip */}
+                                            <td className="px-6 py-4">
+                                                <div
+                                                    className="inline-flex items-center gap-1.5 rounded-lg border border-white/10 bg-slate-950/50 px-2.5 py-1 text-xs text-slate-300"
+                                                    title={`Created by: ${formatAuditActor(
+                                                        role.createdBy
+                                                    )} on ${formatDate(role.createdAt)} | Modified by: ${formatAuditActor(
+                                                        role.updatedBy
+                                                    )} on ${formatDate(role.updatedAt || role.createdAt)}`}
+                                                >
+                                                    <UserCheck size={12} className="text-emerald-400 shrink-0" />
+                                                    <span className="truncate max-w-[110px]">
+                                                        {role.createdBy?.name || "System"}
+                                                    </span>
+                                                </div>
+                                            </td>
+
                                             {/* Status */}
                                             <td className="px-6 py-4">
                                                 <StatusBadge active={role.active} />
                                             </td>
 
-                                            {/* Actions */}
+                                            {/* Actions with strict h-8 w-8 shrink-0 */}
                                             <td className="px-6 py-4 text-right">
-                                                <div className="inline-flex items-center gap-1.5">
+                                                <div className="flex items-center justify-end gap-1.5">
                                                     <button
                                                         type="button"
                                                         onClick={() =>
                                                             setDialog({ mode: "VIEW", role })
                                                         }
                                                         aria-label="View role details"
-                                                        className="rounded-lg border border-white/10 bg-slate-800/50 p-2 text-slate-300 hover:bg-white/10 hover:text-white transition"
-                                                        title="View Details"
+                                                        className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-white/10 bg-white/[0.04] text-sky-300 transition hover:border-sky-400/30 hover:bg-sky-400/10"
+                                                        title="View Details & Governance"
                                                     >
                                                         <Eye size={15} />
                                                     </button>
@@ -2327,7 +2855,7 @@ export default function RolePermission() {
                                                         }
                                                         disabled={!canEdit}
                                                         aria-label="Edit role"
-                                                        className="rounded-lg border border-white/10 bg-slate-800/50 p-2 text-slate-300 hover:bg-white/10 hover:text-white transition disabled:opacity-40"
+                                                        className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-white/10 bg-white/[0.04] text-cyan-300 transition hover:border-cyan-400/30 hover:bg-cyan-400/10 disabled:opacity-40"
                                                         title={canEdit ? "Edit Role" : "No update permission"}
                                                     >
                                                         <Pencil size={15} />
@@ -2339,7 +2867,7 @@ export default function RolePermission() {
                                                         }
                                                         disabled={!canDelete}
                                                         aria-label="Delete role"
-                                                        className="rounded-lg border border-rose-500/20 bg-rose-500/5 p-2 text-rose-300 hover:bg-rose-500/20 hover:text-rose-200 transition disabled:opacity-40"
+                                                        className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-rose-500/20 bg-rose-500/10 text-rose-300 transition hover:border-rose-400/30 hover:bg-rose-500/20 disabled:opacity-40"
                                                         title={canDelete ? "Delete Role" : "No delete permission"}
                                                     >
                                                         <Trash2 size={15} />
@@ -2355,7 +2883,7 @@ export default function RolePermission() {
                 </div>
 
                 {/* Mobile Cards View */}
-                <div className="lg:hidden divide-y divide-white/5">
+                <div className="sm:hidden divide-y divide-white/5">
                     {loading ? (
                         Array.from({ length: 3 }).map((_, i) => (
                             <div key={i} className="p-4 space-y-3 animate-pulse">
@@ -2371,64 +2899,89 @@ export default function RolePermission() {
                         </div>
                     ) : (
                         visibleRoles.map((role) => (
-                            <div key={role.id} className="p-4 space-y-3">
+                            <div key={role.id} className="p-4 space-y-3 hover:bg-white/[0.01] transition">
                                 <div className="flex items-start justify-between gap-3">
-                                    <div className="min-w-0">
-                                        <p className="font-semibold text-white">{role.name}</p>
-                                        <p className="text-xs text-slate-400 line-clamp-1 mt-0.5">
-                                            {role.description || "No description"}
+                                    <div className="min-w-0 flex-1">
+                                        <div className="flex items-center gap-2">
+                                            <div className="rounded-lg border border-white/10 bg-slate-800/80 p-1.5 text-cyan-400 shrink-0">
+                                                <Shield size={14} />
+                                            </div>
+                                            <p className="font-semibold text-white text-sm break-words">{role.name}</p>
+                                        </div>
+                                        <p className="text-xs text-slate-400 line-clamp-2 mt-1 pl-7">
+                                            {role.description || "No description provided"}
                                         </p>
                                     </div>
                                     <StatusBadge active={role.active} />
                                 </div>
 
-                                <div className="flex flex-wrap items-center gap-2 text-xs">
+                                <div className="flex flex-wrap items-center gap-1.5 text-xs">
                                     <span className="rounded-md border border-violet-400/30 bg-violet-500/10 px-2 py-0.5 font-semibold text-violet-300">
                                         {role.userRole?.name || role.userRole?.enumValue || "General"}
                                     </span>
-                                    <span className="text-slate-400 flex items-center gap-1">
-                                        <Building2 size={13} />
-                                        {role.university?.name || "Not assigned"}{role.university?.code ? ` · ${role.university.code}` : ` · ID ${role.university?.id ?? "—"}`}
+                                    <span className="rounded-md border border-white/10 bg-slate-800/60 px-2 py-0.5 text-slate-300 flex items-center gap-1">
+                                        <Building2 size={12} className="text-slate-400" />
+                                        <span className="truncate max-w-[150px]">{role.university?.name || "Not assigned"}</span>
                                     </span>
-                                    <span className="text-slate-400 flex items-center gap-1">
-                                        <Users size={13} />
+                                    <span className="rounded-md border border-white/10 bg-slate-800/60 px-2 py-0.5 text-slate-300 flex items-center gap-1">
+                                        <Users size={12} className="text-slate-400" />
                                         {role.userCount} users
                                     </span>
                                 </div>
 
-                                <div className="flex items-center justify-between pt-2 border-t border-white/5">
+                                {/* Audit bar footer */}
+                                <div className="flex flex-wrap items-center justify-between gap-2 border-t border-white/5 pt-2 text-[11px] text-slate-400">
+                                    <span className="inline-flex items-center gap-1.5">
+                                        <UserCheck size={12} className="text-emerald-400" />
+                                        <span>Created: {role.createdBy?.name || "System"}</span>
+                                    </span>
+                                    {role.createdAt && (
+                                        <span className="font-mono text-slate-500">
+                                            {formatDate(role.createdAt)}
+                                        </span>
+                                    )}
+                                </div>
+
+                                {/* Matrix action + Quick controls */}
+                                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 pt-2 border-t border-white/5">
                                     <button
                                         type="button"
                                         onClick={() =>
                                             setDialog({ mode: "PERMISSIONS", role })
                                         }
-                                        className="inline-flex items-center gap-1.5 text-xs font-semibold text-cyan-400 hover:text-cyan-300 transition"
+                                        className="inline-flex items-center justify-center gap-2 rounded-xl border border-cyan-500/30 bg-cyan-500/10 px-3.5 py-2 text-xs font-semibold text-cyan-300 hover:bg-cyan-500/20 transition w-full sm:w-auto"
                                     >
-                                        <KeyRound size={13} />
-                                        Hierarchy Matrix
+                                        <KeyRound size={13} className="text-cyan-400" />
+                                        <span>Manage Hierarchy Matrix</span>
                                     </button>
 
-                                    <div className="flex min-w-0 items-start gap-2">
+                                    <div className="flex items-center justify-end gap-2 shrink-0">
                                         <button
                                             type="button"
                                             onClick={() => setDialog({ mode: "VIEW", role })}
-                                            className="rounded-lg border border-white/10 bg-slate-800 p-2 text-slate-300 hover:text-white"
+                                            aria-label="View role details"
+                                            className="flex-1 sm:flex-none inline-flex items-center justify-center gap-1 rounded-lg border border-white/10 bg-slate-800/80 px-2.5 py-1.5 text-xs font-medium text-slate-300 hover:text-white"
                                         >
-                                            <Eye size={14} />
+                                            <Eye size={13} />
+                                            <span className="sm:hidden">Details</span>
                                         </button>
                                         <button
                                             type="button"
                                             onClick={() => setDialog({ mode: "EDIT", role })}
-                                            className="rounded-lg border border-white/10 bg-slate-800 p-2 text-slate-300 hover:text-white"
+                                            aria-label="Edit role"
+                                            className="flex-1 sm:flex-none inline-flex items-center justify-center gap-1 rounded-lg border border-white/10 bg-slate-800/80 px-2.5 py-1.5 text-xs font-medium text-slate-300 hover:text-white"
                                         >
-                                            <Pencil size={14} />
+                                            <Pencil size={13} />
+                                            <span className="sm:hidden">Edit</span>
                                         </button>
                                         <button
                                             type="button"
                                             onClick={() => setDialog({ mode: "DELETE", role })}
-                                            className="rounded-lg border border-rose-500/20 bg-rose-500/10 p-2 text-rose-300 hover:text-rose-200"
+                                            aria-label="Delete role"
+                                            className="flex-1 sm:flex-none inline-flex items-center justify-center gap-1 rounded-lg border border-rose-500/20 bg-rose-500/10 px-2.5 py-1.5 text-xs font-medium text-rose-300 hover:text-rose-200"
                                         >
-                                            <Trash2 size={14} />
+                                            <Trash2 size={13} />
+                                            <span className="sm:hidden">Delete</span>
                                         </button>
                                     </div>
                                 </div>

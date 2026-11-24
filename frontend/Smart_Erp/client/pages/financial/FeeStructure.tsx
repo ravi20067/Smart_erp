@@ -4,15 +4,18 @@ import {
     useMemo,
     useState,
     type FormEvent,
+    type ReactNode,
 } from "react";
-import { AnimatePresence, motion } from "framer-motion";
+import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { toast } from "sonner";
 import {
     AlertCircle,
     AlertTriangle,
     ArrowDownUp,
-    Banknote,
+    BadgeIndianRupee,
     BookOpen,
+    Building2,
+    Calendar,
     Check,
     CheckCircle2,
     ChevronDown,
@@ -20,17 +23,23 @@ import {
     ChevronRight,
     ChevronsLeft,
     ChevronsRight,
-    CircleDollarSign,
+    Clock,
+    CreditCard,
     Eye,
-    FileText,
-    Filter,
+    GraduationCap,
+    HelpCircle,
+    Layers,
+    Library,
     LoaderCircle,
     Pencil,
     Plus,
     RefreshCw,
     RotateCcw,
     Search,
+    ShieldCheck,
+    Sparkles,
     Trash2,
+    UserCheck,
     Wallet,
     X,
 } from "lucide-react";
@@ -39,24 +48,46 @@ import {
     createFeeStructure,
     deleteFeeStructure,
     extractErrorMessage,
+    formatAuditActor,
     formatCurrency,
+    formatDate,
+    formatDateTime,
+    getAcademicYearFilter,
     getCourseFilter,
     getFeeEnums,
     getFeeStructures,
+    getInitials,
     getSpecializationFilter,
     hasPermission,
-    normalizeText,
+    uniqueCommonDTOs,
     updateFeeStructure,
     type CommonDTO,
     type FeeComponent,
     type FeeComponentRequest,
     type FeeEnums,
+    type FeeFrequency,
     type FeeStructure,
+    type FeeStructureCreateRequest,
+    type FeeStructureResponse,
+    type FeeStructureUpdateRequest,
 } from "@/services/financial/feeStructureService";
+
+/* -------------------------------------------------------------------------- */
+/* Types & Constants                                                          */
+/* -------------------------------------------------------------------------- */
+
+const PAGE_SIZE = 6;
 
 type DialogMode = "CREATE" | "EDIT" | "VIEW" | "DELETE";
 
-type DraftComponent = {
+type SortOption =
+    | "NEWEST"
+    | "NAME_ASC"
+    | "NAME_DESC"
+    | "AMOUNT_DESC"
+    | "AMOUNT_ASC";
+
+interface DraftComponent {
     key: string;
     id?: number;
     feeCategoryType: string;
@@ -64,385 +95,314 @@ type DraftComponent = {
     amount: string;
     isMandatory: boolean;
     isRefundable: boolean;
-};
+    original?: FeeComponent;
+}
 
-interface FeeForm {
+interface FeeFormState {
     courseId: number | "";
+    academicYearId: number | "";
     name: string;
     frequency: string;
     totalNoOfInstallments: number;
-    specializationId: number[];
+    selectedSpecializationIds: number[];
     components: DraftComponent[];
 }
 
-interface DialogState {
-    mode: DialogMode;
-    item: FeeStructure | null;
+interface FieldErrors {
+    courseId?: string;
+    academicYearId?: string;
+    name?: string;
+    frequency?: string;
+    totalNoOfInstallments?: string;
+    components?: string;
 }
 
-interface EntityOption {
-    id: number;
-    name: string;
-}
+/* -------------------------------------------------------------------------- */
+/* GlassCard & Visual Containers                                              */
+/* -------------------------------------------------------------------------- */
 
-const PAGE_SIZE = 8;
-
-const inputClass =
-    "w-full min-w-0 rounded-xl border border-white/10 bg-slate-950/60 px-3.5 py-3 text-sm text-white outline-none transition placeholder:text-slate-500 focus:border-cyan-400/60 focus:ring-2 focus:ring-cyan-400/10 disabled:cursor-not-allowed disabled:opacity-50";
-
-const selectClass = `${inputClass} appearance-none pr-9`;
-
-const buttonClass =
-    "inline-flex min-h-10 items-center justify-center gap-2 rounded-xl border border-white/10 px-3.5 py-2.5 text-sm font-medium transition hover:bg-white/[0.06] disabled:cursor-not-allowed disabled:opacity-50";
-
-const primaryButtonClass =
-    "inline-flex min-h-10 items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-blue-600 to-cyan-500 px-4 py-2.5 text-sm font-semibold text-white shadow-lg shadow-blue-500/15 transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-50";
-
-const emptyForm = (): FeeForm => ({
-    courseId: "",
-    name: "",
-    frequency: "",
-    totalNoOfInstallments: 1,
-    specializationId: [],
-    components: [],
-});
-
-function labelize(value?: string | null): string {
-    if (!value) return "—";
-
-    return value
-        .replace(/_/g, " ")
-        .toLowerCase()
-        .replace(/\b\w/g, (character) => character.toUpperCase());
-}
-
-function moneyTotal(components: FeeComponent[]): number {
-    return components.reduce(
-        (total, component) =>
-            total + (component.isMandatory ? component.amount : 0),
-        0,
-    );
-}
-
-function formatCount(value: number): string {
-    return new Intl.NumberFormat("en-IN").format(value);
-}
-
-function formatCommon(dto?: CommonDTO | null): string {
-    if (!dto) return "";
-    const name = dto.name || `ID ${dto.id}`;
-    return dto.code ? `${name} (${dto.code})` : name;
-}
-
-function uniqueOptions(
-    items: FeeStructure[],
-    getEntity: (item: FeeStructure) => CommonDTO | null,
-): EntityOption[] {
-    const options = new Map<number, EntityOption>();
-
-    items.forEach((item) => {
-        const entity = getEntity(item);
-
-        if (entity && !options.has(entity.id)) {
-            options.set(entity.id, {
-                id: entity.id,
-                name: formatCommon(entity),
-            });
-        }
-    });
-
-    return [...options.values()].sort((a, b) =>
-        a.name.localeCompare(b.name),
-    );
-}
-
-function FilterSelect({
-    label,
-    value,
-    onChange,
-    options,
+function GlassCard({
+    children,
+    className = "",
 }: {
-    label: string;
-    value: string;
-    onChange: (value: string) => void;
-    options: { value: string; label: string }[];
+    children: ReactNode;
+    className?: string;
 }) {
     return (
-        <label className="block min-w-0 space-y-1">
-            <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">
-                {label}
-            </span>
-            <div className="relative">
-                <select
-                    value={value}
-                    onChange={(e) => onChange(e.target.value)}
-                    className="w-full appearance-none rounded-xl border border-white/10 bg-slate-950/40 px-3 py-2 pr-8 text-xs text-white transition focus:border-cyan-400 focus:outline-none"
-                >
-                    {options.map((opt) => (
-                        <option key={opt.value} value={opt.value} className="bg-slate-900 text-white">
-                            {opt.label}
-                        </option>
-                    ))}
-                </select>
-                <SelectArrow />
-            </div>
-        </label>
+        <div
+            className={`rounded-2xl border border-white/10 bg-slate-900/60 shadow-xl backdrop-blur-xl ${className}`}
+        >
+            {children}
+        </div>
     );
 }
 
-function SkeletonRow() {
-    return (
-        <tr className="animate-pulse">
-            <td className="px-5 py-4">
-                <div className="flex items-center gap-3">
-                    <div className="h-10 w-10 rounded-xl bg-white/10" />
-                    <div className="space-y-2">
-                        <div className="h-4 w-32 rounded bg-white/10" />
-                        <div className="h-3 w-20 rounded bg-white/5" />
-                    </div>
-                </div>
-            </td>
-            <td className="px-5 py-4">
-                <div className="h-4 w-28 rounded bg-white/10" />
-                <div className="mt-2 h-3 w-36 rounded bg-white/5" />
-            </td>
-            <td className="px-5 py-4">
-                <div className="h-6 w-20 rounded-lg bg-white/10" />
-                <div className="mt-2 h-3 w-16 rounded bg-white/5" />
-            </td>
-            <td className="px-5 py-4">
-                <div className="h-4 w-12 rounded bg-white/10" />
-                <div className="mt-2 h-3 w-28 rounded bg-white/5" />
-            </td>
-            <td className="px-5 py-4">
-                <div className="h-5 w-24 rounded bg-white/10" />
-            </td>
-            <td className="px-5 py-4">
-                <div className="h-4 w-20 rounded bg-white/10" />
-            </td>
-            <td className="px-5 py-4 text-right">
-                <div className="inline-block h-8 w-24 rounded bg-white/10" />
-            </td>
-        </tr>
-    );
-}
-
-function FieldError({ message }: { message?: string }) {
-    if (!message) return null;
-
-    return (
-        <p role="alert" className="mt-1.5 flex items-start gap-1.5 text-xs text-rose-300">
-            <AlertCircle size={14} className="mt-0.5 shrink-0" />
-            <span>{message}</span>
-        </p>
-    );
-}
-
-function SelectArrow() {
+function SelectChevron() {
     return (
         <ChevronDown
-            size={15}
+            size={14}
             className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-slate-400"
         />
     );
 }
 
-function EntityFilter({
-    label,
-    value,
-    options,
-    onChange,
-}: {
-    label: string;
-    value: string;
-    options: EntityOption[];
-    onChange: (value: string) => void;
-}) {
+function FrequencyBadge({ frequency }: { frequency?: string | null }) {
+    if (!frequency) return <span className="text-slate-500">—</span>;
+    const freq = frequency.toUpperCase();
+
+    let style = "border-blue-400/20 bg-blue-500/10 text-blue-300";
+    if (freq === "ANNUAL") {
+        style = "border-purple-400/20 bg-purple-500/10 text-purple-300";
+    } else if (freq === "SEMESTER") {
+        style = "border-cyan-400/20 bg-cyan-500/10 text-cyan-300";
+    } else if (freq === "ONE_TIME") {
+        style = "border-amber-400/20 bg-amber-500/10 text-amber-300";
+    } else if (freq === "MONTHLY" || freq === "QUARTERLY") {
+        style = "border-emerald-400/20 bg-emerald-500/10 text-emerald-300";
+    }
+
     return (
-        <div className="relative min-w-0">
-            <select
-                aria-label={label}
-                value={value}
-                onChange={(event) => onChange(event.target.value)}
-                className={selectClass}
-            >
-                <option value="">All {label.toLowerCase()}s</option>
-                {options.map((option) => (
-                    <option key={option.id} value={option.id}>
-                        {option.name}
-                    </option>
-                ))}
-            </select>
-            <SelectArrow />
-        </div>
+        <span
+            className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-0.5 text-[11px] font-semibold uppercase tracking-wider ${style}`}
+        >
+            <Clock size={11} className="shrink-0" />
+            <span>{frequency.replace(/_/g, " ")}</span>
+        </span>
     );
 }
 
-function ErrorBanner({
-    message,
-    onRetry,
-    onDismiss,
-}: {
-    message: string;
-    onRetry: () => void;
-    onDismiss: () => void;
-}) {
-    return (
-        <div
-            role="alert"
-            className="flex flex-col gap-3 rounded-xl border border-rose-400/25 bg-rose-500/[0.08] p-4 sm:flex-row sm:items-start sm:justify-between"
-        >
-            <div className="flex min-w-0 gap-3">
-                <AlertTriangle
-                    size={19}
-                    className="mt-0.5 shrink-0 text-rose-300"
-                />
-                <div className="min-w-0">
-                    <p className="font-semibold text-rose-200">
-                        Could not load fee structures
-                    </p>
-                    <p className="mt-1 break-words text-sm text-rose-200/80">
-                        {message}
-                    </p>
-                    <button
-                        type="button"
-                        onClick={onRetry}
-                        className="mt-3 rounded-lg border border-rose-300/25 px-3 py-1.5 text-xs text-rose-100 hover:bg-rose-400/10"
-                    >
-                        Try again
-                    </button>
-                </div>
-            </div>
+/* -------------------------------------------------------------------------- */
+/* Modal Dialog Component                                                     */
+/* -------------------------------------------------------------------------- */
 
-            <button
-                type="button"
-                onClick={onDismiss}
-                aria-label="Dismiss error"
-                className="self-end rounded-lg p-1.5 text-rose-200 hover:bg-white/5 sm:self-start"
-            >
-                <X size={16} />
-            </button>
-        </div>
-    );
+interface FeeStructureDialogProps {
+    mode: DialogMode;
+    structure: FeeStructureResponse | null;
+    feeEnums: FeeEnums;
+    courses: CommonDTO[];
+    coursesLoading: boolean;
+    busy: boolean;
+    onClose: () => void;
+    onCreate: (
+        courseId: number,
+        academicYearId: number,
+        request: FeeStructureCreateRequest
+    ) => Promise<void>;
+    onUpdate: (id: number, request: FeeStructureUpdateRequest) => Promise<void>;
+    onDelete: (id: number) => Promise<void>;
+    onSwitchToEdit: (structure: FeeStructureResponse) => void;
 }
 
 function FeeStructureDialog({
     mode,
-    item,
+    structure,
+    feeEnums,
     courses,
-    enums,
     coursesLoading,
-    coursesError,
     busy,
-    onRetryCourses,
     onClose,
     onCreate,
     onUpdate,
     onDelete,
-}: {
-    mode: DialogMode;
-    item: FeeStructure | null;
-    courses: CommonDTO[];
-    enums: FeeEnums;
-    coursesLoading: boolean;
-    coursesError: string;
-    busy: boolean;
-    onRetryCourses: () => void;
-    onClose: () => void;
-    onCreate: (courseId: number, form: FeeForm) => Promise<void>;
-    onUpdate: (item: FeeStructure, form: FeeForm) => Promise<void>;
-    onDelete: (item: FeeStructure) => Promise<void>;
-}) {
+    onSwitchToEdit,
+}: FeeStructureDialogProps) {
     const isCreate = mode === "CREATE";
     const isEdit = mode === "EDIT";
-    const readOnly = mode === "VIEW" || mode === "DELETE";
+    const isView = mode === "VIEW";
+    const isDelete = mode === "DELETE";
 
-    const [form, setForm] = useState<FeeForm>(() => {
-        if (!item) return emptyForm();
+    // Form State
+    const [form, setForm] = useState<FeeFormState>(() => {
+        if (structure && (isEdit || isView)) {
+            return {
+                courseId: structure.courses?.id ?? "",
+                academicYearId: structure.academicYear?.id ?? "",
+                name: structure.name || "",
+                frequency: structure.frequency || "SEMESTER",
+                totalNoOfInstallments: structure.totalNoOfInstallments || 1,
+                selectedSpecializationIds: structure.specialization.map((s) => s.id),
+                components: structure.feeComponent.map((c) => ({
+                    key: `existing-${c.id}`,
+                    id: c.id,
+                    feeCategoryType: c.feeCategoryType,
+                    componentName: c.componentName,
+                    amount: String(c.amount),
+                    isMandatory: c.isMandatory,
+                    isRefundable: c.isRefundable,
+                    original: { ...c },
+                })),
+            };
+        }
 
         return {
-            courseId: item.courses?.id ?? "",
-            name: item.name,
-            frequency: item.frequency,
-            totalNoOfInstallments: item.totalNoOfInstallments,
-            specializationId: item.specialization.map(
-                (specialization) => specialization.id,
-            ),
-            components: item.feeComponent.map((component) => ({
-                key: `existing-${component.id}`,
-                id: component.id,
-                feeCategoryType: component.feeCategoryType,
-                componentName: component.componentName,
-                amount: String(component.amount),
-                isMandatory: component.isMandatory,
-                isRefundable: component.isRefundable,
-            })),
+            courseId: "",
+            academicYearId: "",
+            name: "",
+            frequency: feeEnums.feeFrequency[0]?.enumValue || "SEMESTER",
+            totalNoOfInstallments: 1,
+            selectedSpecializationIds: [],
+            components: [
+                {
+                    key: "default-tuition",
+                    feeCategoryType: "TUITION",
+                    componentName: "Tuition Fee",
+                    amount: "",
+                    isMandatory: true,
+                    isRefundable: false,
+                },
+            ],
         };
     });
 
-    const [specializations, setSpecializations] = useState<CommonDTO[]>(
-        () => item?.specialization ?? [],
-    );
+    const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
+    const [submitError, setSubmitError] = useState("");
+
+    // Dynamic Cascade Lists for Modal
+    const [academicYears, setAcademicYears] = useState<CommonDTO[]>([]);
+    const [academicYearsLoading, setAcademicYearsLoading] = useState(false);
+
+    const [availableSpecializations, setAvailableSpecializations] = useState<CommonDTO[]>([]);
     const [specializationsLoading, setSpecializationsLoading] = useState(false);
-    const [specializationsError, setSpecializationsError] = useState("");
-    const [formError, setFormError] = useState("");
-    const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
 
-    const selectedCourseId =
-        typeof form.courseId === "number" ? form.courseId : 0;
+    // Load academic years when course changes in CREATE mode
+    useEffect(() => {
+        if (isCreate && typeof form.courseId === "number" && form.courseId > 0) {
+            let active = true;
+            setAcademicYearsLoading(true);
+            setAcademicYears([]);
+            setAvailableSpecializations([]);
+            setForm((prev) => ({
+                ...prev,
+                academicYearId: "",
+                selectedSpecializationIds: [],
+            }));
 
-    const mandatoryTotal = form.components.reduce((total, component) => {
-        const amount = Number(component.amount);
+            getAcademicYearFilter(form.courseId)
+                .then((years) => {
+                    if (active) {
+                        setAcademicYears(years);
+                        // Auto-select if single year available
+                        if (years.length === 1) {
+                            setForm((prev) => ({ ...prev, academicYearId: years[0].id }));
+                        }
+                    }
+                })
+                .catch((err) => {
+                    if (active) {
+                        toast.error(extractErrorMessage(err, "Failed to load academic years."));
+                    }
+                })
+                .finally(() => {
+                    if (active) setAcademicYearsLoading(false);
+                });
 
-        return total + (
-            component.isMandatory && Number.isFinite(amount) ? amount : 0
-        );
-    }, 0);
+            return () => {
+                active = false;
+            };
+        }
+    }, [isCreate, form.courseId]);
 
-    const updateForm = <K extends keyof FeeForm>(
-        key: K,
-        value: FeeForm[K],
-    ) => {
-        setForm((current) => ({ ...current, [key]: value }));
-        setFieldErrors((current) => ({ ...current, [key]: "" }));
-        setFormError("");
-    };
+    // Load available specializations when course & academic year are set in CREATE mode
+    useEffect(() => {
+        if (
+            isCreate &&
+            typeof form.courseId === "number" &&
+            form.courseId > 0 &&
+            typeof form.academicYearId === "number" &&
+            form.academicYearId > 0
+        ) {
+            let active = true;
+            setSpecializationsLoading(true);
+            setAvailableSpecializations([]);
 
-    const updateComponent = (
-        key: string,
-        patch: Partial<DraftComponent>,
-    ) => {
-        setForm((current) => ({
-            ...current,
-            components: current.components.map((component) =>
-                component.key === key
-                    ? { ...component, ...patch }
-                    : component,
-            ),
-        }));
+            getSpecializationFilter(form.courseId, form.academicYearId)
+                .then((specs) => {
+                    if (active) {
+                        setAvailableSpecializations(specs);
+                    }
+                })
+                .catch((err) => {
+                    if (active) {
+                        toast.error(
+                            extractErrorMessage(err, "Failed to load available specializations.")
+                        );
+                    }
+                })
+                .finally(() => {
+                    if (active) setSpecializationsLoading(false);
+                });
 
-        setFieldErrors((current) => {
-            const next = { ...current };
-            delete next[`name-${key}`];
-            delete next[`amount-${key}`];
-            delete next[`category-${key}`];
-            delete next.components;
-            return next;
+            return () => {
+                active = false;
+            };
+        }
+    }, [isCreate, form.courseId, form.academicYearId]);
+
+    // In EDIT mode, load available specializations and merge with already assigned specializations
+    useEffect(() => {
+        if (isEdit && structure && structure.courses?.id && structure.academicYear?.id) {
+            let active = true;
+            setSpecializationsLoading(true);
+
+            getSpecializationFilter(structure.courses.id, structure.academicYear.id)
+                .then((unassigned) => {
+                    if (active) {
+                        // Merge current assignments with unassigned options
+                        const combined = uniqueCommonDTOs([
+                            ...(structure.specialization || []),
+                            ...unassigned,
+                        ]);
+                        setAvailableSpecializations(combined);
+                    }
+                })
+                .catch(() => {
+                    if (active) {
+                        // Fallback to currently assigned
+                        setAvailableSpecializations(structure.specialization || []);
+                    }
+                })
+                .finally(() => {
+                    if (active) setSpecializationsLoading(false);
+                });
+
+            return () => {
+                active = false;
+            };
+        }
+    }, [isEdit, structure]);
+
+    // Calculation helper for draft components
+    const feeTotals = useMemo(() => {
+        let mandatory = 0;
+        let optional = 0;
+
+        form.components.forEach((c) => {
+            const val = parseFloat(c.amount) || 0;
+            if (val > 0) {
+                if (c.isMandatory) {
+                    mandatory += val;
+                } else {
+                    optional += val;
+                }
+            }
         });
 
-        setFormError("");
-    };
+        const grand = mandatory + optional;
+        const installments = Math.max(1, form.totalNoOfInstallments || 1);
+        const perInstallment = mandatory / installments;
 
-    const addComponent = () => {
-        const category = enums.feeComponentType[0]?.enumValue ?? "";
+        return { mandatory, optional, grand, perInstallment };
+    }, [form.components, form.totalNoOfInstallments]);
 
-        setForm((current) => ({
-            ...current,
+    // Component Row Operations
+    function handleAddComponent() {
+        setForm((prev) => ({
+            ...prev,
             components: [
-                ...current.components,
+                ...prev.components,
                 {
-                    key: `new-${Date.now()}-${current.components.length}`,
-                    feeCategoryType: category,
+                    key: Math.random().toString(36).slice(2),
+                    feeCategoryType: feeEnums.feeComponentType[0]?.enumValue || "TUITION",
                     componentName: "",
                     amount: "",
                     isMandatory: true,
@@ -450,222 +410,292 @@ function FeeStructureDialog({
                 },
             ],
         }));
+    }
 
-        setFormError("");
-    };
+    function handleRemoveComponent(key: string) {
+        setForm((prev) => ({
+            ...prev,
+            components: prev.components.filter((c) => c.key !== key),
+        }));
+    }
 
-    const removeComponent = (key: string) => {
-        setForm((current) => ({
-            ...current,
-            components: current.components.filter(
-                (component) => component.key !== key,
+    function handleUpdateComponent(
+        key: string,
+        field: keyof DraftComponent,
+        value: unknown
+    ) {
+        setForm((prev) => ({
+            ...prev,
+            components: prev.components.map((c) =>
+                c.key === key ? { ...c, [field]: value } : c
             ),
         }));
+    }
 
-        setFieldErrors((current) => {
-            const next = { ...current };
-            delete next[`name-${key}`];
-            delete next[`amount-${key}`];
-            delete next[`category-${key}`];
-            delete next.components;
-            return next;
+    // Specialization Selection Toggle
+    function toggleSpecialization(specId: number) {
+        setForm((prev) => {
+            const current = new Set(prev.selectedSpecializationIds);
+            if (current.has(specId)) {
+                current.delete(specId);
+            } else {
+                current.add(specId);
+            }
+            return { ...prev, selectedSpecializationIds: Array.from(current) };
         });
-    };
+    }
 
-    useEffect(() => {
-        let cancelled = false;
+    function selectAllSpecializations() {
+        setForm((prev) => ({
+            ...prev,
+            selectedSpecializationIds: availableSpecializations.map((s) => s.id),
+        }));
+    }
 
-        if (readOnly || selectedCourseId <= 0) {
-            setSpecializations(item?.specialization ?? []);
-            setSpecializationsError("");
-            setSpecializationsLoading(false);
-            return () => {
-                cancelled = true;
-            };
-        }
+    function deselectAllSpecializations() {
+        setForm((prev) => ({
+            ...prev,
+            selectedSpecializationIds: [],
+        }));
+    }
+
+    // Validation
+    function validate(): boolean {
+        const errors: FieldErrors = {};
 
         if (isCreate) {
-            setSpecializations([]);
-        }
-        setSpecializationsError("");
-        setSpecializationsLoading(true);
-
-        getSpecializationFilter(selectedCourseId)
-            .then((rows) => {
-                if (cancelled) return;
-                const combined = [...rows];
-                (item?.specialization ?? []).forEach((spec) => {
-                    if (!combined.some((c) => c.id === spec.id)) {
-                        combined.push(spec);
-                    }
-                });
-                setSpecializations(combined);
-            })
-            .catch((error: unknown) => {
-                if (cancelled) return;
-                setSpecializations(item?.specialization ?? []);
-                setSpecializationsError(extractErrorMessage(error));
-            })
-            .finally(() => {
-                if (!cancelled) setSpecializationsLoading(false);
-            });
-
-        return () => {
-            cancelled = true;
-        };
-    }, [readOnly, isCreate, selectedCourseId, item]);
-
-    useEffect(() => {
-        const onKeyDown = (event: KeyboardEvent) => {
-            if (event.key === "Escape" && !busy) onClose();
-        };
-
-        window.addEventListener("keydown", onKeyDown);
-        return () => window.removeEventListener("keydown", onKeyDown);
-    }, [busy, onClose]);
-
-    const validate = (): boolean => {
-        const errors: Record<string, string> = {};
-
-        if (isCreate && (!form.courseId || form.courseId <= 0)) {
-            errors.courseId = "Select a course.";
+            if (!form.courseId || typeof form.courseId !== "number" || form.courseId <= 0) {
+                errors.courseId = "Please select a valid course.";
+            }
+            if (
+                !form.academicYearId ||
+                typeof form.academicYearId !== "number" ||
+                form.academicYearId <= 0
+            ) {
+                errors.academicYearId = "Please select an academic year.";
+            }
         }
 
         if (!form.name.trim()) {
             errors.name = "Fee structure name is required.";
         }
 
-        if (form.name.trim().length > 120) {
-            errors.name = "Name cannot exceed 120 characters.";
-        }
-
         if (!form.frequency) {
-            errors.frequency = "Select a fee frequency from the server options.";
+            errors.frequency = "Frequency is required.";
         }
 
-        if (
-            !Number.isInteger(form.totalNoOfInstallments) ||
-            form.totalNoOfInstallments < 1
-        ) {
-            errors.totalNoOfInstallments =
-                "Installments must be a positive whole number.";
+        if (!form.totalNoOfInstallments || form.totalNoOfInstallments < 1) {
+            errors.totalNoOfInstallments = "Number of installments must be at least 1.";
         }
 
         if (form.components.length === 0) {
-            errors.components = "Add at least one fee component.";
-        }
-
-        form.components.forEach((component) => {
-            if (!component.feeCategoryType) {
-                errors[`category-${component.key}`] =
-                    "Select a category returned by the server.";
+            errors.components = "At least one fee component is required.";
+        } else {
+            const hasInvalid = form.components.some(
+                (c) =>
+                    !c.componentName.trim() ||
+                    !c.feeCategoryType ||
+                    isNaN(parseFloat(c.amount)) ||
+                    parseFloat(c.amount) < 0
+            );
+            if (hasInvalid) {
+                errors.components =
+                    "All components must have a valid name, category, and non-negative amount.";
             }
-
-            if (!component.componentName.trim()) {
-                errors[`name-${component.key}`] =
-                    "Component name is required.";
-            }
-
-            const amount = Number(component.amount);
-
-            if (
-                component.amount.trim() === "" ||
-                !Number.isFinite(amount) ||
-                amount < 0
-            ) {
-                errors[`amount-${component.key}`] =
-                    "Enter a valid non-negative amount.";
-            }
-        });
-
-        const categories = form.components.map(
-            (component) => component.feeCategoryType,
-        );
-
-        if (
-            categories.some(Boolean) &&
-            new Set(categories.filter(Boolean)).size !==
-            categories.filter(Boolean).length
-        ) {
-            errors.components =
-                "Each fee category can appear only once in a fee structure.";
         }
 
         setFieldErrors(errors);
+        return Object.keys(errors).length === 0;
+    }
 
-        if (Object.keys(errors).length > 0) {
-            setFormError("Please correct the highlighted fields.");
-            return false;
-        }
+    // Form Submission
+    async function handleSubmit(e: FormEvent) {
+        e.preventDefault();
+        setSubmitError("");
 
-        return true;
-    };
-
-    const submit = async (event: FormEvent<HTMLFormElement>) => {
-        event.preventDefault();
-        setFormError("");
-
-        if (mode === "DELETE") {
-            if (item) await onDelete(item);
-            return;
-        }
-
-        if (mode === "VIEW") {
-            onClose();
+        if (isDelete) {
+            if (!structure) return;
+            try {
+                await onDelete(structure.id);
+            } catch (err) {
+                setSubmitError(extractErrorMessage(err, "Failed to delete fee structure."));
+            }
             return;
         }
 
         if (!validate()) return;
 
         try {
-            if (isCreate && typeof form.courseId === "number") {
-                await onCreate(form.courseId, form);
-            } else if (isEdit && item) {
-                await onUpdate(item, form);
-            }
-        } catch {
-            // The parent handles the API error and displays a toast.
-            // Keep this dialog open so the user does not lose their form.
-        }
-    };
+            if (isCreate) {
+                const requestPayload: FeeStructureCreateRequest = {
+                    name: form.name.trim(),
+                    frequency: form.frequency,
+                    totalNoOfInstallments: Number(form.totalNoOfInstallments),
+                    specializationId: form.selectedSpecializationIds,
+                    components: form.components.map((c) => ({
+                        feeCategoryType: c.feeCategoryType,
+                        componentName: c.componentName.trim(),
+                        amount: parseFloat(c.amount) || 0,
+                        isMandatory: c.isMandatory,
+                        isRefundable: c.isRefundable,
+                    })),
+                };
 
-    const title = {
-        CREATE: "Create fee structure",
-        EDIT: "Edit fee structure",
-        VIEW: "Fee structure details",
-        DELETE: "Delete fee structure",
-    }[mode];
+                await onCreate(
+                    Number(form.courseId),
+                    Number(form.academicYearId),
+                    requestPayload
+                );
+            } else if (isEdit && structure) {
+                const componentToRemove: number[] = [];
+                const componentToAdd: FeeComponentRequest[] = [];
+
+                // Track removed original components
+                const currentIds = new Set(
+                    form.components.filter((c) => c.id).map((c) => c.id!)
+                );
+                structure.feeComponent.forEach((orig) => {
+                    if (!currentIds.has(orig.id)) {
+                        componentToRemove.push(orig.id);
+                    }
+                });
+
+                // Track new components and edited components
+                form.components.forEach((c) => {
+                    const amt = parseFloat(c.amount) || 0;
+                    if (!c.id) {
+                        componentToAdd.push({
+                            feeCategoryType: c.feeCategoryType,
+                            componentName: c.componentName.trim(),
+                            amount: amt,
+                            isMandatory: c.isMandatory,
+                            isRefundable: c.isRefundable,
+                        });
+                    } else if (c.original) {
+                        const isChanged =
+                            c.original.componentName !== c.componentName.trim() ||
+                            c.original.feeCategoryType !== c.feeCategoryType ||
+                            c.original.amount !== amt ||
+                            c.original.isMandatory !== c.isMandatory ||
+                            c.original.isRefundable !== c.isRefundable;
+
+                        if (isChanged) {
+                            componentToRemove.push(c.id);
+                            componentToAdd.push({
+                                feeCategoryType: c.feeCategoryType,
+                                componentName: c.componentName.trim(),
+                                amount: amt,
+                                isMandatory: c.isMandatory,
+                                isRefundable: c.isRefundable,
+                            });
+                        }
+                    }
+                });
+
+                const updatePayload: FeeStructureUpdateRequest = {
+                    name: form.name.trim(),
+                    frequency: form.frequency,
+                    totalNoOfInstallments: Number(form.totalNoOfInstallments),
+                    specializationId: form.selectedSpecializationIds,
+                    componentToAdd,
+                    componentToRemove,
+                };
+
+                await onUpdate(structure.id, updatePayload);
+            }
+        } catch (err) {
+            setSubmitError(extractErrorMessage(err, "Operation failed. Please review the form."));
+        }
+    }
+
+    // View Mode Financial Summary calculations
+    const viewTotals = useMemo(() => {
+        if (!structure) return { mandatory: 0, optional: 0, grand: 0, perInstallment: 0 };
+        const mandatory = structure.feeComponent
+            .filter((c) => c.isMandatory)
+            .reduce((sum, c) => sum + (c.amount || 0), 0);
+        const optional = structure.feeComponent
+            .filter((c) => !c.isMandatory)
+            .reduce((sum, c) => sum + (c.amount || 0), 0);
+        const grand = mandatory + optional;
+        const installments = Math.max(1, structure.totalNoOfInstallments || 1);
+        const perInstallment = mandatory / installments;
+        return { mandatory, optional, grand, perInstallment };
+    }, [structure]);
+
+    const hasSpecializationsAssigned = Boolean(
+        structure?.specialization && structure.specialization.length > 0
+    );
 
     return (
-        <motion.div
-            className="fixed inset-0 z-[100] flex items-start justify-center overflow-y-auto bg-slate-950/80 p-3 backdrop-blur-md sm:items-center sm:p-5"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            onMouseDown={(event) => {
-                if (event.target === event.currentTarget && !busy) onClose();
-            }}
+        <div
+            role="dialog"
+            aria-modal="true"
+            className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-5 overflow-y-auto"
         >
+            {/* Backdrop */}
             <motion.div
-                role="dialog"
-                aria-modal="true"
-                aria-labelledby="fee-dialog-title"
-                initial={{ opacity: 0, y: 12, scale: 0.99 }}
-                animate={{ opacity: 1, y: 0, scale: 1 }}
-                exit={{ opacity: 0, y: 8 }}
-                className="my-auto max-h-[94vh] w-full max-w-4xl overflow-y-auto rounded-2xl border border-cyan-300/15 bg-[#0c1530] shadow-2xl shadow-black/40"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                onClick={() => {
+                    if (!busy) onClose();
+                }}
+                className="fixed inset-0 bg-slate-950/80 backdrop-blur-md"
+            />
+
+            {/* Modal Body */}
+            <motion.div
+                initial={{ scale: 0.95, opacity: 0, y: 15 }}
+                animate={{ scale: 1, opacity: 1, y: 0 }}
+                exit={{ scale: 0.95, opacity: 0, y: 15 }}
+                transition={{ duration: 0.2 }}
+                className="relative z-10 my-auto flex max-h-[92vh] w-full max-w-3xl flex-col rounded-2xl border border-white/10 bg-slate-900 shadow-2xl overflow-hidden"
             >
-                <header className="sticky top-0 z-10 flex items-center justify-between gap-3 border-b border-white/10 bg-[#0c1530]/95 px-4 py-4 backdrop-blur sm:px-6">
-                    <div className="min-w-0">
-                        <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-cyan-300">
-                            Finance / Fee Management
-                        </p>
-                        <h2
-                            id="fee-dialog-title"
-                            className="mt-1 text-lg font-semibold text-white sm:text-xl"
+                {/* Header */}
+                <div className="flex items-center justify-between border-b border-white/10 px-5 py-4 shrink-0">
+                    <div className="flex items-center gap-3">
+                        <div
+                            className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border ${
+                                isDelete
+                                    ? "border-rose-500/20 bg-rose-500/10 text-rose-400"
+                                    : isView
+                                    ? "border-sky-500/20 bg-sky-500/10 text-sky-400"
+                                    : isEdit
+                                    ? "border-cyan-500/20 bg-cyan-500/10 text-cyan-400"
+                                    : "border-emerald-500/20 bg-emerald-500/10 text-emerald-400"
+                            }`}
                         >
-                            {title}
-                        </h2>
+                            {isDelete ? (
+                                <Trash2 size={20} />
+                            ) : isView ? (
+                                <Eye size={20} />
+                            ) : isEdit ? (
+                                <Pencil size={20} />
+                            ) : (
+                                <Plus size={20} />
+                            )}
+                        </div>
+                        <div>
+                            <h2 className="text-base sm:text-lg font-bold text-white">
+                                {isDelete
+                                    ? "Delete Fee Structure"
+                                    : isView
+                                    ? "Fee Structure Details"
+                                    : isEdit
+                                    ? "Edit Fee Structure"
+                                    : "Create Fee Structure"}
+                            </h2>
+                            <p className="text-xs text-slate-400">
+                                {isDelete
+                                    ? "Confirm permanent removal of this fee schedule"
+                                    : isView
+                                    ? `Review structure components, installments, and governance audit`
+                                    : isEdit
+                                    ? `Updating: ${structure?.name || "Fee Structure"}`
+                                    : "Configure new course fee breakdown, schedules, and installments"}
+                            </p>
+                        </div>
                     </div>
 
                     <button
@@ -673,1956 +703,2092 @@ function FeeStructureDialog({
                         onClick={onClose}
                         disabled={busy}
                         aria-label="Close dialog"
-                        className="rounded-lg border border-white/10 p-2 text-slate-300 transition hover:bg-white/5"
+                        className="rounded-lg p-2 text-slate-400 transition hover:bg-white/10 hover:text-white disabled:opacity-50"
                     >
                         <X size={18} />
                     </button>
-                </header>
+                </div>
 
-                <form onSubmit={submit} className="space-y-5 p-4 sm:p-6">
-                    {formError && (
-                        <div
-                            role="alert"
-                            className="rounded-xl border border-rose-400/25 bg-rose-500/[0.08] p-3 text-sm text-rose-200"
-                        >
-                            {formError}
+                {/* Submit Error Banner */}
+                {submitError && (
+                    <div className="mx-5 mt-4 flex items-start gap-2.5 rounded-xl border border-rose-500/30 bg-rose-500/10 p-3 text-xs text-rose-200">
+                        <AlertTriangle size={16} className="mt-0.5 shrink-0 text-rose-400" />
+                        <span className="flex-1 leading-relaxed">{submitError}</span>
+                    </div>
+                )}
+
+                {/* Content Area */}
+                <div className="flex-1 overflow-y-auto p-5 custom-scrollbar space-y-5">
+                    {/* -------------------------------------------------------- */}
+                    {/* DELETE DIALOG                                            */}
+                    {/* -------------------------------------------------------- */}
+                    {isDelete && structure && (
+                        <div className="space-y-4">
+                            {/* Specialization Assigned Warning (Critical Backend Constraint) */}
+                            {hasSpecializationsAssigned ? (
+                                <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-4 text-xs space-y-3">
+                                    <div className="flex items-start gap-3">
+                                        <AlertTriangle size={20} className="mt-0.5 shrink-0 text-amber-400" />
+                                        <div className="space-y-1">
+                                            <p className="font-bold text-amber-200 text-sm">
+                                                Cannot Delete: Specializations Currently Assigned
+                                            </p>
+                                            <p className="text-amber-300/90 leading-relaxed">
+                                                The server enforces that a fee structure cannot be deleted while it has specializations assigned to it.
+                                            </p>
+                                        </div>
+                                    </div>
+
+                                    <div className="rounded-lg border border-amber-400/20 bg-slate-950/60 p-3">
+                                        <p className="text-[11px] font-semibold text-slate-400 mb-2">
+                                            Currently Assigned Specializations ({structure.specialization.length}):
+                                        </p>
+                                        <div className="flex flex-wrap gap-1.5">
+                                            {structure.specialization.map((s) => (
+                                                <span
+                                                    key={s.id}
+                                                    className="inline-flex items-center gap-1 rounded-md border border-amber-400/30 bg-amber-400/10 px-2 py-0.5 text-xs text-amber-200"
+                                                >
+                                                    <span>{s.name}</span>
+                                                    {s.code && (
+                                                        <span className="font-mono text-[10px] text-amber-300">
+                                                            ({s.code})
+                                                        </span>
+                                                    )}
+                                                </span>
+                                            ))}
+                                        </div>
+                                    </div>
+
+                                    <p className="text-slate-300 leading-relaxed text-[11px]">
+                                        To delete this fee structure, click below to open Edit mode, unassign all specializations, save your changes, and then retry deletion.
+                                    </p>
+
+                                    <div className="pt-1 flex justify-end">
+                                        <button
+                                            type="button"
+                                            onClick={() => onSwitchToEdit(structure)}
+                                            className="inline-flex items-center gap-1.5 rounded-xl border border-cyan-400/30 bg-cyan-500/20 px-3.5 py-2 text-xs font-semibold text-cyan-200 hover:bg-cyan-500/30 transition"
+                                        >
+                                            <Pencil size={14} />
+                                            <span>Switch to Edit &amp; Unassign Specializations</span>
+                                        </button>
+                                    </div>
+                                </div>
+                            ) : (
+                                <div className="rounded-xl border border-white/10 bg-slate-950/40 p-4 space-y-3">
+                                    <p className="text-sm text-slate-300 leading-relaxed">
+                                        Are you sure you want to permanently delete the fee structure{" "}
+                                        <span className="font-bold text-white">"{structure.name}"</span>?
+                                    </p>
+
+                                    <div className="rounded-lg border border-white/5 bg-slate-900/60 p-3 text-xs space-y-1.5 text-slate-300">
+                                        <div className="flex justify-between">
+                                            <span className="text-slate-400">Course:</span>
+                                            <span className="font-medium text-white">{structure.courses?.name || "—"}</span>
+                                        </div>
+                                        <div className="flex justify-between">
+                                            <span className="text-slate-400">Academic Year:</span>
+                                            <span className="font-medium text-white">{structure.academicYear?.name || "—"}</span>
+                                        </div>
+                                        <div className="flex justify-between">
+                                            <span className="text-slate-400">Frequency:</span>
+                                            <span className="font-medium text-white">{structure.frequency}</span>
+                                        </div>
+                                        <div className="flex justify-between">
+                                            <span className="text-slate-400">Components Count:</span>
+                                            <span className="font-medium text-white">{structure.feeComponent?.length || 0}</span>
+                                        </div>
+                                    </div>
+
+                                    <p className="text-xs text-rose-300/90 flex items-center gap-1.5">
+                                        <AlertTriangle size={14} className="shrink-0" />
+                                        This action cannot be undone. Any student fee records referencing this structure will be affected.
+                                    </p>
+                                </div>
+                            )}
                         </div>
                     )}
 
-                    {mode === "DELETE" ? (
-                        <div className="rounded-xl border border-rose-400/20 bg-rose-500/[0.07] p-4">
-                            <div className="flex gap-3">
-                                <Trash2
-                                    size={21}
-                                    className="shrink-0 text-rose-300"
-                                />
-                                <div>
-                                    <p className="font-semibold text-white">
-                                        Delete this fee structure?
+                    {/* -------------------------------------------------------- */}
+                    {/* VIEW DIALOG                                              */}
+                    {/* -------------------------------------------------------- */}
+                    {isView && structure && (
+                        <div className="space-y-4">
+                            {/* Institutional Context Breadcrumbs */}
+                            <div className="rounded-xl border border-white/10 bg-slate-950/40 p-3 space-y-2">
+                                <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400 flex items-center gap-1.5">
+                                    <Building2 size={13} className="text-cyan-400" />
+                                    Institutional Hierarchy &amp; Academic Scope
+                                </p>
+                                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
+                                    <div className="rounded-lg border border-white/5 bg-slate-900/60 p-2">
+                                        <span className="text-[10px] text-slate-400 block">University</span>
+                                        <span className="font-semibold text-white truncate block">
+                                            {structure.university?.name || "—"}
+                                        </span>
+                                    </div>
+                                    <div className="rounded-lg border border-white/5 bg-slate-900/60 p-2">
+                                        <span className="text-[10px] text-slate-400 block">School</span>
+                                        <span className="font-semibold text-white truncate block">
+                                            {structure.school?.name || "—"}
+                                        </span>
+                                    </div>
+                                    <div className="rounded-lg border border-white/5 bg-slate-900/60 p-2">
+                                        <span className="text-[10px] text-slate-400 block">Department</span>
+                                        <span className="font-semibold text-white truncate block">
+                                            {structure.department?.name || "—"}
+                                        </span>
+                                    </div>
+                                    <div className="rounded-lg border border-white/5 bg-slate-900/60 p-2">
+                                        <span className="text-[10px] text-slate-400 block">Academic Year</span>
+                                        <span className="font-semibold text-cyan-300 truncate block">
+                                            {structure.academicYear?.name || "—"}
+                                        </span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* Financial Metric Cards */}
+                            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+                                <div className="rounded-xl border border-emerald-500/20 bg-emerald-500/10 p-3 text-center">
+                                    <span className="text-[11px] font-medium text-emerald-300">Mandatory Fee</span>
+                                    <p className="mt-1 text-base sm:text-lg font-bold text-white truncate">
+                                        {formatCurrency(viewTotals.mandatory)}
                                     </p>
-                                    <p className="mt-2 break-words text-sm text-slate-300">
-                                        You are about to delete{" "}
-                                        <strong>{item?.name}</strong>. The
-                                        server may reject deletion if this
-                                        record is referenced elsewhere.
+                                </div>
+                                <div className="rounded-xl border border-white/10 bg-slate-950/40 p-3 text-center">
+                                    <span className="text-[11px] font-medium text-slate-400">Optional Fee</span>
+                                    <p className="mt-1 text-base sm:text-lg font-bold text-white truncate">
+                                        {formatCurrency(viewTotals.optional)}
                                     </p>
+                                </div>
+                                <div className="rounded-xl border border-white/10 bg-slate-950/40 p-3 text-center">
+                                    <span className="text-[11px] font-medium text-slate-400">Installments</span>
+                                    <p className="mt-1 text-base sm:text-lg font-bold text-white truncate">
+                                        {structure.totalNoOfInstallments || 1}
+                                    </p>
+                                    <span className="text-[10px] text-cyan-400 block truncate">
+                                        {formatCurrency(viewTotals.perInstallment)}/inst.
+                                    </span>
+                                </div>
+                                <div className="rounded-xl border border-white/10 bg-slate-950/40 p-3 text-center flex flex-col justify-center items-center">
+                                    <span className="text-[11px] font-medium text-slate-400">Frequency</span>
+                                    <div className="mt-1">
+                                        <FrequencyBadge frequency={structure.frequency} />
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* Components Table */}
+                            <div className="rounded-xl border border-white/10 bg-slate-950/40 p-3 space-y-2">
+                                <div className="flex items-center justify-between">
+                                    <span className="text-xs font-semibold text-slate-300 flex items-center gap-1.5">
+                                        <CreditCard size={13} className="text-cyan-400" />
+                                        Fee Components ({structure.feeComponent?.length || 0})
+                                    </span>
+                                    <span className="text-xs font-bold text-emerald-400">
+                                        Grand Total: {formatCurrency(viewTotals.grand)}
+                                    </span>
+                                </div>
+
+                                <div className="overflow-x-auto custom-scrollbar">
+                                    <table className="w-full text-left text-xs border-collapse">
+                                        <thead>
+                                            <tr className="border-b border-white/10 text-slate-400 uppercase tracking-wider text-[10px]">
+                                                <th className="py-2 px-3">#</th>
+                                                <th className="py-2 px-3">Category</th>
+                                                <th className="py-2 px-3">Component Name</th>
+                                                <th className="py-2 px-3 text-right">Amount</th>
+                                                <th className="py-2 px-3 text-center">Type</th>
+                                                <th className="py-2 px-3 text-center">Refundable</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody className="divide-y divide-white/5 text-slate-200">
+                                            {structure.feeComponent?.map((comp, idx) => (
+                                                <tr key={comp.id || idx} className="hover:bg-white/[0.02]">
+                                                    <td className="py-2 px-3 text-slate-500 font-mono text-[11px]">
+                                                        {idx + 1}
+                                                    </td>
+                                                    <td className="py-2 px-3 font-medium text-cyan-300">
+                                                        {comp.feeCategoryType}
+                                                    </td>
+                                                    <td className="py-2 px-3">{comp.componentName}</td>
+                                                    <td className="py-2 px-3 text-right font-mono font-semibold text-emerald-300">
+                                                        {formatCurrency(comp.amount)}
+                                                    </td>
+                                                    <td className="py-2 px-3 text-center">
+                                                        <span
+                                                            className={`inline-flex rounded-full px-2 py-0.5 text-[10px] font-semibold ${
+                                                                comp.isMandatory
+                                                                    ? "border border-emerald-500/30 bg-emerald-500/10 text-emerald-300"
+                                                                    : "border border-slate-500/30 bg-slate-500/10 text-slate-400"
+                                                            }`}
+                                                        >
+                                                            {comp.isMandatory ? "Mandatory" : "Optional"}
+                                                        </span>
+                                                    </td>
+                                                    <td className="py-2 px-3 text-center">
+                                                        <span
+                                                            className={`inline-flex rounded-full px-2 py-0.5 text-[10px] font-semibold ${
+                                                                comp.isRefundable
+                                                                    ? "border border-amber-500/30 bg-amber-500/10 text-amber-300"
+                                                                    : "border border-white/5 bg-white/5 text-slate-400"
+                                                            }`}
+                                                        >
+                                                            {comp.isRefundable ? "Yes" : "No"}
+                                                        </span>
+                                                    </td>
+                                                </tr>
+                                            ))}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+
+                            {/* Assigned Specializations */}
+                            <div className="rounded-xl border border-white/10 bg-slate-950/40 p-3 space-y-2">
+                                <div className="flex items-center justify-between">
+                                    <span className="text-xs font-semibold text-slate-300 flex items-center gap-1.5">
+                                        <GraduationCap size={13} className="text-purple-400" />
+                                        Assigned Specializations
+                                    </span>
+                                    <span className="rounded-full bg-purple-500/20 px-2 py-0.5 text-[10px] font-bold text-purple-300">
+                                        {structure.specialization?.length ?? 0}
+                                    </span>
+                                </div>
+                                {Array.isArray(structure.specialization) &&
+                                structure.specialization.length > 0 ? (
+                                    <div className="flex flex-wrap gap-1.5 max-h-32 overflow-y-auto custom-scrollbar">
+                                        {structure.specialization.map((s) => (
+                                            <span
+                                                key={s.id}
+                                                className="inline-flex items-center gap-1 rounded-lg border border-purple-400/20 bg-purple-500/10 px-2.5 py-1 text-xs text-purple-200"
+                                            >
+                                                <span>{s.name}</span>
+                                                {s.code && (
+                                                    <span className="text-[10px] text-purple-300 font-mono">
+                                                        ({s.code})
+                                                    </span>
+                                                )}
+                                            </span>
+                                        ))}
+                                    </div>
+                                ) : (
+                                    <p className="text-xs text-slate-500 italic">
+                                        No specific specializations assigned.
+                                    </p>
+                                )}
+                            </div>
+
+                            {/* Audit & Governance Showcase (EXACT University.tsx Design) */}
+                            <div className="rounded-xl border border-white/10 bg-slate-950/40 p-3 space-y-2.5">
+                                <div className="flex items-center justify-between">
+                                    <span className="text-xs font-semibold text-slate-300 flex items-center gap-1.5">
+                                        <ShieldCheck size={13} className="text-emerald-400" />
+                                        Audit Trail &amp; Governance
+                                    </span>
+                                    <span className="text-[10px] uppercase tracking-wider text-slate-500 font-mono">
+                                        System Records
+                                    </span>
+                                </div>
+
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
+                                    {/* Created By Card */}
+                                    <div className="rounded-lg border border-emerald-500/20 bg-emerald-500/5 p-2.5 space-y-1.5">
+                                        <div className="flex items-center justify-between text-[10px] text-emerald-400 font-medium">
+                                            <span className="flex items-center gap-1">
+                                                <UserCheck size={11} /> Created By
+                                            </span>
+                                            {structure.createdAt && (
+                                                <span className="text-slate-400 font-mono text-[10px]">
+                                                    {formatDate(structure.createdAt)}
+                                                </span>
+                                            )}
+                                        </div>
+                                        <div className="flex items-center gap-2">
+                                            <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-emerald-500/20 text-[10px] font-bold text-emerald-300">
+                                                {getInitials(structure.createdBy?.name || "System")}
+                                            </div>
+                                            <div className="min-w-0 flex-1">
+                                                <p className="truncate font-semibold text-slate-200 text-xs">
+                                                    {structure.createdBy?.name || "System Administrator"}
+                                                </p>
+                                                {(structure.createdBy?.code || structure.createdBy?.id) && (
+                                                    <p className="text-[10px] text-slate-400 font-mono truncate">
+                                                        {structure.createdBy.code
+                                                            ? `Code: ${structure.createdBy.code}`
+                                                            : `ID: #${structure.createdBy.id}`}
+                                                    </p>
+                                                )}
+                                            </div>
+                                        </div>
+                                        {structure.createdAt && (
+                                            <div className="text-[10px] text-slate-500 flex items-center gap-1 pt-0.5 border-t border-emerald-500/10">
+                                                <Clock size={10} className="text-slate-400 shrink-0" />
+                                                <span className="truncate">
+                                                    Timestamp: {formatDateTime(structure.createdAt)}
+                                                </span>
+                                            </div>
+                                        )}
+                                    </div>
+
+                                    {/* Updated By Card */}
+                                    <div className="rounded-lg border border-cyan-500/20 bg-cyan-500/5 p-2.5 space-y-1.5">
+                                        <div className="flex items-center justify-between text-[10px] text-cyan-400 font-medium">
+                                            <span className="flex items-center gap-1">
+                                                <RotateCcw size={11} /> Last Modified By
+                                            </span>
+                                            {(structure.updatedAt || structure.createdAt) && (
+                                                <span className="text-slate-400 font-mono text-[10px]">
+                                                    {formatDate(structure.updatedAt || structure.createdAt)}
+                                                </span>
+                                            )}
+                                        </div>
+                                        <div className="flex items-center gap-2">
+                                            <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-cyan-500/20 text-[10px] font-bold text-cyan-300">
+                                                {getInitials(
+                                                    structure.updatedBy?.name ||
+                                                        structure.createdBy?.name ||
+                                                        "System"
+                                                )}
+                                            </div>
+                                            <div className="min-w-0 flex-1">
+                                                <p className="truncate font-semibold text-slate-200 text-xs">
+                                                    {structure.updatedBy?.name ||
+                                                        structure.createdBy?.name ||
+                                                        "System Administrator"}
+                                                </p>
+                                                {(structure.updatedBy?.code || structure.updatedBy?.id) && (
+                                                    <p className="text-[10px] text-slate-400 font-mono truncate">
+                                                        {structure.updatedBy.code
+                                                            ? `Code: ${structure.updatedBy.code}`
+                                                            : `ID: #${structure.updatedBy.id}`}
+                                                    </p>
+                                                )}
+                                            </div>
+                                        </div>
+                                        {(structure.updatedAt || structure.createdAt) && (
+                                            <div className="text-[10px] text-slate-500 flex items-center gap-1 pt-0.5 border-t border-cyan-500/10">
+                                                <Clock size={10} className="text-slate-400 shrink-0" />
+                                                <span className="truncate">
+                                                    Timestamp:{" "}
+                                                    {formatDateTime(structure.updatedAt || structure.createdAt)}
+                                                </span>
+                                            </div>
+                                        )}
+                                    </div>
                                 </div>
                             </div>
                         </div>
-                    ) : (
-                        <>
-                            <section className="grid grid-cols-1 gap-4 md:grid-cols-2">
-                                <div>
-                                    <label className="mb-2 block text-sm text-slate-300">
-                                        Course
-                                        {isCreate && (
-                                            <span className="text-cyan-300"> *</span>
-                                        )}
-                                    </label>
+                    )}
 
-                                    {isCreate ? (
-                                        <>
-                                            <div className="relative">
-                                                <select
-                                                    value={form.courseId}
-                                                    disabled={coursesLoading || readOnly}
-                                                    onChange={(event) => {
-                                                        const value = event.target.value;
-                                                        updateForm(
-                                                            "courseId",
-                                                            value ? Number(value) : "",
-                                                        );
-                                                        updateForm("specializationId", []);
-                                                    }}
-                                                    className={selectClass}
-                                                >
-                                                    <option value="">
-                                                        {coursesLoading
-                                                            ? "Loading courses…"
-                                                            : "Select course"}
+                    {/* -------------------------------------------------------- */}
+                    {/* CREATE / EDIT FORM                                       */}
+                    {/* -------------------------------------------------------- */}
+                    {(isCreate || isEdit) && (
+                        <form id="fee-structure-form" onSubmit={handleSubmit} className="space-y-4">
+                            {/* Course & Academic Year Selection (CREATE: selectable, EDIT: read-only) */}
+                            {isCreate ? (
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                    {/* Course Selector */}
+                                    <div className="space-y-1">
+                                        <label className="text-[11px] font-semibold text-slate-300">
+                                            Course <span className="text-rose-400">*</span>
+                                        </label>
+                                        <div className="relative">
+                                            <select
+                                                value={form.courseId}
+                                                onChange={(e) =>
+                                                    setForm((prev) => ({
+                                                        ...prev,
+                                                        courseId: e.target.value ? Number(e.target.value) : "",
+                                                    }))
+                                                }
+                                                disabled={busy || coursesLoading}
+                                                className="w-full appearance-none rounded-xl border border-white/10 bg-slate-950/60 px-3.5 py-2.5 pr-9 text-xs text-white outline-none focus:border-cyan-400/60 disabled:opacity-50"
+                                            >
+                                                <option value="" className="bg-slate-900 text-white">
+                                                    {coursesLoading ? "Loading courses..." : "Select Course"}
+                                                </option>
+                                                {courses.map((c) => (
+                                                    <option key={c.id} value={c.id} className="bg-slate-900 text-white">
+                                                        {c.name} {c.code ? `(${c.code})` : ""}
                                                     </option>
-                                                    {courses.map((course) => (
-                                                        <option
-                                                            key={course.id}
-                                                            value={course.id}
-                                                        >
-                                                            {formatCommon(course)}
-                                                        </option>
-                                                    ))}
-                                                </select>
-                                                <SelectArrow />
-                                            </div>
-
-                                            <FieldError message={fieldErrors.courseId} />
-
-                                            {coursesError && (
-                                                <div className="mt-2 text-xs text-amber-200">
-                                                    <p>{coursesError}</p>
-                                                    <button
-                                                        type="button"
-                                                        onClick={onRetryCourses}
-                                                        className="mt-1 underline underline-offset-2"
-                                                    >
-                                                        Retry loading courses
-                                                    </button>
-                                                </div>
-                                            )}
-                                        </>
-                                    ) : (
-                                        <div className="rounded-xl border border-white/10 bg-white/[0.03] px-3.5 py-3 text-sm text-slate-200">
-                                            {formatCommon(item?.courses) || "—"}
+                                                ))}
+                                            </select>
+                                            <SelectChevron />
                                         </div>
+                                        {fieldErrors.courseId && (
+                                            <p className="text-[11px] text-rose-400">{fieldErrors.courseId}</p>
+                                        )}
+                                    </div>
+
+                                    {/* Academic Year Selector */}
+                                    <div className="space-y-1">
+                                        <label className="text-[11px] font-semibold text-slate-300">
+                                            Academic Year <span className="text-rose-400">*</span>
+                                        </label>
+                                        <div className="relative">
+                                            <select
+                                                value={form.academicYearId}
+                                                onChange={(e) =>
+                                                    setForm((prev) => ({
+                                                        ...prev,
+                                                        academicYearId: e.target.value ? Number(e.target.value) : "",
+                                                    }))
+                                                }
+                                                disabled={
+                                                    busy ||
+                                                    academicYearsLoading ||
+                                                    !form.courseId ||
+                                                    academicYears.length === 0
+                                                }
+                                                className="w-full appearance-none rounded-xl border border-white/10 bg-slate-950/60 px-3.5 py-2.5 pr-9 text-xs text-white outline-none focus:border-cyan-400/60 disabled:opacity-50"
+                                            >
+                                                <option value="" className="bg-slate-900 text-white">
+                                                    {!form.courseId
+                                                        ? "Select course first"
+                                                        : academicYearsLoading
+                                                        ? "Loading academic years..."
+                                                        : academicYears.length === 0
+                                                        ? "No academic years found"
+                                                        : "Select Academic Year"}
+                                                </option>
+                                                {academicYears.map((y) => (
+                                                    <option key={y.id} value={y.id} className="bg-slate-900 text-white">
+                                                        {y.name} {y.code ? `(${y.code})` : ""}
+                                                    </option>
+                                                ))}
+                                            </select>
+                                            <SelectChevron />
+                                        </div>
+                                        {fieldErrors.academicYearId && (
+                                            <p className="text-[11px] text-rose-400">{fieldErrors.academicYearId}</p>
+                                        )}
+                                    </div>
+                                </div>
+                            ) : (
+                                /* EDIT Mode: Read-only Course and Academic Year banner */
+                                <div className="rounded-xl border border-white/10 bg-slate-950/50 p-3 space-y-1 text-xs">
+                                    <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                                        Bound Academic Scope (Immutable)
+                                    </p>
+                                    <div className="grid grid-cols-2 gap-2 text-slate-300">
+                                        <div>
+                                            <span className="text-slate-500 text-[11px]">Course:</span>{" "}
+                                            <span className="font-semibold text-white">
+                                                {structure?.courses?.name || "—"}
+                                            </span>
+                                        </div>
+                                        <div>
+                                            <span className="text-slate-500 text-[11px]">Academic Year:</span>{" "}
+                                            <span className="font-semibold text-white">
+                                                {structure?.academicYear?.name || "—"}
+                                            </span>
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* Name, Frequency, and Installments */}
+                            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                                {/* Name */}
+                                <div className="space-y-1 sm:col-span-1">
+                                    <label className="text-[11px] font-semibold text-slate-300">
+                                        Fee Structure Name <span className="text-rose-400">*</span>
+                                    </label>
+                                    <input
+                                        type="text"
+                                        value={form.name}
+                                        onChange={(e) =>
+                                            setForm((prev) => ({ ...prev, name: e.target.value }))
+                                        }
+                                        placeholder="e.g. Standard B.Tech Fee 2024"
+                                        disabled={busy}
+                                        className="w-full rounded-xl border border-white/10 bg-slate-950/60 px-3.5 py-2.5 text-xs text-white outline-none focus:border-cyan-400/60 disabled:opacity-50"
+                                    />
+                                    {fieldErrors.name && (
+                                        <p className="text-[11px] text-rose-400">{fieldErrors.name}</p>
                                     )}
                                 </div>
 
-                                <div>
-                                    <label className="mb-2 block text-sm text-slate-300">
-                                        Fee structure name *
-                                    </label>
-                                    <input
-                                        value={form.name}
-                                        maxLength={120}
-                                        readOnly={readOnly}
-                                        onChange={(event) =>
-                                            updateForm("name", event.target.value)
-                                        }
-                                        placeholder="Enter fee structure name"
-                                        className={inputClass}
-                                    />
-                                    <FieldError message={fieldErrors.name} />
-                                </div>
-
-                                <div>
-                                    <label className="mb-2 block text-sm text-slate-300">
-                                        Frequency *
+                                {/* Frequency */}
+                                <div className="space-y-1">
+                                    <label className="text-[11px] font-semibold text-slate-300">
+                                        Frequency <span className="text-rose-400">*</span>
                                     </label>
                                     <div className="relative">
                                         <select
                                             value={form.frequency}
-                                            disabled={readOnly}
-                                            onChange={(event) =>
-                                                updateForm("frequency", event.target.value)
+                                            onChange={(e) =>
+                                                setForm((prev) => ({ ...prev, frequency: e.target.value }))
                                             }
-                                            className={selectClass}
+                                            disabled={busy}
+                                            className="w-full appearance-none rounded-xl border border-white/10 bg-slate-950/60 px-3.5 py-2.5 pr-9 text-xs text-white outline-none focus:border-cyan-400/60 disabled:opacity-50"
                                         >
-                                            <option value="">
-                                                Select frequency
-                                            </option>
-                                            {enums.feeFrequency.map((option) => (
-                                                <option
-                                                    key={option.enumValue}
-                                                    value={option.enumValue}
-                                                >
-                                                    {option.name || labelize(option.enumValue)}
+                                            {feeEnums.feeFrequency.map((f) => (
+                                                <option key={f.enumValue} value={f.enumValue} className="bg-slate-900 text-white">
+                                                    {f.name}
                                                 </option>
                                             ))}
                                         </select>
-                                        <SelectArrow />
+                                        <SelectChevron />
                                     </div>
-                                    {!enums.feeFrequency.length && (
-                                        <p className="mt-1.5 text-xs text-amber-200">
-                                            No frequency options were returned by the API.
-                                        </p>
+                                    {fieldErrors.frequency && (
+                                        <p className="text-[11px] text-rose-400">{fieldErrors.frequency}</p>
                                     )}
-                                    <FieldError message={fieldErrors.frequency} />
                                 </div>
 
-                                <div>
-                                    <label className="mb-2 block text-sm text-slate-300">
-                                        Number of installments *
+                                {/* Total Installments */}
+                                <div className="space-y-1">
+                                    <label className="text-[11px] font-semibold text-slate-300">
+                                        Total Installments <span className="text-rose-400">*</span>
                                     </label>
                                     <input
                                         type="number"
                                         min={1}
-                                        step={1}
+                                        max={24}
                                         value={form.totalNoOfInstallments}
-                                        readOnly={readOnly}
-                                        onChange={(event) =>
-                                            updateForm(
-                                                "totalNoOfInstallments",
-                                                event.target.value === ""
-                                                    ? 0
-                                                    : Number(event.target.value),
-                                            )
+                                        onChange={(e) =>
+                                            setForm((prev) => ({
+                                                ...prev,
+                                                totalNoOfInstallments: Math.max(1, parseInt(e.target.value) || 1),
+                                            }))
                                         }
-                                        className={inputClass}
+                                        disabled={busy}
+                                        className="w-full rounded-xl border border-white/10 bg-slate-950/60 px-3.5 py-2.5 text-xs text-white outline-none focus:border-cyan-400/60 disabled:opacity-50"
                                     />
-                                    <FieldError
-                                        message={fieldErrors.totalNoOfInstallments}
-                                    />
+                                    {fieldErrors.totalNoOfInstallments && (
+                                        <p className="text-[11px] text-rose-400">{fieldErrors.totalNoOfInstallments}</p>
+                                    )}
                                 </div>
-                            </section>
+                            </div>
 
-                            <section className="rounded-2xl border border-white/10 bg-slate-950/25 p-4">
-                                <div className="mb-4">
-                                    <h3 className="font-semibold text-white">
-                                        Specializations
-                                    </h3>
-                                    <p className="mt-1 text-xs leading-5 text-slate-400">
-                                        Assign this fee structure to the applicable
-                                        specializations.
-                                    </p>
-                                </div>
-
-                                {!selectedCourseId ? (
-                                    <p className="rounded-xl border border-dashed border-white/10 p-4 text-sm text-slate-400">
-                                        Select a course to load its specializations.
-                                    </p>
-                                ) : specializationsLoading ? (
-                                    <div className="flex items-center gap-2 py-3 text-sm text-slate-400">
-                                        <LoaderCircle
-                                            size={16}
-                                            className="animate-spin"
-                                        />
-                                        Loading specializations…
-                                    </div>
-                                ) : specializationsError ? (
-                                    <div
-                                        role="alert"
-                                        className="rounded-xl border border-rose-400/20 bg-rose-500/[0.06] p-3 text-sm text-rose-200"
-                                    >
-                                        {specializationsError}
-                                    </div>
-                                ) : specializations.length ? (
-                                    <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-                                        {specializations.map((specialization) => {
-                                            const checked =
-                                                form.specializationId.includes(
-                                                    specialization.id,
-                                                );
-
-                                            return (
-                                                <label
-                                                    key={specialization.id}
-                                                    className={`flex min-w-0 cursor-pointer items-start gap-3 rounded-xl border p-3 text-sm transition ${checked
-                                                        ? "border-cyan-400/40 bg-cyan-400/[0.08] text-cyan-100"
-                                                        : "border-white/10 bg-white/[0.02] text-slate-300 hover:bg-white/[0.04]"
-                                                        }`}
-                                                >
-                                                    <input
-                                                        type="checkbox"
-                                                        disabled={readOnly}
-                                                        checked={checked}
-                                                        onChange={(event) => {
-                                                            const next = event.target.checked
-                                                                ? [
-                                                                    ...form.specializationId,
-                                                                    specialization.id,
-                                                                ]
-                                                                : form.specializationId.filter(
-                                                                    (id) =>
-                                                                        id !== specialization.id,
-                                                                );
-
-                                                            updateForm(
-                                                                "specializationId",
-                                                                next,
-                                                            );
-                                                        }}
-                                                        className="mt-0.5 accent-cyan-400"
-                                                    />
-                                                    <span className="min-w-0 break-words">
-                                                        {specialization.name || `ID ${specialization.id}`}
-                                                        {specialization.code && (
-                                                            <span className="ml-2 text-xs text-slate-500">
-                                                                {specialization.code}
-                                                            </span>
-                                                        )}
-                                                    </span>
-                                                </label>
-                                            );
-                                        })}
-                                    </div>
-                                ) : (
-                                    <p className="rounded-xl border border-dashed border-white/10 p-4 text-sm text-slate-400">
-                                        No specializations are assigned or available.
-                                    </p>
-                                )}
-                            </section>
-
-                            <section className="rounded-2xl border border-white/10 bg-slate-950/25 p-4">
-                                <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                            {/* Specialization Multi-Select */}
+                            <div className="rounded-xl border border-white/10 bg-slate-950/40 p-3 space-y-2">
+                                <div className="flex items-center justify-between">
                                     <div>
-                                        <h3 className="font-semibold text-white">
-                                            Fee components
-                                        </h3>
-                                        <p className="mt-1 text-xs leading-5 text-slate-400">
-                                            The payable estimate below includes only
-                                            mandatory components.
+                                        <span className="text-xs font-semibold text-slate-300 flex items-center gap-1.5">
+                                            <GraduationCap size={13} className="text-purple-400" />
+                                            Assigned Specializations
+                                        </span>
+                                        <p className="text-[10px] text-slate-500">
+                                            Select specializations covered by this fee schedule.
                                         </p>
                                     </div>
-
-                                    {!readOnly && (
-                                        <button
-                                            type="button"
-                                            onClick={addComponent}
-                                            disabled={!enums.feeComponentType.length}
-                                            className={buttonClass}
-                                        >
-                                            <Plus size={16} />
-                                            Add component
-                                        </button>
+                                    {availableSpecializations.length > 0 && (
+                                        <div className="flex items-center gap-1.5">
+                                            <button
+                                                type="button"
+                                                onClick={selectAllSpecializations}
+                                                className="text-[10px] font-medium text-purple-300 hover:underline"
+                                            >
+                                                Select All
+                                            </button>
+                                            <span className="text-slate-600">·</span>
+                                            <button
+                                                type="button"
+                                                onClick={deselectAllSpecializations}
+                                                className="text-[10px] font-medium text-slate-400 hover:underline"
+                                            >
+                                                Clear
+                                            </button>
+                                        </div>
                                     )}
                                 </div>
 
-                                {!enums.feeComponentType.length && !readOnly && (
-                                    <p className="mb-3 rounded-xl border border-amber-400/20 bg-amber-500/[0.06] p-3 text-xs text-amber-200">
-                                        The server returned no fee component categories.
-                                        Components cannot be added until the enum endpoint
-                                        returns valid options.
-                                    </p>
-                                )}
-
-                                <FieldError message={fieldErrors.components} />
-
-                                {form.components.length === 0 ? (
-                                    <div className="rounded-xl border border-dashed border-white/10 p-6 text-center">
-                                        <FileText
-                                            size={24}
-                                            className="mx-auto text-slate-500"
-                                        />
-                                        <p className="mt-2 text-sm text-slate-300">
-                                            No fee components
-                                        </p>
-                                        {!readOnly && (
-                                            <p className="mt-1 text-xs text-slate-500">
-                                                Add a component to configure this fee structure.
-                                            </p>
-                                        )}
+                                {specializationsLoading ? (
+                                    <div className="py-3 text-center text-xs text-slate-400 flex items-center justify-center gap-2">
+                                        <LoaderCircle size={14} className="animate-spin text-purple-400" />
+                                        <span>Loading specializations...</span>
                                     </div>
-                                ) : (
-                                    <div className="space-y-3">
-                                        {form.components.map((component, index) => {
-                                            const categoryOptions =
-                                                enums.feeComponentType.some(
-                                                    (option) =>
-                                                        option.enumValue ===
-                                                        component.feeCategoryType,
-                                                ) || !component.feeCategoryType
-                                                    ? enums.feeComponentType
-                                                    : [
-                                                        ...enums.feeComponentType,
-                                                        {
-                                                            name: component.feeCategoryType,
-                                                            enumValue: component.feeCategoryType,
-                                                        },
-                                                    ];
-
+                                ) : availableSpecializations.length > 0 ? (
+                                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 max-h-36 overflow-y-auto custom-scrollbar pt-1">
+                                        {availableSpecializations.map((spec) => {
+                                            const isSelected = form.selectedSpecializationIds.includes(spec.id);
                                             return (
-                                                <article
-                                                    key={component.key}
-                                                    className="rounded-xl border border-white/10 bg-[#0b1224] p-3 sm:p-4"
+                                                <button
+                                                    key={spec.id}
+                                                    type="button"
+                                                    onClick={() => toggleSpecialization(spec.id)}
+                                                    className={`flex items-center justify-between gap-1.5 rounded-lg border px-2.5 py-1.5 text-left text-xs transition ${
+                                                        isSelected
+                                                            ? "border-purple-400/40 bg-purple-500/20 text-purple-200"
+                                                            : "border-white/5 bg-slate-900/60 text-slate-400 hover:border-white/20 hover:text-slate-300"
+                                                    }`}
                                                 >
-                                                    <div className="mb-3 flex items-center justify-between gap-3">
-                                                        <span className="text-xs font-semibold uppercase tracking-wider text-cyan-300">
-                                                            Component {index + 1}
-                                                        </span>
-                                                        {!readOnly && (
-                                                            <button
-                                                                type="button"
-                                                                onClick={() =>
-                                                                    removeComponent(component.key)
-                                                                }
-                                                                aria-label={`Remove component ${index + 1}`}
-                                                                className="rounded-lg p-2 text-rose-300 transition hover:bg-rose-500/10"
-                                                            >
-                                                                <Trash2 size={16} />
-                                                            </button>
-                                                        )}
-                                                    </div>
-
-                                                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                                                        <div>
-                                                            <label className="mb-1.5 block text-xs text-slate-400">
-                                                                Category *
-                                                            </label>
-                                                            <div className="relative">
-                                                                <select
-                                                                    disabled={readOnly}
-                                                                    value={component.feeCategoryType}
-                                                                    onChange={(event) =>
-                                                                        updateComponent(
-                                                                            component.key,
-                                                                            {
-                                                                                feeCategoryType:
-                                                                                    event.target.value,
-                                                                            },
-                                                                        )
-                                                                    }
-                                                                    className={selectClass}
-                                                                >
-                                                                    <option value="">
-                                                                        Select category
-                                                                    </option>
-                                                                    {categoryOptions.map((option) => (
-                                                                        <option
-                                                                            key={option.enumValue}
-                                                                            value={option.enumValue}
-                                                                        >
-                                                                            {option.name ||
-                                                                                labelize(option.enumValue)}
-                                                                        </option>
-                                                                    ))}
-                                                                </select>
-                                                                <SelectArrow />
-                                                            </div>
-                                                            <FieldError
-                                                                message={
-                                                                    fieldErrors[
-                                                                    `category-${component.key}`
-                                                                    ]
-                                                                }
-                                                            />
-                                                        </div>
-
-                                                        <div>
-                                                            <label className="mb-1.5 block text-xs text-slate-400">
-                                                                Component name *
-                                                            </label>
-                                                            <input
-                                                                readOnly={readOnly}
-                                                                value={component.componentName}
-                                                                onChange={(event) =>
-                                                                    updateComponent(
-                                                                        component.key,
-                                                                        {
-                                                                            componentName:
-                                                                                event.target.value,
-                                                                        },
-                                                                    )
-                                                                }
-                                                                className={inputClass}
-                                                                placeholder="Enter component name"
-                                                            />
-                                                            <FieldError
-                                                                message={
-                                                                    fieldErrors[
-                                                                    `name-${component.key}`
-                                                                    ]
-                                                                }
-                                                            />
-                                                        </div>
-
-                                                        <div>
-                                                            <label className="mb-1.5 block text-xs text-slate-400">
-                                                                Amount (₹) *
-                                                            </label>
-                                                            <input
-                                                                type="number"
-                                                                min={0}
-                                                                step="0.01"
-                                                                readOnly={readOnly}
-                                                                value={component.amount}
-                                                                onChange={(event) =>
-                                                                    updateComponent(
-                                                                        component.key,
-                                                                        {
-                                                                            amount:
-                                                                                event.target.value,
-                                                                        },
-                                                                    )
-                                                                }
-                                                                className={inputClass}
-                                                                placeholder="0.00"
-                                                            />
-                                                            <FieldError
-                                                                message={
-                                                                    fieldErrors[
-                                                                    `amount-${component.key}`
-                                                                    ]
-                                                                }
-                                                            />
-                                                        </div>
-                                                    </div>
-
-                                                    <div className="mt-4 flex flex-wrap gap-x-5 gap-y-3 border-t border-white/[0.06] pt-3">
-                                                        <label className="inline-flex items-center gap-2 text-sm text-slate-300">
-                                                            <input
-                                                                type="checkbox"
-                                                                disabled={readOnly}
-                                                                checked={component.isMandatory}
-                                                                onChange={(event) =>
-                                                                    updateComponent(
-                                                                        component.key,
-                                                                        {
-                                                                            isMandatory:
-                                                                                event.target.checked,
-                                                                        },
-                                                                    )
-                                                                }
-                                                                className="accent-cyan-400"
-                                                            />
-                                                            Mandatory
-                                                        </label>
-
-                                                        <label className="inline-flex items-center gap-2 text-sm text-slate-300">
-                                                            <input
-                                                                type="checkbox"
-                                                                disabled={readOnly}
-                                                                checked={component.isRefundable}
-                                                                onChange={(event) =>
-                                                                    updateComponent(
-                                                                        component.key,
-                                                                        {
-                                                                            isRefundable:
-                                                                                event.target.checked,
-                                                                        },
-                                                                    )
-                                                                }
-                                                                className="accent-cyan-400"
-                                                            />
-                                                            Refundable
-                                                        </label>
-                                                    </div>
-                                                </article>
+                                                    <span className="truncate">{spec.name}</span>
+                                                    {isSelected && <Check size={12} className="shrink-0 text-purple-300" />}
+                                                </button>
                                             );
                                         })}
                                     </div>
+                                ) : (
+                                    <p className="text-xs text-slate-500 italic py-1">
+                                        {isCreate && (!form.courseId || !form.academicYearId)
+                                            ? "Select Course and Academic Year above to load eligible specializations."
+                                            : "No eligible unassigned specializations found."}
+                                    </p>
                                 )}
+                            </div>
 
-                                <div className="mt-4 flex flex-col gap-2 rounded-xl border border-cyan-400/20 bg-cyan-400/[0.05] p-4 sm:flex-row sm:items-center sm:justify-between">
+                            {/* Dynamic Components Builder */}
+                            <div className="rounded-xl border border-white/10 bg-slate-950/40 p-3 space-y-3">
+                                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
                                     <div>
-                                        <p className="text-xs text-slate-400">
-                                            Mandatory component total
-                                        </p>
-                                        <p className="mt-1 text-2xl font-bold text-white">
-                                            {formatCurrency(mandatoryTotal)}
+                                        <span className="text-xs font-semibold text-slate-300 flex items-center gap-1.5">
+                                            <CreditCard size={13} className="text-emerald-400" />
+                                            Fee Breakdown Components ({form.components.length})
+                                        </span>
+                                        <p className="text-[10px] text-slate-500">
+                                            Define mandatory and optional fee items for this schedule.
                                         </p>
                                     </div>
-                                    <p className="max-w-sm text-xs leading-5 text-slate-400">
-                                        This is calculated from the current form values;
-                                        the server remains authoritative for saved fees.
-                                    </p>
+                                    <button
+                                        type="button"
+                                        onClick={handleAddComponent}
+                                        className="inline-flex items-center gap-1.5 rounded-xl border border-emerald-400/30 bg-emerald-500/10 px-3 py-1.5 text-xs font-semibold text-emerald-300 hover:bg-emerald-500/20 transition self-start sm:self-auto"
+                                    >
+                                        <Plus size={13} />
+                                        <span>Add Component</span>
+                                    </button>
                                 </div>
-                            </section>
 
-                            {!isCreate && item && (
-                                <section className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                                    {[
-                                        ["University", formatCommon(item.university)],
-                                        ["School", formatCommon(item.school)],
-                                        ["Department", formatCommon(item.department)],
-                                        ["Academic year", formatCommon(item.academicYear)],
-                                        ["Last modified by", formatCommon(item.lastModifiedBy)],
-                                    ].map(([label, value]) => (
-                                        <div
-                                            key={label}
-                                            className="min-w-0 rounded-xl border border-white/10 bg-white/[0.02] p-3"
-                                        >
-                                            <p className="text-xs text-slate-500">
-                                                {label}
-                                            </p>
-                                            <p className="mt-1 break-words text-sm text-slate-200">
-                                                {value || "—"}
-                                            </p>
-                                        </div>
-                                    ))}
-                                </section>
-                            )}
-                        </>
-                    )}
-
-                    <footer className="flex flex-col-reverse gap-3 border-t border-white/10 pt-4 sm:flex-row sm:justify-end">
-                        <button
-                            type="button"
-                            disabled={busy}
-                            onClick={onClose}
-                            className={buttonClass}
-                        >
-                            {mode === "VIEW" ? "Close" : "Cancel"}
-                        </button>
-
-                        {mode !== "VIEW" && (
-                            <button
-                                type="submit"
-                                disabled={
-                                    busy ||
-                                    (isCreate &&
-                                        (coursesLoading ||
-                                            !courses.length)) ||
-                                    (isCreate &&
-                                        !enums.feeFrequency.length) ||
-                                    (!readOnly &&
-                                        form.components.length > 0 &&
-                                        !enums.feeComponentType.length)
-                                }
-                                className={
-                                    mode === "DELETE"
-                                        ? "inline-flex min-h-10 items-center justify-center gap-2 rounded-xl bg-rose-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-rose-500 disabled:opacity-50"
-                                        : primaryButtonClass
-                                }
-                            >
-                                {busy ? (
-                                    <LoaderCircle
-                                        size={16}
-                                        className="animate-spin"
-                                    />
-                                ) : mode === "DELETE" ? (
-                                    <Trash2 size={16} />
-                                ) : (
-                                    <Check size={16} />
+                                {fieldErrors.components && (
+                                    <p className="text-[11px] text-rose-400">{fieldErrors.components}</p>
                                 )}
 
-                                {busy
-                                    ? "Processing…"
-                                    : mode === "DELETE"
-                                        ? "Confirm delete"
-                                        : isCreate
-                                            ? "Create fee structure"
-                                            : "Save changes"}
-                            </button>
-                        )}
-                    </footer>
-                </form>
+                                {/* Component Rows */}
+                                <div className="space-y-2 max-h-60 overflow-y-auto custom-scrollbar">
+                                    {form.components.map((comp, idx) => (
+                                        <div
+                                            key={comp.key}
+                                            className="flex flex-col sm:flex-row sm:items-center gap-2 rounded-xl border border-white/5 bg-slate-900/60 p-2.5 text-xs"
+                                        >
+                                            <span className="text-slate-500 font-mono text-[10px] w-5 text-center hidden sm:inline">
+                                                {idx + 1}
+                                            </span>
+
+                                            {/* Category */}
+                                            <div className="relative min-w-[130px]">
+                                                <select
+                                                    value={comp.feeCategoryType}
+                                                    onChange={(e) =>
+                                                        handleUpdateComponent(
+                                                            comp.key,
+                                                            "feeCategoryType",
+                                                            e.target.value
+                                                        )
+                                                    }
+                                                    className="w-full appearance-none rounded-lg border border-white/10 bg-slate-950/80 px-2.5 py-1.5 pr-7 text-xs text-white outline-none focus:border-cyan-400"
+                                                >
+                                                    {feeEnums.feeComponentType.map((t) => (
+                                                        <option
+                                                            key={t.enumValue}
+                                                            value={t.enumValue}
+                                                            className="bg-slate-900 text-white"
+                                                        >
+                                                            {t.name}
+                                                        </option>
+                                                    ))}
+                                                </select>
+                                                <ChevronDown
+                                                    size={12}
+                                                    className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-slate-400"
+                                                />
+                                            </div>
+
+                                            {/* Component Name */}
+                                            <input
+                                                type="text"
+                                                value={comp.componentName}
+                                                onChange={(e) =>
+                                                    handleUpdateComponent(
+                                                        comp.key,
+                                                        "componentName",
+                                                        e.target.value
+                                                    )
+                                                }
+                                                placeholder="Component Name (e.g. Lab Fee)"
+                                                className="flex-1 rounded-lg border border-white/10 bg-slate-950/80 px-2.5 py-1.5 text-xs text-white placeholder-slate-500 outline-none focus:border-cyan-400"
+                                            />
+
+                                            {/* Amount */}
+                                            <div className="relative w-full sm:w-28">
+                                                <input
+                                                    type="number"
+                                                    min={0}
+                                                    step="0.01"
+                                                    value={comp.amount}
+                                                    onChange={(e) =>
+                                                        handleUpdateComponent(comp.key, "amount", e.target.value)
+                                                    }
+                                                    placeholder="Amount (₹)"
+                                                    className="w-full rounded-lg border border-white/10 bg-slate-950/80 px-2.5 py-1.5 font-mono text-xs text-emerald-300 placeholder-slate-500 outline-none focus:border-cyan-400"
+                                                />
+                                            </div>
+
+                                            {/* Mandatory Toggle */}
+                                            <label className="flex items-center gap-1.5 text-slate-300 text-[11px] cursor-pointer shrink-0">
+                                                <input
+                                                    type="checkbox"
+                                                    checked={comp.isMandatory}
+                                                    onChange={(e) =>
+                                                        handleUpdateComponent(
+                                                            comp.key,
+                                                            "isMandatory",
+                                                            e.target.checked
+                                                        )
+                                                    }
+                                                    className="rounded border-white/10 bg-slate-950 text-cyan-500 focus:ring-0"
+                                                />
+                                                <span>Mandatory</span>
+                                            </label>
+
+                                            {/* Refundable Toggle */}
+                                            <label className="flex items-center gap-1.5 text-slate-300 text-[11px] cursor-pointer shrink-0">
+                                                <input
+                                                    type="checkbox"
+                                                    checked={comp.isRefundable}
+                                                    onChange={(e) =>
+                                                        handleUpdateComponent(
+                                                            comp.key,
+                                                            "isRefundable",
+                                                            e.target.checked
+                                                        )
+                                                    }
+                                                    className="rounded border-white/10 bg-slate-950 text-cyan-500 focus:ring-0"
+                                                />
+                                                <span>Refundable</span>
+                                            </label>
+
+                                            {/* Remove row button */}
+                                            <button
+                                                type="button"
+                                                onClick={() => handleRemoveComponent(comp.key)}
+                                                disabled={form.components.length === 1}
+                                                className="p-1.5 rounded-lg text-slate-500 hover:text-rose-400 hover:bg-rose-500/10 transition disabled:opacity-20 shrink-0"
+                                                title="Remove fee component"
+                                            >
+                                                <Trash2 size={13} />
+                                            </button>
+                                        </div>
+                                    ))}
+                                </div>
+
+                                {/* Live Computed Totals Footer */}
+                                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-2 border-t border-white/5 text-center text-xs">
+                                    <div className="rounded-lg bg-slate-950/60 p-2">
+                                        <span className="text-[10px] text-slate-400 block">Mandatory Fee</span>
+                                        <span className="font-bold text-emerald-400 text-sm">
+                                            {formatCurrency(feeTotals.mandatory)}
+                                        </span>
+                                    </div>
+                                    <div className="rounded-lg bg-slate-950/60 p-2">
+                                        <span className="text-[10px] text-slate-400 block">Optional Fee</span>
+                                        <span className="font-medium text-slate-300 text-sm">
+                                            {formatCurrency(feeTotals.optional)}
+                                        </span>
+                                    </div>
+                                    <div className="rounded-lg bg-slate-950/60 p-2">
+                                        <span className="text-[10px] text-slate-400 block">Grand Total</span>
+                                        <span className="font-bold text-white text-sm">
+                                            {formatCurrency(feeTotals.grand)}
+                                        </span>
+                                    </div>
+                                    <div className="rounded-lg bg-slate-950/60 p-2">
+                                        <span className="text-[10px] text-slate-400 block">Per Installment</span>
+                                        <span className="font-bold text-cyan-300 text-sm">
+                                            {formatCurrency(feeTotals.perInstallment)}
+                                        </span>
+                                    </div>
+                                </div>
+                            </div>
+                        </form>
+                    )}
+                </div>
+
+                {/* Footer Buttons */}
+                <div className="flex items-center justify-end gap-2 border-t border-white/10 px-5 py-3.5 shrink-0 bg-slate-950/40">
+                    <button
+                        type="button"
+                        onClick={onClose}
+                        disabled={busy}
+                        className="rounded-xl border border-white/10 bg-white/5 px-4 py-2 text-xs font-semibold text-slate-300 transition hover:bg-white/10 hover:text-white disabled:opacity-50"
+                    >
+                        {isView ? "Close" : "Cancel"}
+                    </button>
+
+                    {isDelete && (
+                        <button
+                            type="button"
+                            onClick={handleSubmit}
+                            disabled={busy || hasSpecializationsAssigned}
+                            className="inline-flex items-center gap-1.5 rounded-xl border border-rose-500/30 bg-rose-500 px-4 py-2 text-xs font-semibold text-white shadow-lg shadow-rose-500/20 transition hover:bg-rose-600 disabled:opacity-50"
+                        >
+                            {busy ? (
+                                <>
+                                    <LoaderCircle size={14} className="animate-spin" />
+                                    <span>Deleting...</span>
+                                </>
+                            ) : (
+                                <>
+                                    <Trash2 size={14} />
+                                    <span>Delete Fee Structure</span>
+                                </>
+                            )}
+                        </button>
+                    )}
+
+                    {(isCreate || isEdit) && (
+                        <button
+                            type="submit"
+                            form="fee-structure-form"
+                            disabled={busy}
+                            className="inline-flex items-center gap-1.5 rounded-xl bg-gradient-to-r from-violet-600 via-blue-600 to-cyan-500 px-5 py-2 text-xs font-semibold text-white shadow-lg shadow-blue-500/20 transition hover:brightness-110 disabled:opacity-50"
+                        >
+                            {busy ? (
+                                <>
+                                    <LoaderCircle size={14} className="animate-spin" />
+                                    <span>Saving...</span>
+                                </>
+                            ) : isEdit ? (
+                                <>
+                                    <Pencil size={14} />
+                                    <span>Save Changes</span>
+                                </>
+                            ) : (
+                                <>
+                                    <Plus size={14} />
+                                    <span>Create Structure</span>
+                                </>
+                            )}
+                        </button>
+                    )}
+                </div>
             </motion.div>
-        </motion.div>
+        </div>
     );
 }
 
-export default function FeeStructurePage() {
-    const [items, setItems] = useState<FeeStructure[]>([]);
+/* -------------------------------------------------------------------------- */
+/* Main FeeStructure Page Component                                           */
+/* -------------------------------------------------------------------------- */
+
+export default function FeeStructure() {
+    const reduceMotion = useReducedMotion();
+
+    // Data State
+    const [feeStructures, setFeeStructures] = useState<FeeStructureResponse[]>([]);
     const [courses, setCourses] = useState<CommonDTO[]>([]);
-    const [enums, setEnums] = useState<FeeEnums>({
+    const [feeEnums, setFeeEnums] = useState<FeeEnums>({
         feeFrequency: [],
         feeComponentType: [],
     });
 
     const [loading, setLoading] = useState(true);
     const [refreshing, setRefreshing] = useState(false);
+    const [coursesLoading, setCoursesLoading] = useState(false);
+    const [pageError, setPageError] = useState("");
+    const [notice, setNotice] = useState("");
+
+    // Modal State
+    const [dialogState, setDialogState] = useState<{
+        mode: DialogMode;
+        structure: FeeStructureResponse | null;
+    } | null>(null);
     const [busy, setBusy] = useState(false);
 
-    const [pageError, setPageError] = useState("");
-    const [coursesLoading, setCoursesLoading] = useState(false);
-    const [coursesError, setCoursesError] = useState("");
-    const [enumsError, setEnumsError] = useState("");
-
+    // Filter & Search State
     const [search, setSearch] = useState("");
-    const [universityFilter, setUniversityFilter] = useState("");
-    const [schoolFilter, setSchoolFilter] = useState("");
-    const [departmentFilter, setDepartmentFilter] = useState("");
-    const [yearFilter, setYearFilter] = useState("");
-    const [courseFilter, setCourseFilter] = useState("");
-    const [frequencyFilter, setFrequencyFilter] = useState("");
-    const [sort, setSort] = useState("NEWEST");
-    const [page, setPage] = useState(1);
-    const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
+    const [universityFilter, setUniversityFilter] = useState<number | "ALL">("ALL");
+    const [schoolFilter, setSchoolFilter] = useState<number | "ALL">("ALL");
+    const [departmentFilter, setDepartmentFilter] = useState<number | "ALL">("ALL");
+    const [courseFilter, setCourseFilter] = useState<number | "ALL">("ALL");
+    const [academicYearFilter, setAcademicYearFilter] = useState<number | "ALL">("ALL");
+    const [frequencyFilter, setFrequencyFilter] = useState<string>("ALL");
+    const [sortBy, setSortBy] = useState<SortOption>("NEWEST");
+    const [currentPage, setCurrentPage] = useState(1);
 
-    const [dialog, setDialog] = useState<DialogState | null>(null);
-
-    const loadFeeStructures = useCallback(async (showRefresh = false) => {
-        if (showRefresh) setRefreshing(true);
-        else setLoading(true);
-
+    // Initial Data Fetching
+    const loadData = useCallback(async (isRefresh = false) => {
+        if (isRefresh) {
+            setRefreshing(true);
+        } else {
+            setLoading(true);
+        }
         setPageError("");
 
         try {
-            const result = await getFeeStructures();
-            setItems(result);
-        } catch (error) {
-            const message = extractErrorMessage(error);
-            setPageError(message);
-            toast.error(`Could not load fee structures: ${message}`);
+            const [structuresData, enumsData, coursesData] = await Promise.all([
+                getFeeStructures(),
+                getFeeEnums(),
+                getCourseFilter().catch((err) => {
+                    console.warn("Could not load initial course filter options:", err);
+                    return [] as CommonDTO[];
+                }),
+            ]);
+
+            setFeeStructures(structuresData);
+            setFeeEnums(enumsData);
+            setCourses(coursesData);
+        } catch (err) {
+            setPageError(extractErrorMessage(err, "Failed to load fee structures."));
         } finally {
             setLoading(false);
             setRefreshing(false);
         }
     }, []);
 
-    const loadCourses = useCallback(async () => {
-        setCoursesLoading(true);
-        setCoursesError("");
-
-        try {
-            const result = await getCourseFilter();
-            setCourses(result);
-        } catch (error) {
-            const message = extractErrorMessage(error);
-            setCourses([]);
-            setCoursesError(message);
-            toast.error(`Could not load courses: ${message}`);
-        } finally {
-            setCoursesLoading(false);
-        }
-    }, []);
-
-    const loadEnums = useCallback(async () => {
-        setEnumsError("");
-
-        try {
-            const result = await getFeeEnums();
-            setEnums(result);
-
-            if (
-                result.feeFrequency.length === 0 ||
-                result.feeComponentType.length === 0
-            ) {
-                setEnumsError(
-                    "The enum endpoint did not return all fee options.",
-                );
-            }
-        } catch (error) {
-            const message = extractErrorMessage(error);
-            setEnums({
-                feeFrequency: [],
-                feeComponentType: [],
-            });
-            setEnumsError(message);
-            toast.error(`Could not load fee options: ${message}`);
-        }
-    }, []);
-
     useEffect(() => {
-        void loadFeeStructures();
-        void loadCourses();
-        void loadEnums();
-    }, [loadFeeStructures, loadCourses, loadEnums]);
+        void loadData();
+    }, [loadData]);
 
+    // Lazy load courses if modal is opened and courses are empty
+    async function ensureCourses() {
+        if (courses.length === 0) {
+            setCoursesLoading(true);
+            try {
+                const data = await getCourseFilter();
+                setCourses(data);
+            } catch (err) {
+                console.warn("Failed to load courses on demand:", err);
+            } finally {
+                setCoursesLoading(false);
+            }
+        }
+    }
+
+    // Dynamic Filter Options derived from loaded structures
     const universityOptions = useMemo(
-        () => uniqueOptions(items, (item) => item.university),
-        [items],
+        () => uniqueCommonDTOs(feeStructures.map((f) => f.university)),
+        [feeStructures]
     );
 
     const schoolOptions = useMemo(
-        () => uniqueOptions(items, (item) => item.school),
-        [items],
+        () => uniqueCommonDTOs(feeStructures.map((f) => f.school)),
+        [feeStructures]
     );
 
     const departmentOptions = useMemo(
-        () => uniqueOptions(items, (item) => item.department),
-        [items],
-    );
-
-    const yearOptions = useMemo(
-        () => uniqueOptions(items, (item) => item.academicYear),
-        [items],
+        () => uniqueCommonDTOs(feeStructures.map((f) => f.department)),
+        [feeStructures]
     );
 
     const courseOptions = useMemo(
-        () => uniqueOptions(items, (item) => item.courses),
-        [items],
+        () => uniqueCommonDTOs(feeStructures.map((f) => f.courses)),
+        [feeStructures]
     );
 
-    const filtered = useMemo(() => {
-        const query = normalizeText(search);
+    const academicYearOptions = useMemo(
+        () => uniqueCommonDTOs(feeStructures.map((f) => f.academicYear)),
+        [feeStructures]
+    );
 
-        const result = items.filter((item) => {
-            const searchableValues = [
-                item.name,
-                item.university?.name,
-                item.university?.code,
-                item.courses?.name,
-                item.courses?.code,
-                item.school?.name,
-                item.school?.code,
-                item.department?.name,
-                item.department?.code,
-                item.academicYear?.name,
-                item.academicYear?.code,
-                item.lastModifiedBy?.name,
-                item.lastModifiedBy?.code,
-                ...item.specialization.flatMap((specialization) => [
-                    specialization.name,
-                    specialization.code ?? "",
-                ]),
-                ...item.feeComponent.map((component) => component.componentName),
-                ...item.feeComponent.map((component) => component.feeCategoryType),
-            ];
+    const frequencyOptions = useMemo(() => {
+        const unique = new Set<string>();
+        feeStructures.forEach((f) => {
+            if (f.frequency) unique.add(f.frequency);
+        });
+        return Array.from(unique);
+    }, [feeStructures]);
 
-            const matchesSearch =
-                !query ||
-                searchableValues.some((value) =>
-                    normalizeText(value).includes(query),
+    // Filter and Sort Pipeline
+    const filteredStructures = useMemo(() => {
+        const q = search.trim().toLowerCase();
+
+        return feeStructures.filter((f) => {
+            // Search text
+            if (q) {
+                const matchesName = f.name?.toLowerCase().includes(q);
+                const matchesCourse = f.courses?.name?.toLowerCase().includes(q);
+                const matchesYear = f.academicYear?.name?.toLowerCase().includes(q);
+                const matchesDept = f.department?.name?.toLowerCase().includes(q);
+                const matchesSchool = f.school?.name?.toLowerCase().includes(q);
+                const matchesUni = f.university?.name?.toLowerCase().includes(q);
+                const matchesSpec = f.specialization?.some((s) =>
+                    s.name?.toLowerCase().includes(q)
                 );
+                if (
+                    !matchesName &&
+                    !matchesCourse &&
+                    !matchesYear &&
+                    !matchesDept &&
+                    !matchesSchool &&
+                    !matchesUni &&
+                    !matchesSpec
+                ) {
+                    return false;
+                }
+            }
 
-            const matchesUniversity =
-                !universityFilter ||
-                item.university?.id === Number(universityFilter);
+            // University Filter
+            if (universityFilter !== "ALL" && f.university?.id !== universityFilter) {
+                return false;
+            }
 
-            const matchesSchool =
-                !schoolFilter ||
-                item.school?.id === Number(schoolFilter);
+            // School Filter
+            if (schoolFilter !== "ALL" && f.school?.id !== schoolFilter) {
+                return false;
+            }
 
-            const matchesDepartment =
-                !departmentFilter ||
-                item.department?.id === Number(departmentFilter);
+            // Department Filter
+            if (departmentFilter !== "ALL" && f.department?.id !== departmentFilter) {
+                return false;
+            }
 
-            const matchesYear =
-                !yearFilter ||
-                item.academicYear?.id === Number(yearFilter);
+            // Course Filter
+            if (courseFilter !== "ALL" && f.courses?.id !== courseFilter) {
+                return false;
+            }
 
-            const matchesCourse =
-                !courseFilter ||
-                item.courses?.id === Number(courseFilter);
+            // Academic Year Filter
+            if (academicYearFilter !== "ALL" && f.academicYear?.id !== academicYearFilter) {
+                return false;
+            }
 
-            const matchesFrequency =
-                !frequencyFilter ||
-                item.frequency === frequencyFilter;
+            // Frequency Filter
+            if (frequencyFilter !== "ALL" && f.frequency !== frequencyFilter) {
+                return false;
+            }
 
-            return (
-                matchesSearch &&
-                matchesUniversity &&
-                matchesSchool &&
-                matchesDepartment &&
-                matchesYear &&
-                matchesCourse &&
-                matchesFrequency
-            );
+            return true;
         });
-
-        result.sort((a, b) => {
-            if (sort === "NAME_ASC") {
-                return a.name.localeCompare(b.name);
-            }
-
-            if (sort === "NAME_DESC") {
-                return b.name.localeCompare(a.name);
-            }
-
-            if (sort === "AMOUNT_DESC") {
-                return moneyTotal(b.feeComponent) - moneyTotal(a.feeComponent);
-            }
-
-            if (sort === "AMOUNT_ASC") {
-                return moneyTotal(a.feeComponent) - moneyTotal(b.feeComponent);
-            }
-
-            return b.id - a.id;
-        });
-
-        return result;
     }, [
-        items,
+        feeStructures,
         search,
         universityFilter,
         schoolFilter,
         departmentFilter,
-        yearFilter,
         courseFilter,
+        academicYearFilter,
         frequencyFilter,
-        sort,
     ]);
+
+    const sortedStructures = useMemo(() => {
+        return [...filteredStructures].sort((a, b) => {
+            const aMandatory = a.feeComponent
+                ?.filter((c) => c.isMandatory)
+                .reduce((sum, c) => sum + (c.amount || 0), 0) ?? 0;
+            const bMandatory = b.feeComponent
+                ?.filter((c) => c.isMandatory)
+                .reduce((sum, c) => sum + (c.amount || 0), 0) ?? 0;
+
+            switch (sortBy) {
+                case "NAME_ASC":
+                    return (a.name || "").localeCompare(b.name || "");
+                case "NAME_DESC":
+                    return (b.name || "").localeCompare(a.name || "");
+                case "AMOUNT_DESC":
+                    return bMandatory - aMandatory;
+                case "AMOUNT_ASC":
+                    return aMandatory - bMandatory;
+                case "NEWEST":
+                default:
+                    return b.id - a.id;
+            }
+        });
+    }, [filteredStructures, sortBy]);
+
+    // Pagination
+    const totalPages = Math.max(1, Math.ceil(sortedStructures.length / PAGE_SIZE));
+    const paginatedStructures = useMemo(() => {
+        const start = (currentPage - 1) * PAGE_SIZE;
+        return sortedStructures.slice(start, start + PAGE_SIZE);
+    }, [sortedStructures, currentPage]);
+
+    // Overall Metrics
+    const metrics = useMemo(() => {
+        const total = feeStructures.length;
+        const totalMandatoryValue = feeStructures.reduce((sum, f) => {
+            const m = f.feeComponent
+                ?.filter((c) => c.isMandatory)
+                .reduce((sub, c) => sub + (c.amount || 0), 0) ?? 0;
+            return sum + m;
+        }, 0);
+
+        const uniqueFreqs = new Set(feeStructures.map((f) => f.frequency)).size;
+        const uniqueSpecs = new Set(
+            feeStructures.flatMap((f) => f.specialization?.map((s) => s.id) || [])
+        ).size;
+
+        return { total, totalMandatoryValue, uniqueFreqs, uniqueSpecs };
+    }, [feeStructures]);
 
     const hasActiveFilters =
         Boolean(search.trim()) ||
-        Boolean(universityFilter) ||
-        Boolean(schoolFilter) ||
-        Boolean(departmentFilter) ||
-        Boolean(yearFilter) ||
-        Boolean(courseFilter) ||
-        Boolean(frequencyFilter) ||
-        sort !== "NEWEST";
+        universityFilter !== "ALL" ||
+        schoolFilter !== "ALL" ||
+        departmentFilter !== "ALL" ||
+        courseFilter !== "ALL" ||
+        academicYearFilter !== "ALL" ||
+        frequencyFilter !== "ALL" ||
+        sortBy !== "NEWEST";
 
-    const resetFilters = () => {
+    function resetFilters() {
         setSearch("");
-        setUniversityFilter("");
-        setSchoolFilter("");
-        setDepartmentFilter("");
-        setYearFilter("");
-        setCourseFilter("");
-        setFrequencyFilter("");
-        setSort("NEWEST");
-        setPage(1);
-    };
+        setUniversityFilter("ALL");
+        setSchoolFilter("ALL");
+        setDepartmentFilter("ALL");
+        setCourseFilter("ALL");
+        setAcademicYearFilter("ALL");
+        setFrequencyFilter("ALL");
+        setSortBy("NEWEST");
+        setCurrentPage(1);
+    }
 
-    const activeFilterPills = useMemo(() => {
-        const pills: { id: string; label: string; value: string; onRemove: () => void }[] = [];
-        if (search.trim()) {
-            pills.push({
-                id: "search",
-                label: "Search",
-                value: search,
-                onRemove: () => setSearch(""),
-            });
+    // Modal Handlers
+    function openDialog(mode: DialogMode, structure: FeeStructureResponse | null = null) {
+        setDialogState({ mode, structure });
+        if (mode === "CREATE" || mode === "EDIT") {
+            void ensureCourses();
         }
-        if (frequencyFilter) {
-            const freq = enums.feeFrequency.find((f) => f.enumValue === frequencyFilter);
-            pills.push({
-                id: "frequency",
-                label: "Frequency",
-                value: freq?.name || labelize(frequencyFilter),
-                onRemove: () => setFrequencyFilter(""),
-            });
-        }
-        if (courseFilter) {
-            const item = courseOptions.find((o) => String(o.id) === courseFilter);
-            pills.push({
-                id: "course",
-                label: "Course",
-                value: item?.name ?? courseFilter,
-                onRemove: () => setCourseFilter(""),
-            });
-        }
-        if (universityFilter) {
-            const item = universityOptions.find((o) => String(o.id) === universityFilter);
-            pills.push({
-                id: "university",
-                label: "University",
-                value: item?.name ?? universityFilter,
-                onRemove: () => setUniversityFilter(""),
-            });
-        }
-        if (schoolFilter) {
-            const item = schoolOptions.find((o) => String(o.id) === schoolFilter);
-            pills.push({
-                id: "school",
-                label: "School",
-                value: item?.name ?? schoolFilter,
-                onRemove: () => setSchoolFilter(""),
-            });
-        }
-        if (departmentFilter) {
-            const item = departmentOptions.find((o) => String(o.id) === departmentFilter);
-            pills.push({
-                id: "department",
-                label: "Department",
-                value: item?.name ?? departmentFilter,
-                onRemove: () => setDepartmentFilter(""),
-            });
-        }
-        if (yearFilter) {
-            const item = yearOptions.find((o) => String(o.id) === yearFilter);
-            pills.push({
-                id: "year",
-                label: "Year",
-                value: item?.name ?? yearFilter,
-                onRemove: () => setYearFilter(""),
-            });
-        }
-        if (sort !== "NEWEST") {
-            const sortLabels: Record<string, string> = {
-                NAME_ASC: "Name: A–Z",
-                NAME_DESC: "Name: Z–A",
-                AMOUNT_DESC: "Amount: High to Low",
-                AMOUNT_ASC: "Amount: Low to High",
-            };
-            pills.push({
-                id: "sort",
-                label: "Sort",
-                value: sortLabels[sort] ?? sort,
-                onRemove: () => setSort("NEWEST"),
-            });
-        }
-        return pills;
-    }, [
-        search,
-        frequencyFilter,
-        courseFilter,
-        universityFilter,
-        schoolFilter,
-        departmentFilter,
-        yearFilter,
-        sort,
-        courseOptions,
-        universityOptions,
-        schoolOptions,
-        departmentOptions,
-        yearOptions,
-        enums.feeFrequency,
-    ]);
+    }
 
-    const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
-    const currentPage = Math.min(page, totalPages);
+    function closeDialog() {
+        setDialogState(null);
+    }
 
-    const visible = filtered.slice(
-        (currentPage - 1) * PAGE_SIZE,
-        currentPage * PAGE_SIZE,
-    );
-
-    useEffect(() => {
-        setPage(1);
-    }, [
-        search,
-        universityFilter,
-        schoolFilter,
-        departmentFilter,
-        yearFilter,
-        courseFilter,
-        frequencyFilter,
-        sort,
-    ]);
-
-    useEffect(() => {
-        if (page > totalPages) setPage(totalPages);
-    }, [page, totalPages]);
-
-    const stats = useMemo(() => ({
-        structures: items.length,
-        components: items.reduce(
-            (total, item) => total + item.feeComponent.length,
-            0,
-        ),
-        mandatoryTotal: items.reduce(
-            (total, item) => total + moneyTotal(item.feeComponent),
-            0,
-        ),
-        courses: new Set(
-            items
-                .map((item) => item.courses?.id)
-                .filter((id): id is number => typeof id === "number"),
-        ).size,
-    }), [items]);
-
-    const handleCreate = async (
+    async function handleCreate(
         courseId: number,
-        form: FeeForm,
-    ): Promise<void> => {
+        academicYearId: number,
+        request: FeeStructureCreateRequest
+    ) {
         setBusy(true);
-
         try {
-            const request = {
-                name: form.name.trim(),
-                frequency: form.frequency,
-                totalNoOfInstallments: form.totalNoOfInstallments,
-                specializationId: form.specializationId,
-                components: form.components.map((component) => ({
-                    feeCategoryType: component.feeCategoryType,
-                    componentName: component.componentName.trim(),
-                    amount: Number(component.amount),
-                    isMandatory: component.isMandatory,
-                    isRefundable: component.isRefundable,
-                })),
-            };
-
-            await createFeeStructure(courseId, request);
-            setDialog(null);
-            toast.success("Fee structure created successfully.");
-            await loadFeeStructures(true);
-        } catch (error) {
-            toast.error(extractErrorMessage(error));
-            throw error;
+            const created = await createFeeStructure(courseId, academicYearId, request);
+            setFeeStructures((prev) => [created, ...prev]);
+            closeDialog();
+            setNotice(`Fee structure "${created.name}" created successfully.`);
+            toast.success("Fee structure created successfully");
+        } catch (err) {
+            throw err;
         } finally {
             setBusy(false);
         }
-    };
+    }
 
-    const handleUpdate = async (
-        item: FeeStructure,
-        form: FeeForm,
-    ): Promise<void> => {
+    async function handleUpdate(id: number, request: FeeStructureUpdateRequest) {
         setBusy(true);
-
         try {
-            const originalById = new Map(
-                item.feeComponent.map((component) => [
-                    component.id,
-                    component,
-                ]),
+            const updated = await updateFeeStructure(id, request);
+            setFeeStructures((prev) =>
+                prev.map((item) => (item.id === id ? updated : item))
             );
-
-            const retainedIds = new Set(
-                form.components
-                    .filter(
-                        (component): component is DraftComponent & { id: number } =>
-                            typeof component.id === "number",
-                    )
-                    .map((component) => component.id),
-            );
-
-            const componentToRemove = item.feeComponent
-                .filter((component) => !retainedIds.has(component.id))
-                .map((component) => component.id);
-
-            const componentToAdd: FeeComponentRequest[] = [];
-
-            form.components.forEach((component) => {
-                const payload: FeeComponentRequest = {
-                    feeCategoryType: component.feeCategoryType,
-                    componentName: component.componentName.trim(),
-                    amount: Number(component.amount),
-                    isMandatory: component.isMandatory,
-                    isRefundable: component.isRefundable,
-                };
-
-                if (typeof component.id !== "number") {
-                    componentToAdd.push(payload);
-                    return;
-                }
-
-                const original = originalById.get(component.id);
-                if (!original) {
-                    throw new Error(
-                        "An existing fee component no longer matches the loaded record. Refresh and try again.",
-                    );
-                }
-
-                const changed =
-                    original.feeCategoryType !== payload.feeCategoryType ||
-                    original.componentName !== payload.componentName ||
-                    original.amount !== payload.amount ||
-                    original.isMandatory !== payload.isMandatory ||
-                    original.isRefundable !== payload.isRefundable;
-
-                // The update DTO supports removal by ID and addition as a new component,
-                // not an in-place component edit.
-                if (changed) {
-                    componentToRemove.push(component.id);
-                    componentToAdd.push(payload);
-                }
-            });
-
-            await updateFeeStructure(item.id, {
-                name: form.name.trim(),
-                frequency: form.frequency,
-                totalNoOfInstallments: form.totalNoOfInstallments,
-                specializationId: form.specializationId,
-                componentToAdd,
-                componentToRemove: [...new Set(componentToRemove)],
-            });
-
-            setDialog(null);
-            toast.success("Fee structure updated successfully.");
-            await loadFeeStructures(true);
-        } catch (error) {
-            toast.error(extractErrorMessage(error));
-            throw error;
+            closeDialog();
+            setNotice(`Fee structure "${updated.name}" updated successfully.`);
+            toast.success("Fee structure updated successfully");
+        } catch (err) {
+            throw err;
         } finally {
             setBusy(false);
         }
-    };
+    }
 
-    const handleDelete = async (item: FeeStructure): Promise<void> => {
+    async function handleDelete(id: number) {
         setBusy(true);
-
         try {
-            await deleteFeeStructure(item.id);
-            setDialog(null);
-            toast.success("Fee structure deleted successfully.");
-            await loadFeeStructures(true);
-        } catch (error) {
-            toast.error(extractErrorMessage(error));
-            throw error;
+            await deleteFeeStructure(id);
+            setFeeStructures((prev) => prev.filter((item) => item.id !== id));
+            closeDialog();
+            setNotice("Fee structure deleted successfully.");
+            toast.success("Fee structure deleted successfully");
+        } catch (err) {
+            throw err;
         } finally {
             setBusy(false);
         }
-    };
-    const openCreate = () => {
-        setDialog({ mode: "CREATE", item: null });
-    };
-
-    const openDialog = (mode: DialogMode, item: FeeStructure) => {
-        setDialog({ mode, item });
-    };
-
-    const actionButtons = (item: FeeStructure) => (
-        <div className="flex flex-wrap items-center gap-1.5">
-            <button
-                type="button"
-                title="View fee structure"
-                aria-label={`View ${item.name}`}
-                onClick={() => openDialog("VIEW", item)}
-                className="rounded-lg border border-white/10 p-2 text-slate-300 transition hover:border-cyan-400/30 hover:text-cyan-300"
-            >
-                <Eye size={16} />
-            </button>
-
-            {hasPermission(item, "UPDATE") && (
-                <button
-                    type="button"
-                    title="Edit fee structure"
-                    aria-label={`Edit ${item.name}`}
-                    onClick={() => openDialog("EDIT", item)}
-                    className="rounded-lg border border-white/10 p-2 text-slate-300 transition hover:border-cyan-400/30 hover:text-cyan-300"
-                >
-                    <Pencil size={16} />
-                </button>
-            )}
-
-            {hasPermission(item, "DELETE") && (
-                <button
-                    type="button"
-                    title="Delete fee structure"
-                    aria-label={`Delete ${item.name}`}
-                    onClick={() => openDialog("DELETE", item)}
-                    className="rounded-lg border border-rose-400/20 p-2 text-rose-300 transition hover:bg-rose-500/10"
-                >
-                    <Trash2 size={16} />
-                </button>
-            )}
-        </div>
-    );
-
-    const statCards = [
-        {
-            label: "Total Structures",
-            value: stats.structures,
-            icon: Banknote,
-            tone: "cyan" as const,
-        },
-        {
-            label: "Mandatory Total",
-            value: formatCurrency(stats.mandatoryTotal),
-            icon: Wallet,
-            tone: "emerald" as const,
-        },
-        {
-            label: "Mapped Programs",
-            value: stats.courses,
-            icon: BookOpen,
-            tone: "violet" as const,
-        },
-        {
-            label: "Configured Components",
-            value: stats.components,
-            icon: CircleDollarSign,
-            tone: "amber" as const,
-        },
-    ];
-
-    const tones = {
-        cyan: "border-cyan-400/30 from-cyan-500/10 to-transparent text-cyan-300",
-        emerald: "border-emerald-400/30 from-emerald-500/10 to-transparent text-emerald-300",
-        violet: "border-violet-400/30 from-violet-500/10 to-transparent text-violet-300",
-        amber: "border-amber-400/30 from-amber-500/10 to-transparent text-amber-300",
-        rose: "border-rose-400/30 from-rose-500/10 to-transparent text-rose-300",
-    };
+    }
 
     return (
-        <motion.main
-            initial={{ opacity: 0, y: 10 }}
+        <motion.div
+            initial={reduceMotion ? false : { opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.3 }}
-            className="relative w-full min-w-0 space-y-6 p-3 text-slate-100 sm:p-5 lg:p-7"
+            className="relative w-full min-w-0 space-y-5 p-3 text-slate-100 sm:space-y-6 sm:p-5 lg:p-7"
         >
-            {/* Header Section */}
-            <section>
-                <div className="mb-3 flex items-center gap-2 text-xs font-semibold text-slate-400 sm:text-sm">
-                    <span>Finance</span>
-                    <ChevronRight size={14} className="text-slate-500" />
-                    <span className="text-cyan-300">Fee Structures</span>
+            {/* Header & Breadcrumbs */}
+            <section className="space-y-3">
+                <div className="flex items-center gap-1.5 sm:gap-2 text-xs font-semibold text-slate-400 sm:text-sm">
+                    <span className="truncate">Financial Management</span>
+                    <ChevronRight size={14} className="text-slate-500 shrink-0" />
+                    <span className="text-cyan-300 shrink-0">Fee Structures</span>
                 </div>
 
                 <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
                     <div>
-                        <p className="text-xs font-semibold uppercase tracking-[0.2em] text-cyan-300">
-                            Financial Configuration &amp; Billing
+                        <p className="text-[11px] sm:text-xs font-semibold uppercase tracking-[0.2em] text-cyan-300">
+                            Academic Billing &amp; Installments
                         </p>
                         <h1 className="mt-1 text-2xl font-bold tracking-tight text-white sm:text-3xl lg:text-4xl">
-                            Fee Structure Management
+                            Fee Structures
                         </h1>
-                        <p className="mt-1.5 max-w-2xl text-xs leading-5 text-slate-400 sm:text-sm sm:leading-6">
-                            Configure tuition fee schedules, installment breakdowns, academic program mappings,
-                            and category components.
+                        <p className="mt-1 max-w-2xl text-xs leading-5 text-slate-400 sm:text-sm sm:leading-6">
+                            Configure mandatory tuition, examination, and laboratory components, manage installment frequencies, and monitor governance audit trails.
                         </p>
                     </div>
 
-                    <div className="flex flex-wrap items-center gap-2.5 sm:gap-3">
+                    <div className="flex flex-wrap items-center gap-2 sm:gap-3">
                         <button
                             type="button"
-                            onClick={() => void loadFeeStructures(true)}
+                            onClick={() => void loadData(true)}
                             disabled={loading || refreshing}
-                            title="Refresh fee structures"
-                            className="inline-flex items-center justify-center gap-2 rounded-xl border border-white/10 bg-slate-900/60 px-3.5 py-2.5 text-xs font-medium text-slate-300 transition hover:bg-white/10 hover:text-white sm:px-4 sm:py-3 sm:text-sm disabled:opacity-50"
+                            title="Refresh fee structure list"
+                            className="flex-1 sm:flex-none inline-flex items-center justify-center gap-2 rounded-xl border border-white/10 bg-slate-900/60 px-3.5 py-2.5 text-xs font-medium text-slate-300 transition hover:bg-white/10 hover:text-white sm:px-4 sm:py-3 sm:text-sm disabled:opacity-50"
                         >
                             <RefreshCw
                                 size={15}
-                                className={loading || refreshing ? "animate-spin text-cyan-400" : ""}
+                                className={refreshing || loading ? "animate-spin text-cyan-400" : ""}
                             />
                             <span>{refreshing ? "Refreshing..." : "Refresh"}</span>
                         </button>
 
                         <button
                             type="button"
-                            onClick={openCreate}
-                            disabled={loading || !courses.length}
-                            title={!courses.length ? "No courses available" : "Add fee structure"}
-                            className="inline-flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-violet-600 via-blue-600 to-cyan-500 px-4 py-2.5 text-xs font-semibold text-white shadow-lg shadow-blue-500/20 transition duration-200 hover:-translate-y-0.5 hover:brightness-110 active:translate-y-0 sm:px-5 sm:py-3 sm:text-sm disabled:cursor-not-allowed disabled:opacity-50"
+                            onClick={() => openDialog("CREATE")}
+                            className="flex-1 sm:flex-none inline-flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-violet-600 via-blue-600 to-cyan-500 px-4 py-2.5 text-xs font-semibold text-white shadow-lg shadow-blue-500/20 transition duration-200 hover:-translate-y-0.5 hover:brightness-110 active:translate-y-0 sm:px-5 sm:py-3 sm:text-sm"
                         >
-                            <Plus size={18} />
+                            <Plus size={16} className="sm:w-[18px] sm:h-[18px]" />
                             <span>Add Fee Structure</span>
                         </button>
                     </div>
                 </div>
             </section>
 
-            {/* Error Banners */}
+            {/* Alert Status Banners */}
             <AnimatePresence>
-                {pageError && (
-                    <ErrorBanner
-                        message={pageError}
-                        onRetry={() => void loadFeeStructures()}
-                        onDismiss={() => setPageError("")}
-                    />
+                {(pageError || notice) && (
+                    <motion.div
+                        role={pageError ? "alert" : "status"}
+                        initial={{ opacity: 0, y: -8 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, y: -8 }}
+                        className={`flex items-start justify-between gap-3 rounded-xl border p-3.5 sm:p-4 text-xs sm:text-sm ${
+                            pageError
+                                ? "border-rose-400/30 bg-rose-500/10 text-rose-200"
+                                : "border-emerald-400/30 bg-emerald-500/10 text-emerald-200"
+                        }`}
+                    >
+                        <div className="flex items-start gap-2.5">
+                            {pageError ? (
+                                <AlertTriangle size={18} className="mt-0.5 shrink-0 text-rose-400" />
+                            ) : (
+                                <CheckCircle2 size={18} className="mt-0.5 shrink-0 text-emerald-400" />
+                            )}
+                            <div>
+                                <p className="font-semibold text-white">
+                                    {pageError ? "Action Required" : "Success"}
+                                </p>
+                                <p className="mt-0.5 leading-relaxed">{pageError || notice}</p>
+                            </div>
+                        </div>
+                        <div className="flex items-center gap-2 shrink-0">
+                            {pageError && (
+                                <button
+                                    type="button"
+                                    onClick={() => void loadData()}
+                                    className="rounded-lg border border-rose-400/30 bg-rose-500/20 px-2.5 py-1 text-xs font-medium text-rose-200 hover:bg-rose-500/30"
+                                >
+                                    Retry
+                                </button>
+                            )}
+                            <button
+                                type="button"
+                                onClick={() => {
+                                    setPageError("");
+                                    setNotice("");
+                                }}
+                                aria-label="Dismiss message"
+                                className="text-slate-400 hover:text-white"
+                            >
+                                <X size={16} />
+                            </button>
+                        </div>
+                    </motion.div>
                 )}
             </AnimatePresence>
 
-            {coursesError && (
-                <div
-                    role="alert"
-                    className="flex flex-col gap-3 rounded-xl border border-amber-400/20 bg-amber-500/[0.05] p-4 sm:flex-row sm:items-center sm:justify-between"
-                >
-                    <div className="text-sm text-amber-100">
-                        <p className="font-semibold">Course filter unavailable</p>
-                        <p className="mt-1 break-words text-amber-100/75">
-                            {coursesError}
-                        </p>
-                    </div>
-                    <button
-                        type="button"
-                        onClick={() => void loadCourses()}
-                        className={buttonClass}
-                    >
-                        Retry
-                    </button>
-                </div>
-            )}
-
-            {enumsError && (
-                <div
-                    role="alert"
-                    className="rounded-xl border border-amber-400/20 bg-amber-500/[0.05] p-3 text-sm text-amber-100"
-                >
-                    Fee options: {enumsError}
-                </div>
-            )}
-
-            {/* Statistics Row */}
+            {/* Metric Statistics Cards */}
             <section
-                aria-label="Fee structure statistics"
-                className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4"
+                aria-label="Fee structure metrics"
+                className="grid grid-cols-2 gap-2.5 sm:gap-3.5 sm:grid-cols-2 lg:grid-cols-4"
             >
-                {statCards.map((stat, index) => {
-                    const Icon = stat.icon;
-
-                    return (
-                        <motion.div
-                            key={stat.label}
-                            initial={{ opacity: 0, y: 14 }}
-                            animate={{ opacity: 1, y: 0 }}
-                            transition={{
-                                duration: 0.3,
-                                delay: index * 0.05,
-                            }}
-                            whileHover={{ y: -3 }}
-                            className={`rounded-2xl border bg-gradient-to-br p-4 sm:p-5 shadow-lg backdrop-blur-xl ${tones[stat.tone]}`}
-                        >
-                            <div className="flex items-start justify-between gap-3">
-                                <div>
-                                    <p className="text-xs font-medium text-slate-300 sm:text-sm">
-                                        {stat.label}
-                                    </p>
-                                    <p className="mt-2 text-2xl font-bold tracking-tight text-white sm:mt-3 sm:text-3xl">
-                                        {loading ? (
-                                            <span className="inline-block h-8 w-16 animate-pulse rounded bg-white/10" />
-                                        ) : typeof stat.value === "number" ? (
-                                            formatCount(stat.value)
-                                        ) : (
-                                            stat.value
-                                        )}
-                                    </p>
-                                </div>
-                                <div className="rounded-xl border border-white/10 bg-slate-950/30 p-2.5 sm:p-3">
-                                    <Icon size={21} className="sm:w-[22px] sm:h-[22px]" />
-                                </div>
+                {[
+                    {
+                        label: "Total Fee Structures",
+                        value: loading ? "—" : metrics.total.toLocaleString("en-IN"),
+                        sub: "Active fee schedules",
+                        icon: Wallet,
+                        color: "border-blue-400/30 bg-blue-500/10 text-blue-300",
+                    },
+                    {
+                        label: "Mandatory Fee Portfolio",
+                        value: loading ? "—" : formatCurrency(metrics.totalMandatoryValue),
+                        sub: "Total baseline tuition value",
+                        icon: BadgeIndianRupee,
+                        color: "border-emerald-400/30 bg-emerald-500/10 text-emerald-300",
+                    },
+                    {
+                        label: "Configured Frequencies",
+                        value: loading ? "—" : metrics.uniqueFreqs.toLocaleString("en-IN"),
+                        sub: "Billing cycles (Semester/Annual)",
+                        icon: Calendar,
+                        color: "border-cyan-400/30 bg-cyan-500/10 text-cyan-300",
+                    },
+                    {
+                        label: "Specializations Covered",
+                        value: loading ? "—" : metrics.uniqueSpecs.toLocaleString("en-IN"),
+                        sub: "Associated academic branches",
+                        icon: GraduationCap,
+                        color: "border-purple-400/30 bg-purple-500/10 text-purple-300",
+                    },
+                ].map((stat, idx) => (
+                    <GlassCard key={stat.label} className="p-3.5 sm:p-5">
+                        <div className="flex items-center justify-between">
+                            <span className="text-[11px] sm:text-xs font-medium uppercase tracking-wider text-slate-400 truncate">
+                                {stat.label}
+                            </span>
+                            <div
+                                className={`flex h-8 w-8 sm:h-9 sm:w-9 items-center justify-center rounded-xl border ${stat.color} shrink-0`}
+                            >
+                                <stat.icon size={17} />
                             </div>
-                            <div className="mt-4 sm:mt-5 h-1 overflow-hidden rounded-full bg-white/10">
-                                <motion.div
-                                    initial={{ width: "0%" }}
-                                    animate={{ width: loading ? "30%" : "100%" }}
-                                    transition={{ duration: 0.7, delay: index * 0.08 }}
-                                    className="h-full rounded-full bg-current opacity-60"
-                                />
-                            </div>
-                        </motion.div>
-                    );
-                })}
+                        </div>
+                        <div className="mt-2 flex items-baseline gap-2">
+                            <span className="text-xl sm:text-2xl font-extrabold tracking-tight text-white truncate">
+                                {stat.value}
+                            </span>
+                        </div>
+                        <p className="mt-1 text-[11px] text-slate-400 truncate">{stat.sub}</p>
+                    </GlassCard>
+                ))}
             </section>
 
-            {/* Main Content Card (Filters + Table + Pagination) */}
-            <section className="overflow-hidden rounded-2xl border border-white/10 bg-slate-900/65 shadow-[0_12px_45px_rgba(0,0,0,0.18)] backdrop-blur-xl">
-                {/* Responsive Filter Toolbar */}
-                <div className="grid gap-3 border-b border-white/10 p-3.5 sm:p-5 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6">
-                    {/* Search Input */}
-                    <div className="relative min-w-0 sm:col-span-2">
-                        <Search
-                            size={16}
-                            className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400"
-                        />
-                        <input
-                            aria-label="Search fee structures"
-                            value={search}
-                            onChange={(e) => setSearch(e.target.value)}
-                            placeholder="Search name, course, university, components..."
-                            className="w-full rounded-xl border border-white/10 bg-slate-950/50 py-2.5 pl-10 pr-9 text-sm text-white placeholder-slate-500 transition focus:border-cyan-400 focus:outline-none"
-                        />
-                        {search && (
-                            <button
-                                type="button"
-                                onClick={() => setSearch("")}
-                                aria-label="Clear search"
-                                className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white"
-                            >
-                                <X size={14} />
-                            </button>
-                        )}
-                    </div>
-
-                    {/* Quick Frequency Filter */}
-                    <div className="relative">
-                        <select
-                            aria-label="Filter by frequency"
-                            value={frequencyFilter}
-                            onChange={(e) => setFrequencyFilter(e.target.value)}
-                            className="w-full appearance-none rounded-xl border border-white/10 bg-slate-950/50 px-3.5 py-2.5 pr-9 text-sm text-white transition focus:border-cyan-400 focus:outline-none"
-                        >
-                            <option value="">All Frequencies</option>
-                            {enums.feeFrequency.map((option) => (
-                                <option key={option.enumValue} value={option.enumValue}>
-                                    {option.name || labelize(option.enumValue)}
-                                </option>
-                            ))}
-                        </select>
-                        <SelectArrow />
-                    </div>
-
-                    {/* Quick Course Filter */}
-                    <div className="relative">
-                        <select
-                            aria-label="Filter by course"
-                            value={courseFilter}
-                            onChange={(e) => setCourseFilter(e.target.value)}
-                            className="w-full appearance-none rounded-xl border border-white/10 bg-slate-950/50 px-3.5 py-2.5 pr-9 text-sm text-white transition focus:border-cyan-400 focus:outline-none"
-                        >
-                            <option value="">All Courses</option>
-                            {courseOptions.map((c) => (
-                                <option key={c.id} value={c.id}>
-                                    {c.name}
-                                </option>
-                            ))}
-                        </select>
-                        <SelectArrow />
-                    </div>
-
-                    {/* Sort Options */}
-                    <div className="relative">
-                        <select
-                            aria-label="Sort fee structures"
-                            value={sort}
-                            onChange={(e) => setSort(e.target.value)}
-                            className="w-full appearance-none rounded-xl border border-white/10 bg-slate-950/50 px-3.5 py-2.5 pr-9 text-sm text-white transition focus:border-cyan-400 focus:outline-none"
-                        >
-                            <option value="NEWEST">Newest First</option>
-                            <option value="NAME_ASC">Name: A–Z</option>
-                            <option value="NAME_DESC">Name: Z–A</option>
-                            <option value="AMOUNT_DESC">Mandatory Total: High to Low</option>
-                            <option value="AMOUNT_ASC">Mandatory Total: Low to High</option>
-                        </select>
-                        <ArrowDownUp
-                            size={14}
-                            className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-slate-400"
-                        />
-                    </div>
-
-                    {/* Filter Toggle & Quick Reset */}
-                    <div className="flex items-center gap-2">
-                        <button
-                            type="button"
-                            onClick={() => setShowAdvancedFilters((v) => !v)}
-                            className={`flex-1 inline-flex items-center justify-center gap-1.5 rounded-xl border px-3 py-2.5 text-xs font-semibold transition ${showAdvancedFilters
-                                ? "border-cyan-400/40 bg-cyan-500/15 text-cyan-200"
-                                : "border-white/10 bg-slate-800/60 text-slate-300 hover:bg-white/10 hover:text-white"
-                                }`}
-                            title="Toggle more filter options"
-                        >
-                            <Filter size={14} />
-                            <span>Filters</span>
-                            {activeFilterPills.length > 0 && (
-                                <span className="ml-1 rounded-full bg-cyan-500/25 px-1.5 py-0.2 text-[10px] font-bold text-cyan-300">
-                                    {activeFilterPills.length}
-                                </span>
-                            )}
-                        </button>
-
-                        {hasActiveFilters && (
-                            <button
-                                type="button"
-                                onClick={resetFilters}
-                                className="inline-flex items-center justify-center gap-1.5 rounded-xl border border-white/10 bg-slate-800/60 px-3 py-2.5 text-xs font-semibold text-slate-300 hover:bg-white/10 hover:text-white transition"
-                                title="Reset all filters"
-                            >
-                                <RotateCcw size={14} />
-                            </button>
-                        )}
-                    </div>
-                </div>
-
-                {/* Active Filter Pills Bar (Matching Student.tsx) */}
-                {activeFilterPills.length > 0 && (
-                    <div className="flex flex-wrap items-center gap-2 border-b border-white/10 bg-slate-950/20 px-4 py-2.5 sm:px-5">
-                        <span className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">
-                            Active Filters:
-                        </span>
-                        {activeFilterPills.map((pill) => (
-                            <span
-                                key={pill.id}
-                                className="inline-flex items-center gap-1.5 rounded-lg border border-cyan-400/20 bg-cyan-500/10 px-2.5 py-1 text-xs text-cyan-200"
-                            >
-                                <span className="text-slate-400">{pill.label}:</span>
-                                <span className="font-semibold truncate max-w-[140px]">
-                                    {pill.value}
-                                </span>
+            {/* Filter Toolbar Card */}
+            <GlassCard className="p-3.5 sm:p-4">
+                <div className="space-y-3">
+                    {/* Top Row: Search + University + School + Department */}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5">
+                        {/* Search Input */}
+                        <div className="relative">
+                            <Search
+                                size={15}
+                                className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400"
+                            />
+                            <input
+                                value={search}
+                                onChange={(e) => setSearch(e.target.value)}
+                                placeholder="Search name, course, specialization..."
+                                className="w-full rounded-xl border border-white/10 bg-slate-950/60 pl-10 pr-9 py-2.5 text-xs text-white placeholder-slate-500 outline-none transition focus:border-cyan-400/60"
+                            />
+                            {search && (
                                 <button
                                     type="button"
-                                    onClick={pill.onRemove}
-                                    aria-label={`Remove ${pill.label} filter`}
-                                    className="ml-0.5 rounded p-0.5 text-cyan-300 hover:bg-cyan-500/20 hover:text-white transition"
+                                    onClick={() => setSearch("")}
+                                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white"
                                 >
-                                    <X size={12} />
+                                    <X size={14} />
                                 </button>
-                            </span>
-                        ))}
-                        <button
-                            type="button"
-                            onClick={resetFilters}
-                            className="text-xs text-slate-400 hover:text-white underline underline-offset-2 ml-1 transition"
-                        >
-                            Clear all
-                        </button>
-                    </div>
-                )}
-
-                {/* Advanced Filters Expandable Drawer */}
-                <AnimatePresence initial={false}>
-                    {showAdvancedFilters && (
-                        <motion.div
-                            initial={{ opacity: 0, height: 0 }}
-                            animate={{ opacity: 1, height: "auto" }}
-                            exit={{ opacity: 0, height: 0 }}
-                            className="overflow-hidden border-b border-white/10 bg-slate-950/40"
-                        >
-                            <div className="grid grid-cols-1 gap-3 p-4 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5">
-                                <FilterSelect
-                                    label="University"
-                                    value={universityFilter}
-                                    onChange={setUniversityFilter}
-                                    options={[
-                                        { value: "", label: "All universities" },
-                                        ...universityOptions.map((o) => ({
-                                            value: String(o.id),
-                                            label: o.name,
-                                        })),
-                                    ]}
-                                />
-                                <FilterSelect
-                                    label="School"
-                                    value={schoolFilter}
-                                    onChange={setSchoolFilter}
-                                    options={[
-                                        { value: "", label: "All schools" },
-                                        ...schoolOptions.map((o) => ({
-                                            value: String(o.id),
-                                            label: o.name,
-                                        })),
-                                    ]}
-                                />
-                                <FilterSelect
-                                    label="Department"
-                                    value={departmentFilter}
-                                    onChange={setDepartmentFilter}
-                                    options={[
-                                        { value: "", label: "All departments" },
-                                        ...departmentOptions.map((o) => ({
-                                            value: String(o.id),
-                                            label: o.name,
-                                        })),
-                                    ]}
-                                />
-                                <FilterSelect
-                                    label="Academic Year"
-                                    value={yearFilter}
-                                    onChange={setYearFilter}
-                                    options={[
-                                        { value: "", label: "All academic years" },
-                                        ...yearOptions.map((o) => ({
-                                            value: String(o.id),
-                                            label: o.name,
-                                        })),
-                                    ]}
-                                />
-                                <FilterSelect
-                                    label="Course"
-                                    value={courseFilter}
-                                    onChange={setCourseFilter}
-                                    options={[
-                                        { value: "", label: "All courses" },
-                                        ...courseOptions.map((o) => ({
-                                            value: String(o.id),
-                                            label: o.name,
-                                        })),
-                                    ]}
-                                />
-                            </div>
-                        </motion.div>
-                    )}
-                </AnimatePresence>
-
-                {/* Record Counter Strip */}
-                <div className="flex flex-wrap items-center justify-between gap-3 border-b border-white/10 px-4 py-3 sm:px-5">
-                    <p className="text-xs text-slate-400">
-                        {loading
-                            ? "Loading records…"
-                            : `Showing ${filtered.length
-                                ? (currentPage - 1) * PAGE_SIZE + 1
-                                : 0
-                            }–${Math.min(
-                                currentPage * PAGE_SIZE,
-                                filtered.length,
-                            )} of ${formatCount(filtered.length)} records`}
-                    </p>
-
-                    <span className="rounded-lg border border-white/10 bg-slate-950/40 px-2.5 py-1 text-xs text-slate-400">
-                        {formatCount(items.length)} total records
-                    </span>
-                </div>
-
-                {loading ? (
-                    <div className="hidden overflow-x-auto xl:block">
-                        <table className="w-full min-w-[1050px] text-left">
-                            <tbody className="divide-y divide-white/[0.06]">
-                                {[...Array(5)].map((_, i) => (
-                                    <SkeletonRow key={i} />
-                                ))}
-                            </tbody>
-                        </table>
-                    </div>
-                ) : filtered.length === 0 ? (
-                    <div className="flex flex-col items-center px-5 py-14 text-center">
-                        <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4 text-cyan-300">
-                            <FileText size={28} />
+                            )}
                         </div>
-                        <h3 className="mt-4 font-semibold text-white">
-                            {items.length === 0
-                                ? "No fee structures returned"
-                                : "No matching fee structures"}
-                        </h3>
-                        <p className="mt-1 max-w-md text-sm leading-6 text-slate-400">
-                            {items.length === 0
-                                ? "The API returned no fee structures. Create one if your account has the required course permission."
-                                : "Try adjusting your search or filters."}
-                        </p>
-                        {hasActiveFilters && (
+
+                        {/* University Filter */}
+                        <div className="relative">
+                            <select
+                                value={universityFilter}
+                                onChange={(e) => {
+                                    const val = e.target.value === "ALL" ? "ALL" : Number(e.target.value);
+                                    setUniversityFilter(val);
+                                }}
+                                className="w-full appearance-none rounded-xl border border-white/10 bg-slate-950/60 px-3.5 py-2.5 pr-9 text-xs text-white outline-none transition focus:border-cyan-400/60"
+                            >
+                                <option value="ALL" className="bg-slate-900 text-white">
+                                    All Universities
+                                </option>
+                                {universityOptions.map((u) => (
+                                    <option key={u.id} value={u.id} className="bg-slate-900 text-white">
+                                        {u.name}
+                                    </option>
+                                ))}
+                            </select>
+                            <SelectChevron />
+                        </div>
+
+                        {/* School Filter */}
+                        <div className="relative">
+                            <select
+                                value={schoolFilter}
+                                onChange={(e) => {
+                                    const val = e.target.value === "ALL" ? "ALL" : Number(e.target.value);
+                                    setSchoolFilter(val);
+                                }}
+                                className="w-full appearance-none rounded-xl border border-white/10 bg-slate-950/60 px-3.5 py-2.5 pr-9 text-xs text-white outline-none transition focus:border-cyan-400/60"
+                            >
+                                <option value="ALL" className="bg-slate-900 text-white">
+                                    All Schools
+                                </option>
+                                {schoolOptions.map((s) => (
+                                    <option key={s.id} value={s.id} className="bg-slate-900 text-white">
+                                        {s.name}
+                                    </option>
+                                ))}
+                            </select>
+                            <SelectChevron />
+                        </div>
+
+                        {/* Department Filter */}
+                        <div className="relative">
+                            <select
+                                value={departmentFilter}
+                                onChange={(e) => {
+                                    const val = e.target.value === "ALL" ? "ALL" : Number(e.target.value);
+                                    setDepartmentFilter(val);
+                                }}
+                                className="w-full appearance-none rounded-xl border border-white/10 bg-slate-950/60 px-3.5 py-2.5 pr-9 text-xs text-white outline-none transition focus:border-cyan-400/60"
+                            >
+                                <option value="ALL" className="bg-slate-900 text-white">
+                                    All Departments
+                                </option>
+                                {departmentOptions.map((d) => (
+                                    <option key={d.id} value={d.id} className="bg-slate-900 text-white">
+                                        {d.name}
+                                    </option>
+                                ))}
+                            </select>
+                            <SelectChevron />
+                        </div>
+                    </div>
+
+                    {/* Secondary Row: Course + Academic Year + Frequency + Sort + Reset */}
+                    <div className="grid grid-cols-2 sm:grid-cols-5 gap-2.5 pt-2 border-t border-white/5">
+                        {/* Course Filter */}
+                        <div className="relative">
+                            <select
+                                value={courseFilter}
+                                onChange={(e) => {
+                                    const val = e.target.value === "ALL" ? "ALL" : Number(e.target.value);
+                                    setCourseFilter(val);
+                                }}
+                                className="w-full appearance-none rounded-xl border border-white/10 bg-slate-950/60 px-3 py-2 pr-8 text-xs text-white outline-none transition focus:border-cyan-400/60"
+                            >
+                                <option value="ALL" className="bg-slate-900 text-white">
+                                    All Courses
+                                </option>
+                                {courseOptions.map((c) => (
+                                    <option key={c.id} value={c.id} className="bg-slate-900 text-white">
+                                        {c.name}
+                                    </option>
+                                ))}
+                            </select>
+                            <SelectChevron />
+                        </div>
+
+                        {/* Academic Year Filter */}
+                        <div className="relative">
+                            <select
+                                value={academicYearFilter}
+                                onChange={(e) => {
+                                    const val = e.target.value === "ALL" ? "ALL" : Number(e.target.value);
+                                    setAcademicYearFilter(val);
+                                }}
+                                className="w-full appearance-none rounded-xl border border-white/10 bg-slate-950/60 px-3 py-2 pr-8 text-xs text-white outline-none transition focus:border-cyan-400/60"
+                            >
+                                <option value="ALL" className="bg-slate-900 text-white">
+                                    All Academic Years
+                                </option>
+                                {academicYearOptions.map((y) => (
+                                    <option key={y.id} value={y.id} className="bg-slate-900 text-white">
+                                        {y.name}
+                                    </option>
+                                ))}
+                            </select>
+                            <SelectChevron />
+                        </div>
+
+                        {/* Frequency Filter */}
+                        <div className="relative">
+                            <select
+                                value={frequencyFilter}
+                                onChange={(e) => setFrequencyFilter(e.target.value)}
+                                className="w-full appearance-none rounded-xl border border-white/10 bg-slate-950/60 px-3 py-2 pr-8 text-xs text-white outline-none transition focus:border-cyan-400/60"
+                            >
+                                <option value="ALL" className="bg-slate-900 text-white">
+                                    All Frequencies
+                                </option>
+                                {frequencyOptions.map((f) => (
+                                    <option key={f} value={f} className="bg-slate-900 text-white">
+                                        {f.replace(/_/g, " ")}
+                                    </option>
+                                ))}
+                            </select>
+                            <SelectChevron />
+                        </div>
+
+                        {/* Sort */}
+                        <div className="relative">
+                            <select
+                                value={sortBy}
+                                onChange={(e) => setSortBy(e.target.value as SortOption)}
+                                className="w-full appearance-none rounded-xl border border-white/10 bg-slate-950/60 px-3 py-2 pr-8 text-xs text-white outline-none transition focus:border-cyan-400/60"
+                            >
+                                <option value="NEWEST" className="bg-slate-900 text-white">
+                                    Newest First
+                                </option>
+                                <option value="NAME_ASC" className="bg-slate-900 text-white">
+                                    Name (A-Z)
+                                </option>
+                                <option value="NAME_DESC" className="bg-slate-900 text-white">
+                                    Name (Z-A)
+                                </option>
+                                <option value="AMOUNT_DESC" className="bg-slate-900 text-white">
+                                    Fee (High to Low)
+                                </option>
+                                <option value="AMOUNT_ASC" className="bg-slate-900 text-white">
+                                    Fee (Low to High)
+                                </option>
+                            </select>
+                            <ArrowDownUp
+                                size={13}
+                                className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-slate-400"
+                            />
+                        </div>
+
+                        {/* Reset Filters */}
+                        <div className="col-span-2 sm:col-span-1 flex items-center">
                             <button
                                 type="button"
                                 onClick={resetFilters}
-                                className={`${buttonClass} mt-4`}
+                                disabled={!hasActiveFilters}
+                                className="w-full inline-flex items-center justify-center gap-1.5 rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-xs font-semibold text-slate-300 transition hover:bg-white/10 hover:text-white disabled:opacity-40"
                             >
-                                <RotateCcw size={15} />
-                                Clear filters
+                                <RotateCcw size={13} />
+                                <span>Reset Filters</span>
                             </button>
-                        )}
+                        </div>
                     </div>
-                ) : (
-                    <>
-                        {/* Desktop Table View */}
-                        <div className="hidden overflow-x-auto xl:block">
-                            <table className="w-full min-w-[1050px] text-left">
-                                <thead className="bg-white/[0.025] text-[11px] uppercase tracking-wider text-slate-400">
-                                    <tr>
-                                        {[
-                                            "Fee structure",
-                                            "Course / Academic Context",
-                                            "Frequency",
-                                            "Components",
-                                            "Mandatory total",
-                                            "Specializations",
-                                            "Actions",
-                                        ].map((heading) => (
-                                            <th
-                                                key={heading}
-                                                className="px-5 py-4 font-semibold"
-                                            >
-                                                {heading}
-                                            </th>
-                                        ))}
-                                    </tr>
-                                </thead>
+                </div>
+            </GlassCard>
 
-                                <tbody className="divide-y divide-white/[0.06]">
-                                    {visible.map((item) => (
-                                        <tr
-                                            key={item.id}
-                                            className="transition hover:bg-white/[0.025]"
+            {/* List Presentation: Dual-View (Desktop Table + Mobile Cards) */}
+            <GlassCard>
+                {/* 1. Desktop Table View (hidden on sm/mobile) */}
+                <div className="hidden sm:block overflow-x-auto">
+                    <table className="w-full border-collapse text-left text-sm text-slate-300">
+                        <thead>
+                            <tr className="border-b border-white/10 bg-white/[0.02] text-xs font-semibold uppercase tracking-wider text-slate-400">
+                                <th scope="col" className="px-5 py-4 w-12 text-center">
+                                    #
+                                </th>
+                                <th scope="col" className="px-4 py-4 min-w-[220px]">
+                                    Structure &amp; Creator
+                                </th>
+                                <th scope="col" className="px-4 py-4 min-w-[170px]">
+                                    Course &amp; Academic Year
+                                </th>
+                                <th scope="col" className="px-4 py-4">
+                                    Frequency
+                                </th>
+                                <th scope="col" className="px-4 py-4 text-right">
+                                    Mandatory Fee
+                                </th>
+                                <th scope="col" className="px-4 py-4 text-center">
+                                    Installments
+                                </th>
+                                <th scope="col" className="px-4 py-4 min-w-[130px]">
+                                    Specializations
+                                </th>
+                                <th scope="col" className="px-5 py-4 text-right">
+                                    Actions
+                                </th>
+                            </tr>
+                        </thead>
+                        <tbody className="divide-y divide-white/5 text-xs sm:text-sm">
+                            {loading ? (
+                                <tr>
+                                    <td colSpan={8} className="px-6 py-20 text-center">
+                                        <div className="inline-flex flex-col items-center justify-center gap-3">
+                                            <LoaderCircle size={32} className="animate-spin text-cyan-400" />
+                                            <p className="font-semibold text-slate-200">
+                                                Loading fee structures...
+                                            </p>
+                                            <p className="text-xs text-slate-400">
+                                                Fetching schedules, component breakdowns, and installments
+                                            </p>
+                                        </div>
+                                    </td>
+                                </tr>
+                            ) : pageError && feeStructures.length === 0 ? (
+                                <tr>
+                                    <td colSpan={8} className="px-6 py-16 text-center">
+                                        <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl border border-rose-500/20 bg-rose-500/10 text-rose-400">
+                                            <AlertTriangle size={26} />
+                                        </div>
+                                        <p className="mt-4 font-semibold text-slate-200">
+                                            Failed to load fee structures
+                                        </p>
+                                        <p className="mt-1 text-sm text-slate-400 max-w-md mx-auto">
+                                            {pageError}
+                                        </p>
+                                        <button
+                                            type="button"
+                                            onClick={() => void loadData()}
+                                            className="mt-4 inline-flex items-center gap-2 rounded-xl border border-cyan-400/30 bg-cyan-500/10 px-4 py-2 text-sm font-semibold text-cyan-300 transition hover:bg-cyan-500/20"
                                         >
-                                            <td className="px-5 py-4">
-                                                <div className="flex min-w-0 items-center gap-3">
-                                                    <span className="rounded-xl border border-cyan-400/20 bg-cyan-400/[0.07] p-2.5 text-cyan-300">
-                                                        <Banknote size={18} />
-                                                    </span>
+                                            <RefreshCw size={15} />
+                                            Try Again
+                                        </button>
+                                    </td>
+                                </tr>
+                            ) : paginatedStructures.length > 0 ? (
+                                paginatedStructures.map((f, index) => {
+                                    const canEdit = hasPermission(f, "UPDATE");
+                                    const canDelete = hasPermission(f, "DELETE");
+
+                                    const mandatoryTotal = f.feeComponent
+                                        ?.filter((c) => c.isMandatory)
+                                        .reduce((sum, c) => sum + (c.amount || 0), 0) ?? 0;
+                                    const optionalTotal = f.feeComponent
+                                        ?.filter((c) => !c.isMandatory)
+                                        .reduce((sum, c) => sum + (c.amount || 0), 0) ?? 0;
+
+                                    const installments = Math.max(1, f.totalNoOfInstallments || 1);
+                                    const perInstallment = mandatoryTotal / installments;
+
+                                    return (
+                                        <motion.tr
+                                            key={f.id}
+                                            initial={{ opacity: 0 }}
+                                            animate={{ opacity: 1 }}
+                                            className="group transition-colors hover:bg-cyan-400/[0.035]"
+                                        >
+                                            {/* Index */}
+                                            <td className="px-5 py-4 text-slate-500 text-xs text-center font-mono">
+                                                {(currentPage - 1) * PAGE_SIZE + index + 1}
+                                            </td>
+
+                                            {/* Structure & Creator Pill (Exact University.tsx Matching) */}
+                                            <td className="px-4 py-4">
+                                                <div className="flex items-center gap-3">
+                                                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-cyan-300/20 bg-gradient-to-br from-cyan-500/25 to-violet-500/20 text-xs font-bold text-cyan-200">
+                                                        {getInitials(f.name)}
+                                                    </div>
                                                     <div className="min-w-0">
-                                                        <p className="max-w-[240px] break-words font-semibold text-white">
-                                                            {item.name || "—"}
+                                                        <p className="max-w-xs truncate font-semibold text-slate-100">
+                                                            {f.name || "Unnamed Structure"}
                                                         </p>
-                                                        <p className="mt-1 text-xs text-slate-500">
-                                                            ID: {item.id}
-                                                        </p>
+                                                        <div className="flex flex-wrap items-center gap-1.5 text-xs text-slate-400">
+                                                            <span className="font-mono text-[11px] text-slate-500">
+                                                                ID #{f.id}
+                                                            </span>
+                                                            <span className="text-slate-600">·</span>
+                                                            <span
+                                                                className="inline-flex items-center gap-1 text-[11px] text-slate-400 group-hover:text-slate-300 transition-colors"
+                                                                title={`Created by: ${formatAuditActor(
+                                                                    f.createdBy
+                                                                )}${
+                                                                    f.createdAt
+                                                                        ? ` on ${formatDate(f.createdAt)}`
+                                                                        : ""
+                                                                }${
+                                                                    f.updatedBy?.name
+                                                                        ? ` | Modified by: ${formatAuditActor(
+                                                                              f.updatedBy
+                                                                          )}`
+                                                                        : ""
+                                                                }`}
+                                                            >
+                                                                <UserCheck
+                                                                    size={11}
+                                                                    className="text-emerald-400 shrink-0"
+                                                                />
+                                                                <span className="truncate max-w-[120px] font-medium text-slate-300">
+                                                                    {f.createdBy?.name || "System"}
+                                                                </span>
+                                                            </span>
+                                                        </div>
                                                     </div>
                                                 </div>
                                             </td>
 
-                                            <td className="px-5 py-4">
-                                                <div className="flex items-center gap-1.5 max-w-[220px]">
-                                                    <p
-                                                        className="font-medium text-slate-200 truncate"
-                                                        title={formatCommon(item.courses) || "—"}
-                                                    >
-                                                        {item.courses?.name || "—"}
+                                            {/* Course & Academic Year */}
+                                            <td className="px-4 py-4">
+                                                <div className="min-w-0">
+                                                    <p className="truncate font-medium text-slate-200">
+                                                        {f.courses?.name || "—"}
                                                     </p>
-                                                    {item.courses?.code && (
-                                                        <span className="shrink-0 rounded bg-cyan-950/60 border border-cyan-500/30 px-1.5 py-0.2 text-[10px] font-mono text-cyan-300">
-                                                            {item.courses.code}
+                                                    <div className="flex items-center gap-1.5 mt-0.5">
+                                                        {f.courses?.code && (
+                                                            <span className="rounded bg-white/5 px-1.5 py-0.2 font-mono text-[10px] text-cyan-300">
+                                                                {f.courses.code}
+                                                            </span>
+                                                        )}
+                                                        <span className="text-[11px] text-slate-400 truncate">
+                                                            {f.academicYear?.name || "—"}
                                                         </span>
-                                                    )}
+                                                    </div>
                                                 </div>
-                                                <p className="mt-1 text-xs text-slate-400 truncate max-w-[220px]">
-                                                    {[formatCommon(item.university), formatCommon(item.academicYear)]
-                                                        .filter(Boolean)
-                                                        .join(" · ") || "—"}
-                                                </p>
-                                                <p className="mt-0.5 text-[11px] text-slate-500 truncate max-w-[220px]">
-                                                    {[formatCommon(item.school), formatCommon(item.department)]
-                                                        .filter(Boolean)
-                                                        .join(" · ")}
-                                                </p>
                                             </td>
 
-                                            <td className="px-5 py-4">
-                                                <span className="rounded-lg border border-violet-400/20 bg-violet-400/[0.08] px-2.5 py-1.5 text-xs text-violet-200">
-                                                    {labelize(item.frequency)}
-                                                </span>
-                                                <p className="mt-2 text-xs text-slate-500">
-                                                    {item.totalNoOfInstallments} installment(s)
-                                                </p>
+                                            {/* Frequency Badge */}
+                                            <td className="px-4 py-4">
+                                                <FrequencyBadge frequency={f.frequency} />
                                             </td>
 
-                                            <td className="px-5 py-4">
-                                                <p className="font-medium text-white">
-                                                    {item.feeComponent.length}
+                                            {/* Mandatory Fee */}
+                                            <td className="px-4 py-4 text-right">
+                                                <p className="font-bold text-emerald-300 font-mono text-sm">
+                                                    {formatCurrency(mandatoryTotal)}
                                                 </p>
-                                                <p className="mt-1 max-w-[190px] break-words text-xs text-slate-500">
-                                                    {item.feeComponent
-                                                        .slice(0, 2)
-                                                        .map((component) => component.componentName)
-                                                        .filter(Boolean)
-                                                        .join(", ") || "—"}
-                                                </p>
-                                            </td>
-
-                                            <td className="px-5 py-4 font-semibold tabular-nums text-white">
-                                                {formatCurrency(
-                                                    moneyTotal(item.feeComponent),
+                                                {optionalTotal > 0 && (
+                                                    <p className="text-[10px] text-slate-400 mt-0.5">
+                                                        +{formatCurrency(optionalTotal)} opt.
+                                                    </p>
                                                 )}
                                             </td>
 
-                                            <td className="px-5 py-4">
-                                                <p className="text-sm font-medium text-slate-200">
-                                                    {item.specialization.length} {item.specialization.length === 1 ? "Specialization" : "Specializations"}
-                                                </p>
-                                                <div className="mt-1 flex flex-wrap gap-1 max-w-[200px]">
-                                                    {item.specialization.slice(0, 2).map((sp) => (
-                                                        <span
-                                                            key={sp.id}
-                                                            className="rounded bg-slate-800/80 border border-white/5 px-1.5 py-0.5 text-[10px] text-slate-300 truncate max-w-[180px]"
-                                                            title={formatCommon(sp)}
-                                                        >
-                                                            {formatCommon(sp)}
-                                                        </span>
-                                                    ))}
-                                                    {item.specialization.length > 2 && (
-                                                        <span className="text-[10px] text-slate-500 self-center">
-                                                            +{item.specialization.length - 2} more
-                                                        </span>
-                                                    )}
-                                                </div>
-                                            </td>
-
-                                            <td className="px-5 py-4">
-                                                {actionButtons(item)}
-                                            </td>
-                                        </tr>
-                                    ))}
-                                </tbody>
-                            </table>
-                        </div>
-
-                        {/* Mobile Cards View */}
-                        <div className="grid grid-cols-1 gap-3 p-3 sm:p-4 xl:hidden">
-                            {visible.map((item) => (
-                                <article
-                                    key={item.id}
-                                    className="min-w-0 rounded-2xl border border-white/10 bg-slate-950/30 p-4"
-                                >
-                                    <div className="flex items-start gap-3">
-                                        <span className="shrink-0 rounded-xl border border-cyan-400/20 bg-cyan-400/[0.07] p-2.5 text-cyan-300">
-                                            <Banknote size={19} />
-                                        </span>
-
-                                        <div className="min-w-0 flex-1">
-                                            <div className="flex flex-wrap items-start justify-between gap-2">
-                                                <div className="min-w-0">
-                                                    <h3 className="break-words font-semibold text-white">
-                                                        {item.name || "—"}
-                                                    </h3>
-                                                    <p className="mt-1 text-xs text-slate-500">
-                                                        ID: {item.id} · {formatCommon(item.courses) || "—"}
-                                                    </p>
-                                                </div>
-
-                                                <span className="rounded-lg border border-violet-400/20 bg-violet-400/[0.08] px-2 py-1 text-xs text-violet-200">
-                                                    {labelize(item.frequency)}
+                                            {/* Installments */}
+                                            <td className="px-4 py-4 text-center">
+                                                <span className="font-semibold text-white">
+                                                    {f.totalNoOfInstallments}x
                                                 </span>
-                                            </div>
-
-                                            <div className="mt-4 grid grid-cols-2 gap-3">
-                                                <div className="min-w-0 rounded-xl border border-white/[0.07] bg-white/[0.02] p-3">
-                                                    <p className="text-xs text-slate-500">
-                                                        Mandatory total
-                                                    </p>
-                                                    <p className="mt-1 break-words font-semibold text-white">
-                                                        {formatCurrency(
-                                                            moneyTotal(item.feeComponent),
-                                                        )}
-                                                    </p>
-                                                </div>
-
-                                                <div className="min-w-0 rounded-xl border border-white/[0.07] bg-white/[0.02] p-3">
-                                                    <p className="text-xs text-slate-500">
-                                                        Components
-                                                    </p>
-                                                    <p className="mt-1 font-semibold text-white">
-                                                        {item.feeComponent.length}
-                                                    </p>
-                                                    <p className="mt-1 break-words text-xs text-slate-500">
-                                                        {item.totalNoOfInstallments} installment(s)
-                                                    </p>
-                                                </div>
-                                            </div>
-
-                                            <div className="mt-3 space-y-1 text-xs text-slate-400">
-                                                <p>
-                                                    Academic year: {formatCommon(item.academicYear) || "—"}
+                                                <p className="text-[10px] text-cyan-300 font-mono mt-0.5">
+                                                    {formatCurrency(perInstallment)}/inst.
                                                 </p>
-                                                <p>
-                                                    University: {formatCommon(item.university) || "—"}
-                                                </p>
-                                                <p>
-                                                    School: {formatCommon(item.school) || "—"}
-                                                </p>
-                                                <p>
-                                                    Department: {formatCommon(item.department) || "—"}
-                                                </p>
-                                            </div>
+                                            </td>
 
-                                            {item.feeComponent.length > 0 && (
-                                                <div className="mt-3 flex flex-wrap gap-1.5">
-                                                    {item.feeComponent
-                                                        .slice(0, 4)
-                                                        .map((component) => (
-                                                            <span
-                                                                key={component.id}
-                                                                className="max-w-full break-words rounded-lg border border-white/10 bg-white/[0.03] px-2 py-1 text-xs text-slate-300"
-                                                            >
-                                                                {component.componentName}
+                                            {/* Specializations */}
+                                            <td className="px-4 py-4">
+                                                {f.specialization && f.specialization.length > 0 ? (
+                                                    <div className="flex items-center gap-1 flex-wrap">
+                                                        <span className="inline-flex items-center gap-1 rounded-md border border-purple-400/20 bg-purple-500/10 px-2 py-0.5 text-xs text-purple-300">
+                                                            <GraduationCap size={11} />
+                                                            <span>
+                                                                {f.specialization.length}{" "}
+                                                                {f.specialization.length === 1 ? "Spec" : "Specs"}
                                                             </span>
-                                                        ))}
-                                                    {item.feeComponent.length > 4 && (
-                                                        <span className="px-1 py-1 text-xs text-slate-500">
-                                                            +{item.feeComponent.length - 4} more
                                                         </span>
+                                                    </div>
+                                                ) : (
+                                                    <span className="text-slate-500 text-xs italic">
+                                                        General (All)
+                                                    </span>
+                                                )}
+                                            </td>
+
+                                            {/* Actions with strict h-8 w-8 shrink-0 */}
+                                            <td className="px-5 py-4">
+                                                <div className="flex items-center justify-end gap-1.5">
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => openDialog("VIEW", f)}
+                                                        aria-label={`View details of ${f.name}`}
+                                                        title="View fee structure details"
+                                                        className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-white/10 bg-white/[0.04] text-sky-300 transition hover:border-sky-400/30 hover:bg-sky-400/10"
+                                                    >
+                                                        <Eye size={15} />
+                                                    </button>
+                                                    {canEdit && (
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => openDialog("EDIT", f)}
+                                                            aria-label={`Edit ${f.name}`}
+                                                            title="Edit fee structure"
+                                                            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-white/10 bg-white/[0.04] text-cyan-300 transition hover:border-cyan-400/30 hover:bg-cyan-400/10"
+                                                        >
+                                                            <Pencil size={15} />
+                                                        </button>
+                                                    )}
+                                                    {canDelete && (
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => openDialog("DELETE", f)}
+                                                            aria-label={`Delete ${f.name}`}
+                                                            title="Delete fee structure"
+                                                            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-rose-500/20 bg-rose-500/10 text-rose-300 transition hover:border-rose-400/30 hover:bg-rose-500/20"
+                                                        >
+                                                            <Trash2 size={15} />
+                                                        </button>
                                                     )}
                                                 </div>
+                                            </td>
+                                        </motion.tr>
+                                    );
+                                })
+                            ) : (
+                                <tr>
+                                    <td colSpan={8} className="px-6 py-16 text-center">
+                                        <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.04] text-slate-400">
+                                            <Wallet size={25} />
+                                        </div>
+                                        <p className="mt-4 font-semibold text-slate-200">
+                                            {hasActiveFilters
+                                                ? "No matching fee structures found"
+                                                : "No fee structures configured yet"}
+                                        </p>
+                                        <p className="mt-1 text-sm text-slate-500 max-w-sm mx-auto">
+                                            {hasActiveFilters
+                                                ? "Try revising your search terms or resetting your filters."
+                                                : "Get started by creating your institution's first course fee structure."}
+                                        </p>
+                                        <div className="mt-4 flex justify-center gap-2">
+                                            {hasActiveFilters ? (
+                                                <button
+                                                    type="button"
+                                                    onClick={resetFilters}
+                                                    className="inline-flex items-center gap-1.5 rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-xs font-semibold text-slate-200 hover:bg-white/10"
+                                                >
+                                                    <RotateCcw size={13} />
+                                                    Clear Filters
+                                                </button>
+                                            ) : (
+                                                <button
+                                                    type="button"
+                                                    onClick={() => openDialog("CREATE")}
+                                                    className="inline-flex items-center gap-1.5 rounded-xl bg-gradient-to-r from-violet-600 via-blue-600 to-cyan-500 px-4 py-2 text-xs font-semibold text-white shadow-lg shadow-blue-500/20"
+                                                >
+                                                    <Plus size={14} />
+                                                    Add Fee Structure
+                                                </button>
                                             )}
+                                        </div>
+                                    </td>
+                                </tr>
+                            )}
+                        </tbody>
+                    </table>
+                </div>
 
-                                            <div className="mt-4 border-t border-white/10 pt-3">
-                                                {actionButtons(item)}
+                {/* 2. Mobile Card View (sm:hidden) */}
+                <div className="divide-y divide-white/5 sm:hidden">
+                    {loading ? (
+                        <div className="p-8 text-center">
+                            <LoaderCircle size={28} className="animate-spin text-cyan-400 mx-auto" />
+                            <p className="mt-3 text-xs font-semibold text-slate-200">
+                                Loading fee structures...
+                            </p>
+                        </div>
+                    ) : pageError && feeStructures.length === 0 ? (
+                        <div className="p-6 text-center">
+                            <AlertTriangle size={24} className="text-rose-400 mx-auto" />
+                            <p className="mt-2 text-xs font-semibold text-white">
+                                Failed to load fee structures
+                            </p>
+                            <button
+                                type="button"
+                                onClick={() => void loadData()}
+                                className="mt-3 inline-flex items-center gap-1.5 rounded-xl border border-cyan-400/30 bg-cyan-500/10 px-3 py-1.5 text-xs font-semibold text-cyan-300"
+                            >
+                                <RefreshCw size={13} /> Retry
+                            </button>
+                        </div>
+                    ) : paginatedStructures.length > 0 ? (
+                        paginatedStructures.map((f) => {
+                            const canEdit = hasPermission(f, "UPDATE");
+                            const canDelete = hasPermission(f, "DELETE");
+
+                            const mandatoryTotal = f.feeComponent
+                                ?.filter((c) => c.isMandatory)
+                                .reduce((sum, c) => sum + (c.amount || 0), 0) ?? 0;
+                            const optionalTotal = f.feeComponent
+                                ?.filter((c) => !c.isMandatory)
+                                .reduce((sum, c) => sum + (c.amount || 0), 0) ?? 0;
+
+                            const installments = Math.max(1, f.totalNoOfInstallments || 1);
+                            const perInstallment = mandatoryTotal / installments;
+
+                            return (
+                                <article key={f.id} className="p-3.5 space-y-3">
+                                    {/* Header: Name + ID + Frequency */}
+                                    <div className="flex items-start justify-between gap-2">
+                                        <div className="min-w-0">
+                                            <p className="font-semibold text-white text-sm truncate">
+                                                {f.name}
+                                            </p>
+                                            <div className="flex items-center gap-2 mt-0.5 text-xs text-slate-400">
+                                                <span className="font-mono text-[11px] text-slate-500">
+                                                    ID #{f.id}
+                                                </span>
+                                                <span>·</span>
+                                                <span className="truncate">{f.courses?.name || "—"}</span>
                                             </div>
                                         </div>
+                                        <FrequencyBadge frequency={f.frequency} />
+                                    </div>
+
+                                    {/* Financial Breakdown Grid */}
+                                    <div className="rounded-xl border border-white/5 bg-slate-950/40 p-2.5 text-xs space-y-1.5">
+                                        <div className="flex items-center justify-between">
+                                            <span className="text-slate-400 text-[11px]">Academic Year:</span>
+                                            <span className="font-medium text-white">{f.academicYear?.name || "—"}</span>
+                                        </div>
+                                        <div className="flex items-center justify-between">
+                                            <span className="text-slate-400 text-[11px]">Mandatory Fee:</span>
+                                            <span className="font-bold text-emerald-300 font-mono">
+                                                {formatCurrency(mandatoryTotal)}
+                                            </span>
+                                        </div>
+                                        <div className="flex items-center justify-between">
+                                            <span className="text-slate-400 text-[11px]">Installments:</span>
+                                            <span className="font-medium text-cyan-300">
+                                                {f.totalNoOfInstallments}x ({formatCurrency(perInstallment)}/inst.)
+                                            </span>
+                                        </div>
+                                        {f.specialization && f.specialization.length > 0 && (
+                                            <div className="flex items-center justify-between">
+                                                <span className="text-slate-400 text-[11px]">Specializations:</span>
+                                                <span className="font-medium text-purple-300">
+                                                    {f.specialization.length} assigned
+                                                </span>
+                                            </div>
+                                        )}
+                                    </div>
+
+                                    {/* Mobile Audit Showcase Bar (Matching University.tsx) */}
+                                    <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 rounded-xl border border-white/5 bg-slate-950/30 px-3 py-2 text-[11px] text-slate-400">
+                                        <div className="flex items-center gap-1.5 min-w-0">
+                                            <UserCheck size={12} className="text-emerald-400 shrink-0" />
+                                            <span className="text-slate-500">Created:</span>
+                                            <span className="font-medium text-slate-200 truncate max-w-[120px]">
+                                                {f.createdBy?.name || "System"}
+                                            </span>
+                                            {f.createdAt && (
+                                                <span className="text-slate-500 font-mono text-[10px]">
+                                                    · {formatDate(f.createdAt)}
+                                                </span>
+                                            )}
+                                        </div>
+                                        {f.updatedBy?.name && (
+                                            <div className="flex items-center gap-1.5 min-w-0">
+                                                <RotateCcw size={11} className="text-cyan-400 shrink-0" />
+                                                <span className="text-slate-500">Updated:</span>
+                                                <span className="font-medium text-slate-200 truncate max-w-[120px]">
+                                                    {f.updatedBy.name}
+                                                </span>
+                                            </div>
+                                        )}
+                                    </div>
+
+                                    {/* Action Buttons */}
+                                    <div className="flex items-center gap-2 pt-1 border-t border-white/5">
+                                        <button
+                                            type="button"
+                                            onClick={() => openDialog("VIEW", f)}
+                                            className="flex-1 inline-flex items-center justify-center gap-1.5 rounded-lg border border-cyan-500/20 bg-cyan-500/10 px-3 py-1.5 text-xs font-semibold text-cyan-300 hover:bg-cyan-500/20 transition"
+                                        >
+                                            <Eye size={13} /> Details
+                                        </button>
+                                        {canEdit && (
+                                            <button
+                                                type="button"
+                                                onClick={() => openDialog("EDIT", f)}
+                                                className="flex-1 inline-flex items-center justify-center gap-1.5 rounded-lg border border-white/10 bg-slate-800/80 px-3 py-1.5 text-xs font-semibold text-slate-200 hover:bg-white/10 transition"
+                                            >
+                                                <Pencil size={13} /> Edit
+                                            </button>
+                                        )}
+                                        {canDelete && (
+                                            <button
+                                                type="button"
+                                                onClick={() => openDialog("DELETE", f)}
+                                                className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-rose-500/20 bg-rose-500/10 text-rose-300 transition hover:bg-rose-500/20"
+                                            >
+                                                <Trash2 size={13} />
+                                            </button>
+                                        )}
                                     </div>
                                 </article>
-                            ))}
+                            );
+                        })
+                    ) : (
+                        <div className="p-8 text-center text-xs text-slate-400">
+                            No fee structures match your criteria.
                         </div>
+                    )}
+                </div>
 
-                        {/* Pagination Footer */}
-                        <footer className="flex flex-col gap-3 border-t border-white/10 px-4 py-4 sm:flex-row sm:items-center sm:justify-between">
-                            <p className="text-xs text-slate-400">
+                {/* Pagination Footer */}
+                <footer className="flex flex-col gap-3 border-t border-white/10 px-4 py-3.5 sm:flex-row sm:items-center sm:justify-between sm:px-6">
+                    <p className="text-xs text-slate-400 text-center sm:text-left">
+                        {sortedStructures.length === 0
+                            ? "Showing 0 fee structures"
+                            : `Showing ${(currentPage - 1) * PAGE_SIZE + 1} to ${Math.min(
+                                  currentPage * PAGE_SIZE,
+                                  sortedStructures.length
+                              )} of ${sortedStructures.length} fee structure${
+                                  sortedStructures.length === 1 ? "" : "s"
+                              }`}
+                    </p>
+
+                    {totalPages > 1 && (
+                        <nav
+                            aria-label="Fee structure pagination"
+                            className="flex items-center justify-center gap-1"
+                        >
+                            <button
+                                type="button"
+                                onClick={() => setCurrentPage(1)}
+                                disabled={currentPage === 1}
+                                aria-label="First page"
+                                className="rounded-lg p-1.5 text-slate-400 transition hover:bg-white/10 hover:text-white disabled:opacity-30 disabled:hover:bg-transparent"
+                            >
+                                <ChevronsLeft size={16} />
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                                disabled={currentPage === 1}
+                                aria-label="Previous page"
+                                className="rounded-lg p-1.5 text-slate-400 transition hover:bg-white/10 hover:text-white disabled:opacity-30 disabled:hover:bg-transparent"
+                            >
+                                <ChevronLeft size={16} />
+                            </button>
+
+                            <span className="px-3 text-xs font-semibold text-slate-300">
                                 Page {currentPage} of {totalPages}
-                            </p>
+                            </span>
 
-                            <div className="flex items-center justify-between gap-1 sm:justify-end">
-                                <button
-                                    type="button"
-                                    disabled={currentPage === 1}
-                                    onClick={() => setPage(1)}
-                                    aria-label="First page"
-                                    className={`${buttonClass} !min-h-9 !px-2`}
-                                >
-                                    <ChevronsLeft size={16} />
-                                </button>
+                            <button
+                                type="button"
+                                onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                                disabled={currentPage === totalPages}
+                                aria-label="Next page"
+                                className="rounded-lg p-1.5 text-slate-400 transition hover:bg-white/10 hover:text-white disabled:opacity-30 disabled:hover:bg-transparent"
+                            >
+                                <ChevronRight size={16} />
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => setCurrentPage(totalPages)}
+                                disabled={currentPage === totalPages}
+                                aria-label="Last page"
+                                className="rounded-lg p-1.5 text-slate-400 transition hover:bg-white/10 hover:text-white disabled:opacity-30 disabled:hover:bg-transparent"
+                            >
+                                <ChevronsRight size={16} />
+                            </button>
+                        </nav>
+                    )}
+                </footer>
+            </GlassCard>
 
-                                <button
-                                    type="button"
-                                    disabled={currentPage === 1}
-                                    onClick={() =>
-                                        setPage((value) => Math.max(1, value - 1))
-                                    }
-                                    aria-label="Previous page"
-                                    className={`${buttonClass} !min-h-9 !px-2`}
-                                >
-                                    <ChevronLeft size={16} />
-                                </button>
-
-                                <span className="px-3 text-xs text-slate-400">
-                                    {currentPage} / {totalPages}
-                                </span>
-
-                                <button
-                                    type="button"
-                                    disabled={currentPage === totalPages}
-                                    onClick={() =>
-                                        setPage((value) =>
-                                            Math.min(totalPages, value + 1),
-                                        )
-                                    }
-                                    aria-label="Next page"
-                                    className={`${buttonClass} !min-h-9 !px-2`}
-                                >
-                                    <ChevronRight size={16} />
-                                </button>
-
-                                <button
-                                    type="button"
-                                    disabled={currentPage === totalPages}
-                                    onClick={() => setPage(totalPages)}
-                                    aria-label="Last page"
-                                    className={`${buttonClass} !min-h-9 !px-2`}
-                                >
-                                    <ChevronsRight size={16} />
-                                </button>
-                            </div>
-                        </footer>
-                    </>
-                )}
-            </section>
-
+            {/* Modal Dialog */}
             <AnimatePresence>
-                {dialog && (
+                {dialogState && (
                     <FeeStructureDialog
-                        key={`${dialog.mode}-${dialog.item?.id ?? "new"}`}
-                        mode={dialog.mode}
-                        item={dialog.item}
+                        mode={dialogState.mode}
+                        structure={dialogState.structure}
+                        feeEnums={feeEnums}
                         courses={courses}
-                        enums={enums}
                         coursesLoading={coursesLoading}
-                        coursesError={coursesError}
                         busy={busy}
-                        onRetryCourses={() => void loadCourses()}
-                        onClose={() => {
-                            if (!busy) setDialog(null);
-                        }}
+                        onClose={closeDialog}
                         onCreate={handleCreate}
                         onUpdate={handleUpdate}
                         onDelete={handleDelete}
+                        onSwitchToEdit={(struct) => setDialogState({ mode: "EDIT", structure: struct })}
                     />
                 )}
             </AnimatePresence>
-        </motion.main>
+        </motion.div>
     );
 }

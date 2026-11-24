@@ -21,10 +21,4 @@ public class SubjectRequest {
     private ActiveStatus activeStatus;
 
     private List<Long> specializationsId;
-
-    private Long questionBankTeacherId;
-    private LocalDate lastDateQuestionBankSummit;
-
-    private Long studyMaterialTeacherId;
-    private LocalDate lastDateStudyMaterialSummit;
 }

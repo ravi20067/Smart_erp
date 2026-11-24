@@ -7,4 +7,6 @@ import java.util.List;
 
 public interface SubjectRepo extends JpaRepository<Subject, Long> {
     List<Subject> findBySubjectTeachers_Id(Long teacherId);
+
+    List<Subject> findByCodeContainingIgnoreCase(String code);
 }

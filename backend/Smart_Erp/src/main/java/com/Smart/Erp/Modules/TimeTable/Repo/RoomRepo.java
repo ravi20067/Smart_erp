@@ -4,4 +4,7 @@ import com.Smart.Erp.Modules.TimeTable.Entity.Room;
 import org.springframework.data.jpa.repository.JpaRepository;
 
 public interface RoomRepo extends JpaRepository<Room,Long> {
+    boolean existsByRoomNumber(String roomNumber);
+
+    boolean existsByRoomNumberAndIdNot(String roomNumber, Long id);
 }

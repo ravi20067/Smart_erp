@@ -26,11 +26,14 @@ export interface CourseResponse {
     sections: CommonDTO[];
     specializations: CommonDTO[];
     newEnrollmentAllowed: boolean | null;
-    academicYear: CommonDTO | null;
     department: CommonDTO | null;
     school: CommonDTO | null;
     university: CommonDTO | null;
     permissionActions: PermissionAction[];
+    createdAt?: string | null;
+    updatedAt?: string | null;
+    createdBy?: CommonDTO | null;
+    updatedBy?: CommonDTO | null;
 }
 
 export interface CommonRequest {
@@ -54,11 +57,10 @@ export interface CourseFilters {
     universityId?: number | "ALL";
     schoolId?: number | "ALL";
     departmentId?: number | "ALL";
-    academicYearId?: number | "ALL";
 }
 
 export interface CoursePrefixRequest {
-    academicYearId: number;
+    departmentId: number;
     courseId?: number;
 }
 
@@ -67,7 +69,7 @@ export interface CoursePrefixRequest {
 /* -------------------------------------------------------------------------- */
 
 const getCoursesUrl = (): string => `${getBaseUrl().replace(/\/+$/, "")}/courses`;
-const getAcademicYearFilterUrl = (): string => `${getBaseUrl().replace(/\/+$/, "")}/filter/academic-year`;
+const getDepartmentFilterUrl = (): string => `${getBaseUrl().replace(/\/+$/, "")}/filter/department`;
 
 /* -------------------------------------------------------------------------- */
 /* Response normalization                                                     */
@@ -133,7 +135,6 @@ export function normalizeCourse(value: unknown): CourseResponse {
             typeof value.newEnrollmentAllowed === "boolean"
                 ? value.newEnrollmentAllowed
                 : null,
-        academicYear: toCommonDTO(value.academicYear),
         department: toCommonDTO(value.department),
         school: toCommonDTO(value.school),
         university: toCommonDTO(value.university),
@@ -142,7 +143,20 @@ export function normalizeCourse(value: unknown): CourseResponse {
                 (item): item is string => typeof item === "string"
             )
             : [],
+        createdAt: typeof value.createdAt === "string" ? value.createdAt : null,
+        updatedAt: typeof value.updatedAt === "string" ? value.updatedAt : null,
+        createdBy: toCommonDTO(value.createdBy),
+        updatedBy: toCommonDTO(value.updatedBy),
     };
+}
+
+export function formatAuditActor(
+    actor?: CommonDTO | null,
+    fallback = "System Administrator"
+): string {
+    if (!actor) return fallback;
+    if (actor.name && actor.code) return `${actor.name} (${actor.code})`;
+    return actor.name || actor.code || fallback;
 }
 
 function normalizeCourseList(value: unknown): CourseResponse[] {
@@ -252,68 +266,94 @@ export async function getAllCourses(): Promise<CourseResponse[]> {
 }
 
 /**
- * Academic-year options for the create-course dialog.
- * This endpoint is based on the academic filter mapping supplied in your
- * controller notes. Adjust the URL if your filter controller has another base.
+ * Department options for the create-course dialog.
+ * Fetches from CommonController: GET /{role}/filter/department
  */
-export async function getAcademicYearFilter(): Promise<CommonDTO[]> {
-    const response = await api.get<unknown>(getAcademicYearFilterUrl());
-    return toCommonDTOList(response.data);
+export async function getDepartmentFilter(): Promise<CommonDTO[]> {
+    const roleBase = getBaseUrl().replace(/\/+$/, "") || "/super-admin";
+
+    // 1. Role-based CommonController endpoint
+    try {
+        const response = await api.get<unknown>(`${roleBase}/filter/department`);
+        const list = toCommonDTOList(response.data);
+        if (list.length > 0) return list;
+    } catch {
+        // Fallback
+    }
+
+    // 2. Super-admin CommonController fallback
+    try {
+        const response = await api.get<unknown>("/super-admin/filter/department");
+        const list = toCommonDTOList(response.data);
+        if (list.length > 0) return list;
+    } catch {
+        // Fallback
+    }
+
+    // 3. Fallback to department entity endpoint
+    try {
+        const fallbackUrl = `${roleBase}/department`;
+        const res = await api.get<unknown>(fallbackUrl);
+        return toCommonDTOList(res.data);
+    } catch {
+        return [];
+    }
 }
 
 /**
- * Returns the fixed prefix for the selected academic year.
+ * Returns the fixed prefix for the selected department.
  * The optional courseId is supported by the backend controller.
+ * GET /{role}/courses/prefix?departmentId={departmentId}&courseId={optional}
  */
 export async function getCoursePrefix(
-    academicYearId: number,
+    departmentId: number,
     courseId?: number
 ): Promise<string> {
-    if (!Number.isFinite(academicYearId) || academicYearId <= 0) {
-        throw new Error("Select a valid academic year first.");
+    if (!Number.isFinite(departmentId) || departmentId <= 0) {
+        return "";
     }
 
-    const params: Record<string, number> = { academicYearId };
+    const params: Record<string, number> = { departmentId };
 
     if (courseId && courseId > 0) {
         params.courseId = courseId;
     }
 
-    const response = await api.get<unknown>(`${getCoursesUrl()}/prefix`, {
-        params,
-        responseType: "text",
-    });
+    try {
+        const response = await api.get<unknown>(`${getCoursesUrl()}/prefix`, {
+            params,
+            responseType: "text",
+        });
 
-    const data = response.data;
-    const prefix =
-        typeof data === "string"
-            ? data
-            : isRecord(data) && typeof data.prefix === "string"
-                ? data.prefix
-                : "";
+        const data = response.data;
+        const prefix =
+            typeof data === "string"
+                ? data
+                : isRecord(data) && typeof data.prefix === "string"
+                    ? data.prefix
+                    : "";
 
-    if (!prefix.trim()) {
-        throw new Error("The server returned an empty course-code prefix.");
+        return prefix.trim();
+    } catch {
+        return "";
     }
-
-    return prefix.trim();
 }
 
 /**
- * Create contract from the supplied controller:
- * POST /courses?academicYear={id}
+ * Create contract from backend controller:
+ * POST /{role}/courses?departmentId={id}
  * Body: CommonRequest { name, code }
  */
 export async function createCourse(
-    academicYearId: number,
+    departmentId: number,
     request: CourseCreateRequest
 ): Promise<CourseResponse> {
-    if (!Number.isFinite(academicYearId) || academicYearId <= 0) {
-        throw new Error("Select a valid academic year.");
+    if (!Number.isFinite(departmentId) || departmentId <= 0) {
+        throw new Error("Select a valid department.");
     }
 
     const response = await api.post<unknown>(getCoursesUrl(), request, {
-        params: { academicYear: academicYearId },
+        params: { departmentId },
     });
 
     return normalizeCourse(response.data);

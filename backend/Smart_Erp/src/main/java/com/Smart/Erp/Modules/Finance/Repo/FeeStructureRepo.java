@@ -8,4 +8,5 @@ import java.util.Optional;
 
 public interface FeeStructureRepo extends JpaRepository<FeeStructure, Long> {
     Optional<FeeStructure> findByCourse_Id(Long courseId);
+
 }

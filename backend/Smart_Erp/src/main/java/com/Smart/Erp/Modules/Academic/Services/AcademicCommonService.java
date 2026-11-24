@@ -1,7 +1,6 @@
 
 package com.Smart.Erp.Modules.Academic.Services;
 
-import com.Smart.Erp.Config.CommonReference;
 import com.Smart.Erp.Core.Common.CommonDTO;
 import com.Smart.Erp.Core.Exception.ResourceNotFoundException;
 import com.Smart.Erp.Modules.Academic.Entity.*;
@@ -12,8 +11,8 @@ import com.Smart.Erp.Modules.Student.Entity.StudentEnrollment;
 import com.Smart.Erp.Modules.Student.Repo.StudentEnrollmentRepo;
 import com.Smart.Erp.Modules.Subject.Entity.Subject;
 import com.Smart.Erp.Modules.Subject.Repo.SubjectRepo;
-import com.Smart.Erp.Modules.Teacher.Entity.TeacherEnrollment;
-import com.Smart.Erp.Modules.Teacher.Repo.TeacherEnrollmentRepo;
+import com.Smart.Erp.Modules.Teacher.Entity.Teacher;
+import com.Smart.Erp.Modules.Teacher.Repo.TeacherRepo;
 import com.Smart.Erp.Modules.User.Entity.User;
 import com.Smart.Erp.Modules.User.Enum.EnrollmentStatus;
 import com.Smart.Erp.Modules.User.Enum.PermissionAction;
@@ -43,7 +42,7 @@ public class AcademicCommonService {
     private final SectionRepo sectionRepo;
     private final SectionGroupRepo sectionGroupRepo;
     private final StudentEnrollmentRepo studentEnrollmentRepo;
-    private final TeacherEnrollmentRepo teacherEnrollmentRepo;
+    private final TeacherRepo teacherRepo;
     private final UserCommonService userService;
     private final AuthorizationService authorizationService;
     private final SubjectRepo subjectRepo;
@@ -56,25 +55,22 @@ public class AcademicCommonService {
 
     public @Nullable List<CommonDTO> getTeacherFilter() {
         Map<Long, List<PermissionAction>> map =
-                authorizationService.getAll(ResourceType.TEACHER_ENROLLMENT);
+                authorizationService.getAll(ResourceType.TEACHER);
 
         if (map == null || map.isEmpty()) {
             return Collections.emptyList();
         }
 
-        List<TeacherEnrollment> enrollments =
-                teacherEnrollmentRepo.findAllById(map.keySet());
+        List<Teacher> teachers =
+                teacherRepo.findAllById(map.keySet());
 
-        if (enrollments.isEmpty()) {
+        if (teachers.isEmpty()) {
             return Collections.emptyList();
         }
 
-        return enrollments.stream()
+        return teachers.stream()
                 .filter(Objects::nonNull)
-                .map(TeacherEnrollment::getTeacher)
-                .filter(Objects::nonNull)
-                .distinct()
-                .map(CommonReference::toCommonDTO)
+                .map(Teacher::toCommonDTO)
                 .filter(Objects::nonNull)
                 .toList();
     }
@@ -269,9 +265,9 @@ public class AcademicCommonService {
                 .filter(
                         sectionGroup ->
                         {
-                            Course course = sectionGroup.getSpecialization().getCourse();
+                            Course course = sectionGroup.getSection().getCourse();
                             return course.getNewEnrollmentAllowed() && course.getActiveStatus() == ActiveStatus.ENABLE
-                                    && sectionGroup.getSection().getActiveStatus() == ActiveStatus.ENABLE && sectionGroup.getSpecialization().getFeeStructure() != null;
+                                    && sectionGroup.getSection().getActiveStatus() == ActiveStatus.ENABLE;
                         }
                 )
                 .map(SectionGroup::toSectionGroupFilter)
@@ -468,41 +464,15 @@ public class AcademicCommonService {
             return department;
         }
 
-        if (department.getAcademicYears() != null) {
-            department.getAcademicYears().stream()
-                    .filter(Objects::nonNull)
-                    .forEach(academicYear ->
-                            handleActiveStatusUpdate(
-                                    academicYear, activeStatus));
-        }
-
-        // Do not replace the managed academicYears collection.
-        return department;
-    }
-
-    public AcademicYear handleActiveStatusUpdate(
-            AcademicYear academicYear,
-            ActiveStatus activeStatus) {
-
-        if (academicYear == null || activeStatus == null) {
-            return academicYear;
-        }
-
-        academicYear.setActiveStatus(activeStatus);
-
-        if (activeStatus == ActiveStatus.ENABLE) {
-            return academicYear;
-        }
-
-        if (academicYear.getCourses() != null) {
-            academicYear.getCourses().stream()
+        if (department.getCourses() != null) {
+            department.getCourses().stream()
                     .filter(Objects::nonNull)
                     .forEach(course ->
-                            handleActiveStatusUpdate(course, activeStatus));
+                            handleActiveStatusUpdate(
+                                    course, activeStatus));
         }
 
-        // Do not replace the managed courses collection.
-        return academicYear;
+        return department;
     }
 
     public Course handleActiveStatusUpdate(
@@ -668,42 +638,7 @@ public class AcademicCommonService {
 
         subject.setActiveStatus(activeStatus);
 
-        handleActiveStatusUpdate(
-                subject.getSubjectTeachers(), activeStatus);
-
         return subject;
-    }
-
-    private void handleActiveStatusUpdate(
-            Set<TeacherEnrollment> teacherEnrollments,
-            ActiveStatus activeStatus) {
-
-        if (teacherEnrollments == null
-                || teacherEnrollments.isEmpty()
-                || activeStatus == null) {
-            return;
-        }
-
-        for (TeacherEnrollment enrollment : teacherEnrollments) {
-            if (enrollment == null || enrollment.getStatus() == null) {
-                continue;
-            }
-
-            if (activeStatus == ActiveStatus.DISABLE
-                    && enrollment.getStatus() == EnrollmentStatus.ACTIVE) {
-
-                enrollment.setStatus(EnrollmentStatus.DISABLE);
-
-            } else if (activeStatus == ActiveStatus.ENABLE
-                    && enrollment.getStatus() == EnrollmentStatus.DISABLE) {
-
-                enrollment.setStatus(EnrollmentStatus.ACTIVE);
-            }
-        }
-
-        teacherEnrollmentRepo.saveAll(teacherEnrollments.stream()
-                .filter(Objects::nonNull)
-                .toList());
     }
 
     // =========================================================
@@ -723,12 +658,15 @@ public class AcademicCommonService {
     @Transactional
     public void handleStudentChange(
             Specialization specialization,
-            Specialization oldSpecialization
+            Specialization oldSpecialization,
+            AcademicYear academicYear,
+            AcademicYear oldAcademicYear
     ) {
+
         Map<User, String> finalUsernames = new LinkedHashMap<>();
 
-        addDesiredUsernames(finalUsernames, oldSpecialization);
-        addDesiredUsernames(finalUsernames, specialization);
+        addDesiredUsernames(finalUsernames, oldSpecialization,oldAcademicYear);
+        addDesiredUsernames(finalUsernames, specialization,academicYear);
 
         if (finalUsernames.isEmpty()) {
             return;
@@ -759,15 +697,15 @@ public class AcademicCommonService {
 
     private void addDesiredUsernames(
             Map<User, String> finalUsernames,
-            Specialization specialization
-    ) {
+            Specialization specialization,
+            AcademicYear academicYear) {
         if (specialization == null
                 || specialization.getSectionGroups() == null
                 || specialization.getSectionGroups().isEmpty()) {
             return;
         }
 
-        List<User> users = getList(specialization);
+        List<User> users = getList(specialization,academicYear);
 
         if (users.isEmpty()) {
             return;
@@ -787,7 +725,7 @@ public class AcademicCommonService {
 
         String prefix = specialization.getCode() == null
                 ? ""
-                : specialization.getCode();
+                : academicYear.getCode().replace(academicYear.getUniversity().getCode(), "") + "-" + specialization.getCode();
 
         int index = 1;
 
@@ -838,15 +776,19 @@ public class AcademicCommonService {
         int i = 1;
 
         for (StudentEnrollment enrollment : studentEnrollments) {
-            enrollment.setRollNumber(prefix + i++);
+            enrollment.setRollNumber(prefix + String.format("%02d", i++));
         }
 
         return studentEnrollments;
     }
 
-    private static @NonNull List<User> getList(Specialization specialization) {
+    private static @NonNull List<User> getList(Specialization specialization, AcademicYear academicYear) {
         List<SectionGroup> sectionGroups =
                 specialization.getSectionGroups();
+
+        sectionGroups = sectionGroups.stream()
+                .filter(sectionGroup -> Objects.equals(sectionGroup.getSection().getAcademicYear().getId(), academicYear.getId()))
+                .toList();
 
         List<User> users = new ArrayList<>();
 

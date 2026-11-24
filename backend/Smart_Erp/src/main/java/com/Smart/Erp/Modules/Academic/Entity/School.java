@@ -31,6 +31,8 @@ public class School extends BaseAuditableEntity implements CommonReference {
     @Column(unique = true)
     private String code;
 
+    @Enumerated(EnumType.STRING)
+    @Builder.Default
     private ActiveStatus activeStatus = ActiveStatus.DISABLE;
 
     @ManyToOne(fetch = FetchType.LAZY)
@@ -70,6 +72,10 @@ public class School extends BaseAuditableEntity implements CommonReference {
                 )
                 .permissionActions(permissionActions)
                 .university(university.toCommonDTO())
+                .createdAt(this.getCreatedAt())
+                .updatedAt(this.getUpdatedAt())
+                .createdBy(this.getCreatedBy().toCommonDTO())
+                .updatedBy(this.getUpdatedBy().toCommonDTO())
                 .build();
     }
 }

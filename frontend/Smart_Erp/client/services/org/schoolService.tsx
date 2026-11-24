@@ -2,17 +2,17 @@ import api from "@/services/axiosConfig";
 import { getBaseUrl } from "@/services/authutil";
 
 /* -------------------------------------------------------------------------- */
-/* Types                                                                      */
+/* Types — Aligned with SchoolController & School Response DTO                */
 /* -------------------------------------------------------------------------- */
 
 export type ActiveStatus = "ENABLE" | "DISABLE";
 
-export type PermissionAction = "UPDATE" | "DELETE";
+export type PermissionAction = "CREATE_CHILD" | "READ" | "UPDATE" | "DELETE";
 
 export interface CommonDTO {
     id: number;
     name: string;
-    code: string;
+    code?: string | null;
 }
 
 export interface CommonRequest {
@@ -35,6 +35,10 @@ export interface SchoolResponse {
     departments: CommonDTO[];
     permissionActions: PermissionAction[];
     university: CommonDTO;
+    createdAt?: string | null;
+    updatedAt?: string | null;
+    createdBy?: CommonDTO | null;
+    updatedBy?: CommonDTO | null;
 }
 
 export interface SchoolFormRequest {
@@ -49,9 +53,68 @@ export interface UpdateSchoolRequest {
     activeStatus: ActiveStatus;
 }
 
+/* -------------------------------------------------------------------------- */
+/* Normalization & Audit Helpers                                              */
+/* -------------------------------------------------------------------------- */
+
+export const normalizeCommonDTO = (val: unknown): CommonDTO | null => {
+    if (!val || typeof val !== "object") return null;
+    const obj = val as Record<string, unknown>;
+    const id = Number(obj.id);
+    const name = typeof obj.name === "string" ? obj.name.trim() : "";
+    const code = typeof obj.code === "string" ? obj.code.trim() : null;
+
+    if (isNaN(id) && !name && !code) return null;
+
+    return {
+        id: isNaN(id) ? 0 : id,
+        name: name || "System",
+        code: code || null,
+    };
+};
+
+export const normalizeSchoolResponse = (item: unknown): SchoolResponse => {
+    if (!item || typeof item !== "object") {
+        throw new Error("Invalid school record received from server.");
+    }
+    const s = item as Record<string, unknown>;
+    return {
+        id: Number(s.id ?? 0),
+        name: typeof s.name === "string" ? s.name : "",
+        activeStatus: s.activeStatus === "ENABLE" ? "ENABLE" : "DISABLE",
+        code: typeof s.code === "string" ? s.code : "",
+        departments: Array.isArray(s.departments)
+            ? s.departments
+                .map((d) => normalizeCommonDTO(d))
+                .filter((d): d is CommonDTO => d !== null)
+            : [],
+        permissionActions: Array.isArray(s.permissionActions)
+            ? (s.permissionActions as PermissionAction[])
+            : [],
+        university: normalizeCommonDTO(s.university) || { id: 0, name: "—", code: "" },
+        createdAt: typeof s.createdAt === "string" ? s.createdAt : null,
+        updatedAt: typeof s.updatedAt === "string" ? s.updatedAt : null,
+        createdBy: normalizeCommonDTO(s.createdBy),
+        updatedBy: normalizeCommonDTO(s.updatedBy),
+    };
+};
+
+export const formatAuditActor = (
+    actor?: CommonDTO | null,
+    fallback = "System Administrator"
+): string => {
+    if (!actor) return fallback;
+    if (actor.name && actor.code) return `${actor.name} (${actor.code})`;
+    return actor.name || fallback;
+};
+
+/* -------------------------------------------------------------------------- */
+/* URL builder                                                                 */
+/* -------------------------------------------------------------------------- */
+
 const getSchoolUrl = (): string => {
     const base = getBaseUrl().replace(/\/+$/, "");
-    return `${base}/school`;
+    return `${base || "/super-admin"}/school`;
 };
 
 /* -------------------------------------------------------------------------- */
@@ -63,8 +126,10 @@ export function extractErrorMessage(error: unknown): string {
         return "An unexpected error occurred. Please try again.";
     }
 
+    if (typeof error === "string") return error;
+
     if (typeof error === "object" && error !== null) {
-        const err = error as Record<string, any>;
+        const err = error as Record<string, unknown>;
 
         if (err.code === "ERR_NETWORK" || err.message === "Network Error") {
             return "Unable to connect to the server. Check your connection and confirm that the backend is running.";
@@ -74,7 +139,10 @@ export function extractErrorMessage(error: unknown): string {
             return "The request timed out. Please try again.";
         }
 
-        const response = err.response;
+        const response = err.response as {
+            status?: number;
+            data?: unknown;
+        } | undefined;
 
         if (response) {
             const status = response.status;
@@ -85,37 +153,36 @@ export function extractErrorMessage(error: unknown): string {
             }
 
             if (data && typeof data === "object") {
+                const d = data as Record<string, unknown>;
                 for (const key of ["message", "error", "detail", "title"]) {
-                    if (typeof data[key] === "string" && data[key].trim()) {
-                        return data[key];
+                    if (typeof d[key] === "string" && (d[key] as string).trim()) {
+                        return d[key] as string;
                     }
                 }
 
-                if (Array.isArray(data.errors) && data.errors.length > 0) {
-                    return data.errors
+                if (Array.isArray(d.errors) && d.errors.length > 0) {
+                    return d.errors
                         .map((item: unknown) => {
                             if (typeof item === "string") return item;
-
                             if (item && typeof item === "object") {
                                 const value = item as Record<string, unknown>;
-                                return (
+                                return String(
                                     value.defaultMessage ??
                                     value.message ??
                                     JSON.stringify(value)
                                 );
                             }
-
                             return String(item);
                         })
                         .join(", ");
                 }
 
                 if (
-                    data.errors &&
-                    typeof data.errors === "object" &&
-                    !Array.isArray(data.errors)
+                    d.errors &&
+                    typeof d.errors === "object" &&
+                    !Array.isArray(d.errors)
                 ) {
-                    return Object.entries(data.errors)
+                    return Object.entries(d.errors as Record<string, unknown>)
                         .map(([field, message]) => `${field}: ${String(message)}`)
                         .join(", ");
                 }
@@ -135,7 +202,7 @@ export function extractErrorMessage(error: unknown): string {
                 case 422:
                     return "The server could not process the submitted information.";
                 default:
-                    if (status >= 500) {
+                    if (status && status >= 500) {
                         return "The server encountered an error. Please try again later.";
                     }
             }
@@ -165,7 +232,7 @@ export async function getSchools(): Promise<SchoolResponse[]> {
         throw new Error("The server returned an invalid school list.");
     }
 
-    return response.data;
+    return response.data.map(normalizeSchoolResponse);
 }
 
 /* -------------------------------------------------------------------------- */
@@ -174,28 +241,48 @@ export async function getSchools(): Promise<SchoolResponse[]> {
 /* -------------------------------------------------------------------------- */
 
 export async function getUniversityFilter(): Promise<CommonDTO[]> {
-    // This endpoint has an explicit /super-admin path in your controller.
-    // If your Axios baseURL already includes /super-admin, use:
-    // api.get<CommonDTO[]>(`${getBaseUrl()}/filter/university`)
-    const response = await api.get<CommonDTO[]>(
-        "/super-admin/filter/university"
-    );
+    try {
+        const response = await api.get<CommonDTO[]>(
+            "/super-admin/filter/university"
+        );
 
-    if (!Array.isArray(response.data)) {
-        throw new Error("The server returned an invalid university list.");
+        if (Array.isArray(response.data) && response.data.length > 0) {
+            return response.data
+                .map((university) => normalizeCommonDTO(university))
+                .filter(
+                    (university): university is CommonDTO =>
+                        university !== null &&
+                        Number.isFinite(university.id) &&
+                        university.id > 0
+                );
+        }
+    } catch {
+        // Fallback to university service listing if filter endpoint is restricted
     }
 
-    return response.data.filter(
-        (university) =>
-            university != null &&
-            Number.isFinite(Number(university.id)) &&
-            typeof university.name === "string"
-    );
+    try {
+        const fallbackUrl = `${getBaseUrl().replace(/\/+$/, "") || "/super-admin"}/university`;
+        const res = await api.get<Array<{ id: number; name: string; code?: string }>>(fallbackUrl);
+        if (Array.isArray(res.data)) {
+            return res.data
+                .map((university) => normalizeCommonDTO(university))
+                .filter(
+                    (university): university is CommonDTO =>
+                        university !== null &&
+                        Number.isFinite(university.id) &&
+                        university.id > 0
+                );
+        }
+    } catch {
+        // Ignored
+    }
+
+    return [];
 }
 
 /* -------------------------------------------------------------------------- */
 /* Get fixed school prefix                                                    */
-/* GET /{role}/school/prefix?universityId={id}&schoolId={optionalId}           */
+/* GET /{role}/school/prefix?universityId={id}&schoolId={optionalId}          */
 /* -------------------------------------------------------------------------- */
 
 export async function getSchoolPrefix(
@@ -208,7 +295,7 @@ export async function getSchoolPrefix(
 
     const params: Record<string, number> = { universityId };
 
-    if (schoolId != null) {
+    if (schoolId != null && Number.isFinite(schoolId) && schoolId > 0) {
         params.schoolId = schoolId;
     }
 
@@ -217,17 +304,20 @@ export async function getSchoolPrefix(
         responseType: "text",
     });
 
-    if (typeof response.data !== "string" || !response.data.trim()) {
+    const raw = typeof response.data === "string" ? response.data : String(response.data ?? "");
+    const clean = raw.replace(/^"|"$/g, "").trim();
+
+    if (!clean) {
         throw new Error("The server did not return a valid school prefix.");
     }
 
-    return response.data.trim();
+    return clean;
 }
 
 /* -------------------------------------------------------------------------- */
 /* Create school                                                              */
 /* POST /{role}/school?universityId={id}                                      */
-/* Body: CommonRequest                                                        */
+/* Body: CommonRequest ({ name, code })                                       */
 /* -------------------------------------------------------------------------- */
 
 export async function createSchool(
@@ -246,13 +336,13 @@ export async function createSchool(
         throw new Error("The server did not return the created school.");
     }
 
-    return response.data;
+    return normalizeSchoolResponse(response.data);
 }
 
 /* -------------------------------------------------------------------------- */
 /* Update school                                                              */
 /* PUT /{role}/school                                                         */
-/* Body: SchoolRequest                                                        */
+/* Body: SchoolRequest ({ id, name, code, activeStatus })                     */
 /* -------------------------------------------------------------------------- */
 
 export async function updateSchool(
@@ -268,7 +358,7 @@ export async function updateSchool(
         throw new Error("The server did not return the updated school.");
     }
 
-    return response.data;
+    return normalizeSchoolResponse(response.data);
 }
 
 /* -------------------------------------------------------------------------- */

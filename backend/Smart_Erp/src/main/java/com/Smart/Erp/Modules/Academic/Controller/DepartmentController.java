@@ -61,7 +61,7 @@ public class DepartmentController {
     @PreAuthorize(
             "@authVerifier.can(" +
                     "T(com.Smart.Erp.Modules.User.Enum.PermissionAction).CREATE_CHILD, " +
-                    "T(com.Smart.Erp.Modules.User.Enum.ResourceType).DEPARTMENT, " +
+                    "T(com.Smart.Erp.Modules.User.Enum.ResourceType).SCHOOL, " +
                     "#schoolId) || " +
                     "(#schoolId != null && " +
                     "@authVerifier.can(" +

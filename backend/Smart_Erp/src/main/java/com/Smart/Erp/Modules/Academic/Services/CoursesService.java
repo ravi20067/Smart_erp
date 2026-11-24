@@ -31,16 +31,16 @@ public class CoursesService {
                 .toList();
     }
 
-    public @Nullable CourseResponse create(Long academicYearId, CommonRequest request) {
+    public @Nullable CourseResponse create(Long departmentId, CommonRequest request) {
         Course build = Course.builder()
                 .name(request.getName())
-                .academicYear(academicCommonService.getAcademicYear(academicYearId))
+                .department(academicCommonService.getDepartment(departmentId))
                 .build();
 
         build.setCodeWithPrefix(request.getCode());
 
         build = courseRepo.save(build);
-        authorizationService.createPermission(build.getId(), ResourceType.COURSE, academicYearId, ResourceType.ACADEMIC_YEAR);
+        authorizationService.createPermission(build.getId(), ResourceType.COURSE, departmentId, ResourceType.DEPARTMENT);
         return build.mapToResponse(authorizationService.getPermissionAction(ResourceType.COURSE, build.getId()));
     }
 
@@ -70,7 +70,7 @@ public class CoursesService {
         }
     }
 
-    public String getPrefix(Long academicYearId) {
-        return academicCommonService.getAcademicYear(academicYearId).getCode();
+    public String getPrefix(Long departmentId) {
+        return academicCommonService.getDepartment(departmentId).getCode();
     }
 }

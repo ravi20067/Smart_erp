@@ -1,4 +1,3 @@
-
 import api from "@/services/axiosConfig";
 import { getBaseUrl } from "@/services/authutil";
 
@@ -31,7 +30,7 @@ export interface SectionGroupResponse {
 }
 
 export interface SectionResponse {
-    id: string;
+    id: number;
     name: string;
     code: string;
     capacity: number | null;
@@ -43,6 +42,10 @@ export interface SectionResponse {
     university: CommonDTO | null;
     activeStatus: ActiveStatus | null;
     permissionActions: PermissionAction[];
+    createdAt?: string | null;
+    updatedAt?: string | null;
+    createdBy?: CommonDTO | null;
+    updatedBy?: CommonDTO | null;
 }
 
 export interface SectionRequest {
@@ -53,9 +56,8 @@ export interface SectionRequest {
     specializationId: number[];
 }
 
-export interface SectionCreateRequest extends SectionRequest { }
-
-export interface SectionUpdateRequest extends SectionRequest { }
+export interface SectionCreateRequest extends SectionRequest {}
+export interface SectionUpdateRequest extends SectionRequest {}
 
 const getSectionsUrl = (): string => `${getBaseUrl().replace(/\/+$/, "")}/sections`;
 const getFilterUrl = (): string => `${getBaseUrl().replace(/\/+$/, "")}/filter`;
@@ -140,12 +142,9 @@ export function extractErrorMessage(
         typeof candidate.message === "string" &&
         candidate.message.trim()
     ) {
-        if (
-            candidate.message.toLowerCase().includes("network error")
-        ) {
+        if (candidate.message.toLowerCase().includes("network error")) {
             return "Unable to connect to the server. Check your connection and try again.";
         }
-
         return candidate.message.trim();
     }
 
@@ -154,6 +153,18 @@ export function extractErrorMessage(
 
 function ensureArray<T>(value: unknown): T[] {
     return Array.isArray(value) ? (value as T[]) : [];
+}
+
+function normalizeCommonDTO(value: unknown): CommonDTO | null {
+    if (!value || typeof value !== "object") return null;
+    const item = value as Record<string, unknown>;
+    const id = Number(item.id);
+    if (!Number.isFinite(id) || id <= 0) return null;
+    return {
+        id,
+        name: String(item.name ?? "").trim(),
+        code: typeof item.code === "string" ? item.code.trim() : null,
+    };
 }
 
 function normalizeSectionGroup(value: unknown): SectionGroupResponse {
@@ -176,7 +187,7 @@ function normalizeSectionGroup(value: unknown): SectionGroupResponse {
         name: String(item.name ?? ""),
         code: typeof item.code === "string" ? item.code : null,
         specialization: spec,
-        studentCount: Number.isFinite(studentCountNum) ? studentCountNum : null,
+        studentCount: Number.isFinite(studentCountNum) ? studentCountNum : 0,
     };
 }
 
@@ -185,7 +196,6 @@ function normalizeSection(value: unknown): SectionResponse {
         value && typeof value === "object" ? value : {}
     ) as Record<string, unknown>;
 
-    // Support common ID names used by backend DTOs.
     const idCandidates = [
         item.id,
         item.sectionId,
@@ -193,44 +203,42 @@ function normalizeSection(value: unknown): SectionResponse {
         item.section_id,
     ];
 
-    const validId = idCandidates.find((candidate) => {
-        if (
-            candidate === null ||
-            candidate === undefined ||
-            String(candidate).trim() === ""
-        ) {
-            return false;
+    let validId = 0;
+    for (const candidate of idCandidates) {
+        if (candidate !== null && candidate !== undefined && String(candidate).trim() !== "") {
+            const num = Number(candidate);
+            if (Number.isSafeInteger(num) && num > 0) {
+                validId = num;
+                break;
+            }
         }
+    }
 
-        const id = Number(candidate);
-        return Number.isSafeInteger(id) && id > 0;
-    });
+    const capacityNum = Number(item.capacity);
 
     return {
-        id: validId === undefined ? "" : String(validId),
-        name: String(item.name ?? ""),
-        code: String(item.code ?? ""),
-        capacity:
-            typeof item.capacity === "number"
-                ? item.capacity
-                : null,
+        id: validId,
+        name: String(item.name ?? "").trim(),
+        code: String(item.code ?? "").trim(),
+        capacity: Number.isFinite(capacityNum) ? capacityNum : null,
         sectionGroup: Array.isArray(item.sectionGroup)
             ? item.sectionGroup.map(normalizeSectionGroup)
             : [],
-        course: (item.course ?? null) as CommonDTO | null,
-        academicYear:
-            (item.academicYear ?? null) as CommonDTO | null,
-        department: (item.department ?? null) as CommonDTO | null,
-        school: (item.school ?? null) as CommonDTO | null,
-        university: (item.university ?? null) as CommonDTO | null,
-        activeStatus:
-            (item.activeStatus ?? null) as ActiveStatus | null,
+        course: normalizeCommonDTO(item.course),
+        academicYear: normalizeCommonDTO(item.academicYear),
+        department: normalizeCommonDTO(item.department),
+        school: normalizeCommonDTO(item.school),
+        university: normalizeCommonDTO(item.university),
+        activeStatus: (item.activeStatus ?? null) as ActiveStatus | null,
         permissionActions: Array.isArray(item.permissionActions)
-            ? item.permissionActions as PermissionAction[]
+            ? (item.permissionActions as PermissionAction[])
             : [],
+        createdAt: typeof item.createdAt === "string" ? item.createdAt : null,
+        updatedAt: typeof item.updatedAt === "string" ? item.updatedAt : null,
+        createdBy: normalizeCommonDTO(item.createdBy),
+        updatedBy: normalizeCommonDTO(item.updatedBy),
     };
 }
-
 
 function normalizeCommonDTOs(value: unknown): CommonDTO[] {
     return ensureArray<CommonDTO>(value)
@@ -243,13 +251,13 @@ function normalizeCommonDTOs(value: unknown): CommonDTO[] {
         )
         .map((item) => ({
             id: Number(item.id),
-            name: item.name,
-            code: item.code ?? null,
+            name: item.name.trim(),
+            code: item.code ? item.code.trim() : null,
         }));
 }
 
 /* -------------------------------------------------------------------------- */
-/* Section CRUD                                                               */
+/* Section CRUD Endpoints                                                     */
 /* -------------------------------------------------------------------------- */
 
 /**
@@ -267,23 +275,28 @@ export async function getAllSections(): Promise<SectionResponse[]> {
 }
 
 /**
- * POST {baseUrl}/sections?courseId={courseId}
+ * POST {baseUrl}/sections?courseId={courseId}&academicYearId={academicYearId}
  *
- * The request's code contains only the suffix, not the fixed prefix.
+ * Backend expects both courseId and academicYearId as query params.
+ * The request body's code contains only the suffix.
  */
 export async function createSection(
     courseId: number,
+    academicYearId: number,
     request: SectionCreateRequest
 ): Promise<SectionResponse> {
     if (!Number.isFinite(courseId) || courseId <= 0) {
         throw new Error("Please select a valid course.");
+    }
+    if (!Number.isFinite(academicYearId) || academicYearId <= 0) {
+        throw new Error("Please select a valid academic year.");
     }
 
     try {
         const response = await api.post<unknown>(
             getSectionsUrl(),
             request,
-            { params: { courseId } }
+            { params: { courseId, academicYearId } }
         );
 
         return normalizeSection(response.data);
@@ -323,9 +336,7 @@ export async function updateSection(
 /**
  * DELETE {baseUrl}/sections?sectionId={sectionId}
  */
-export async function deleteSection(
-    sectionId: number
-): Promise<string> {
+export async function deleteSection(sectionId: number): Promise<string> {
     if (!Number.isFinite(sectionId) || sectionId <= 0) {
         throw new Error("Invalid section ID.");
     }
@@ -351,16 +362,20 @@ export async function deleteSection(
 }
 
 /**
- * GET {baseUrl}/sections/prefix?courseId={courseId}
+ * GET {baseUrl}/sections/prefix?academicYearId={academicYearId}&courseId={courseId}&sectionId={sectionId}
  *
- * The server returns the fixed prefix as a string.
+ * Backend returns prefix as string: academicYear.getCode().replace(univ.getCode(), "") + "-" + course.getCode()
  */
 export async function getSectionPrefix(
+    academicYearId: number,
     courseId: number,
     sectionId?: number
 ): Promise<string> {
     if (!Number.isFinite(courseId) || courseId <= 0) {
         throw new Error("Select a course to load its section prefix.");
+    }
+    if (!Number.isFinite(academicYearId) || academicYearId <= 0) {
+        throw new Error("Select an academic year to load its section prefix.");
     }
 
     try {
@@ -368,6 +383,7 @@ export async function getSectionPrefix(
             `${getSectionsUrl()}/prefix`,
             {
                 params: {
+                    academicYearId,
                     courseId,
                     ...(sectionId ? { sectionId } : {}),
                 },
@@ -393,8 +409,37 @@ export async function getSectionPrefix(
     }
 }
 
+/**
+ * GET {baseUrl}/sections/academic-year/filter?courseId={courseId}
+ *
+ * Backend returns list of academic years accessible for section creation under this course.
+ */
+export async function getSectionAcademicYearFilter(
+    courseId: number
+): Promise<CommonDTO[]> {
+    if (!Number.isFinite(courseId) || courseId <= 0) {
+        return [];
+    }
+
+    try {
+        const response = await api.get<unknown>(
+            `${getSectionsUrl()}/academic-year/filter`,
+            { params: { courseId } }
+        );
+
+        return normalizeCommonDTOs(response.data);
+    } catch (error) {
+        throw new Error(
+            extractErrorMessage(
+                error,
+                "Unable to load academic years for this course."
+            )
+        );
+    }
+}
+
 /* -------------------------------------------------------------------------- */
-/* Creation/update dropdown options                                           */
+/* Creation/update filter dropdown options from common controller             */
 /* -------------------------------------------------------------------------- */
 
 /**
@@ -402,10 +447,7 @@ export async function getSectionPrefix(
  */
 export async function getCourseFilter(): Promise<CommonDTO[]> {
     try {
-        const response = await api.get<unknown>(
-            `${getFilterUrl()}/courses`
-        );
-
+        const response = await api.get<unknown>(`${getFilterUrl()}/courses`);
         return normalizeCommonDTOs(response.data);
     } catch (error) {
         throw new Error(
@@ -419,48 +461,18 @@ export async function getCourseFilter(): Promise<CommonDTO[]> {
  */
 export async function getSpecializationFilter(): Promise<CommonDTO[]> {
     try {
-        const response = await api.get<unknown>(
-            `${getFilterUrl()}/specialization`
-        );
-
+        const response = await api.get<unknown>(`${getFilterUrl()}/specialization`);
         return normalizeCommonDTOs(response.data);
     } catch (error) {
         throw new Error(
-            extractErrorMessage(
-                error,
-                "Unable to load specialization options."
-            )
+            extractErrorMessage(error, "Unable to load specialization options.")
         );
     }
 }
 
 /* -------------------------------------------------------------------------- */
-/* Shared helpers                                                             */
+/* Shared Helpers                                                             */
 /* -------------------------------------------------------------------------- */
-
-
-export function getNumericSectionId(
-    section: SectionResponse
-): number {
-    const rawId: unknown = section.id;
-    const id = Number(rawId);
-
-    if (
-        rawId === null ||
-        rawId === undefined ||
-        String(rawId).trim() === "" ||
-        !Number.isSafeInteger(id) ||
-        id <= 0
-    ) {
-        throw new Error(
-            `Section "${section.name}" has invalid ID: ${String(rawId)}. ` +
-            "Check the section API response and database ID mapping."
-        );
-    }
-
-    return id;
-}
-
 
 export function uniqueCommonDTOs(
     items: Array<CommonDTO | null | undefined>
@@ -485,4 +497,66 @@ export function uniqueCommonDTOs(
     return Array.from(unique.values()).sort((a, b) =>
         a.name.localeCompare(b.name)
     );
+}
+
+export function formatAuditActor(actor?: CommonDTO | null): string {
+    if (!actor) return "System";
+    const name = actor.name?.trim();
+    const code = actor.code?.trim();
+    if (name && code) return `${name} (${code})`;
+    if (name) return name;
+    if (code) return code;
+    if (actor.id) return `ID: #${actor.id}`;
+    return "System";
+}
+
+export function formatDate(dateStr?: string | null): string {
+    if (!dateStr) return "—";
+    try {
+        const d = new Date(dateStr);
+        if (isNaN(d.getTime())) return "—";
+        return new Intl.DateTimeFormat("en-IN", {
+            day: "2-digit",
+            month: "short",
+            year: "numeric",
+        }).format(d);
+    } catch {
+        return "—";
+    }
+}
+
+export function formatDateTime(dateStr?: string | null): string {
+    if (!dateStr) return "—";
+    try {
+        const d = new Date(dateStr);
+        if (isNaN(d.getTime())) return "—";
+        return new Intl.DateTimeFormat("en-IN", {
+            day: "2-digit",
+            month: "short",
+            year: "numeric",
+            hour: "2-digit",
+            minute: "2-digit",
+        }).format(d);
+    } catch {
+        return "—";
+    }
+}
+
+export function getInitials(name?: string): string {
+    if (!name) return "SY";
+    const parts = name.trim().split(/\s+/).filter(Boolean);
+    if (parts.length === 0) return "SY";
+    if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+    return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+}
+
+export function removePrefix(
+    code: string | null | undefined,
+    prefix: string
+): string {
+    const value = (code ?? "").trim();
+    if (prefix && value.startsWith(prefix)) {
+        return value.slice(prefix.length).trim();
+    }
+    return value;
 }

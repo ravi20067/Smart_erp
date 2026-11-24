@@ -32,10 +32,7 @@ import org.springframework.web.multipart.MultipartFile;
 
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
-import java.util.Collections;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
+import java.util.*;
 
 @Service
 @Transactional
@@ -61,9 +58,9 @@ public class StudentService {
     public StudentEnrollmentResponse create(StudentRequest studentRequest, MultipartFile file) {
 
         SectionGroup sectionGroup = academicCommonService.getSectionGroup(studentRequest.getSectionGroupId());
-        AcademicYear academicYear = sectionGroup.getSpecialization().getCourse().getAcademicYear();
+        AcademicYear academicYear = sectionGroup.getSection().getAcademicYear();
 
-        University university = academicYear.getDepartment().getSchool().getUniversity();
+        University university = academicYear.getUniversity();
 
         if (sectionGroup.getSection().getCapacity() <= sectionGroup.getSection().getSectionGroups().size()) {
             throw new OperationNotAllowedException("Section is full");
@@ -74,13 +71,15 @@ public class StudentService {
                 : Collections.emptySet();
 
         int studentCount = sectionGroup.getSpecialization().getSectionGroups().stream()
+                .filter(group -> Objects.equals(group.getSection().getAcademicYear().getId(), academicYear.getId()))
                 .mapToInt(group -> group.getStudentEnrollments().size())
                 .sum();
 
         String userName = userService.getAvailableUsername(
-                sectionGroup.getSpecialization().getCode(),
+                academicYear.getCode().replace(academicYear.getUniversity().getCode(), "") + "-" + sectionGroup.getSpecialization().getCode(),
                 studentCount + 1
         );
+
         String registrationNo = academicYear.getStudentPostfix();
         LocalDate dob = studentRequest.getBasicDetailRequest().getDob();
         String formattedDob = dob != null ? dob.format(DateTimeFormatter.ISO_LOCAL_DATE) : "";
@@ -104,7 +103,7 @@ public class StudentService {
         student = studentRepo.save(student);
 
         academicCommonService.handleStudentChange(sectionGroup,null);
-        academicCommonService.handleStudentChange(sectionGroup.getSpecialization(),null);
+        academicCommonService.handleStudentChange(sectionGroup.getSpecialization(),null,academicYear,null);
         student = commonService.getStudent(student.getId());
 
         authorizationService.createPermission(studentEnrollment.getId(), ResourceType.STUDENT_ENROLLMENT, sectionGroup.getId(), ResourceType.SECTION_GROUP);
@@ -147,7 +146,6 @@ public class StudentService {
         }
 
         studentEnrollment.setSectionGroup(newSectionGroup);
-        studentEnrollment.setAcademicYear(newSectionGroup.getSpecialization().getCourse().getAcademicYear());
         studentEnrollment = studentEnrollmentRepo.save(studentEnrollment);
         academicCommonService.handleStudentChange(newSectionGroup, oldSectionGroup);
         return commonService.getStudentEnrollment(studentEnrollment.getId()).mapToResponse(authorizationService.getPermissionAction(ResourceType.STUDENT_ENROLLMENT, studentEnrollment.getId()));
@@ -167,15 +165,14 @@ public class StudentService {
         }
 
         studentEnrollment.setSectionGroup(newSectionGroup);
-        studentEnrollment.setAcademicYear(newSectionGroup.getSpecialization().getCourse().getAcademicYear());
 
-        FeeStructure feeStructure = newSectionGroup.getSpecialization().getFeeStructure();
+        FeeStructure feeStructure = newSectionGroup.getSpecialization().getFeeStructure(newSectionGroup.getSection().getAcademicYear());
 
         studentEnrollment.getFirstFeeAccount().adjustFeeStructureChange(feeStructure);
 
         studentEnrollment = studentEnrollmentRepo.save(studentEnrollment);
 
-        academicCommonService.handleStudentChange(newSectionGroup.getSpecialization(),oldSpecialization);
+        academicCommonService.handleStudentChange(newSectionGroup.getSpecialization(),oldSpecialization,newSectionGroup.getSection().getAcademicYear(), oldSectionGroup.getSection().getAcademicYear());
         academicCommonService.handleStudentChange(newSectionGroup,oldSectionGroup);
 
         authorizationService.changeParent(

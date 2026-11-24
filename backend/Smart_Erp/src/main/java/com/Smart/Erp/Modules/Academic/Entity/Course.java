@@ -30,13 +30,14 @@ public class Course extends BaseAuditableEntity implements CommonReference {
 
     private String code;
 
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "academic_year_id")
-    private AcademicYear academicYear;
+    @ManyToOne
+    @JoinColumn(name = "department_id", nullable = false)
+    private Department department;
 
     @Builder.Default
     private ActiveStatus activeStatus = ActiveStatus.DISABLE;
 
+    @Builder.Default
     private Boolean newEnrollmentAllowed = false;
     // Course → Subject
     @Builder.Default
@@ -74,11 +75,10 @@ public class Course extends BaseAuditableEntity implements CommonReference {
     private List<Specialization> specializations = new ArrayList<>();
 
     public void setCodeWithPrefix(String code){
-        this.code = academicYear.getCode()+code;
+        this.code = department.getCode()+code;
     }
 
     public CourseResponse mapToResponse(List<PermissionAction> permissionActions) {
-        Department department = this.getAcademicYear().getDepartment();
         School school = department.getSchool();
         University university = school.getUniversity();
         return CourseResponse.builder()
@@ -99,11 +99,14 @@ public class Course extends BaseAuditableEntity implements CommonReference {
                         .toList()
                 )
                 .newEnrollmentAllowed(this.getNewEnrollmentAllowed())
-                .academicYear(this.getAcademicYear().toCommonDTO())
                 .department(department.toCommonDTO())
                 .school(school.toCommonDTO())
                 .university(university.toCommonDTO())
                 .permissionActions(permissionActions)
+                .createdAt(this.getCreatedAt())
+                .updatedAt(this.getUpdatedAt())
+                .createdBy(this.getCreatedBy().toCommonDTO())
+                .updatedBy(this.getUpdatedBy().toCommonDTO())
                 .build();
     }
 }

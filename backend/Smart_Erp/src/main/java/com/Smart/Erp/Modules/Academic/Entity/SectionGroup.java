@@ -1,12 +1,13 @@
+
 package com.Smart.Erp.Modules.Academic.Entity;
 
 import com.Smart.Erp.Config.BaseAuditableEntity;
 import com.Smart.Erp.Config.CommonReference;
-import com.Smart.Erp.Core.Common.DTO;
 import com.Smart.Erp.Modules.Academic.DTO.Sections.SectionGroupResponse;
-import com.Smart.Erp.Modules.Academic.Enum.ActiveStatus;
 import com.Smart.Erp.Modules.Student.DTO.SectionGroupFilter;
 import com.Smart.Erp.Modules.Student.Entity.StudentEnrollment;
+import com.Smart.Erp.Modules.TimeTable.Entity.DailyTimetableOverride;
+import com.Smart.Erp.Modules.TimeTable.Entity.SectionTimetableVersion;
 import jakarta.persistence.*;
 import lombok.*;
 
@@ -19,35 +20,83 @@ import java.util.List;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-public class SectionGroup  extends BaseAuditableEntity implements CommonReference {
+public class SectionGroup extends BaseAuditableEntity
+        implements CommonReference {
+
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
+
     private String name;
+
     @Transient
     private String code;
 
+
+    // =====================================================
+    // SECTION RELATIONSHIP
+    // =====================================================
+
     @ToString.Exclude
-    @ManyToOne
+    @EqualsAndHashCode.Exclude
+    @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "section_id")
     private Section section;
-    @ManyToOne
+
+
+    // Specialization
+    @ToString.Exclude
+    @EqualsAndHashCode.Exclude
+    @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "specialization_id")
     private Specialization specialization;
+
+
+    // Student Enrollments
     @ToString.Exclude
+    @EqualsAndHashCode.Exclude
     @OneToMany(mappedBy = "sectionGroup")
     @Builder.Default
-    private List<StudentEnrollment> studentEnrollments = new ArrayList<>();
+    private List<StudentEnrollment> studentEnrollments =
+            new ArrayList<>();
 
 
-    public void setCodeWithPrefix(String code){
-        this.code = mergeForCode(specialization.getCode() , section.getCode()) + code;
+    // =====================================================
+    // TIMETABLE RELATIONSHIPS
+    // =====================================================
+
+    // Timetable versions specifically assigned to this group
+    @OneToMany(mappedBy = "sectionGroup")
+    @ToString.Exclude
+    @EqualsAndHashCode.Exclude
+    @Builder.Default
+    private List<SectionTimetableVersion> timetableVersions =
+            new ArrayList<>();
+
+
+    // Daily overrides specifically assigned to this group
+    @OneToMany(mappedBy = "sectionGroup")
+    @ToString.Exclude
+    @EqualsAndHashCode.Exclude
+    @Builder.Default
+    private List<DailyTimetableOverride> timetableOverrides =
+            new ArrayList<>();
+
+
+    // =====================================================
+    // EXISTING METHODS
+    // =====================================================
+
+    public void setCodeWithPrefix(String code) {
+        this.code = code;
     }
 
     public String getStudentRollPrefix() {
+
         Course course = section.getCourse();
-        AcademicYear academicYear = course.getAcademicYear();
-        Department department = academicYear.getDepartment();
+        AcademicYear academicYear = section.getAcademicYear();
+
+        Department department = course.getDepartment();
         School school = department.getSchool();
         University university = school.getUniversity();
 
@@ -59,36 +108,57 @@ public class SectionGroup  extends BaseAuditableEntity implements CommonReferenc
                 + section.getId();
     }
 
-    public SectionGroupResponse mapToResponse(SectionGroup this){
+    public SectionGroupResponse mapToResponse(SectionGroup this) {
+
         return SectionGroupResponse.builder()
                 .id(this.getId())
                 .name(this.getName())
                 .code(this.getCode())
-                .specialization(this.getSpecialization().toCommonDTO())
+                .specialization(
+                        this.getSpecialization() == null
+                                ? null
+                                : this.getSpecialization().toCommonDTO()
+                )
+                .studentCount(this.getStudentEnrollments().size())
+                .createdAt(this.getCreatedAt())
+                .updatedAt(this.getUpdatedAt())
+                .createdBy(
+                        this.getCreatedBy() == null
+                                ? null
+                                : this.getCreatedBy().toCommonDTO()
+                )
+                .updatedBy(
+                        this.getUpdatedBy() == null
+                                ? null
+                                : this.getUpdatedBy().toCommonDTO()
+                )
                 .build();
     }
 
     public SectionGroupFilter toSectionGroupFilter() {
+
         return SectionGroupFilter.builder()
                 .sectionGroup(this.toCommonDTO())
                 .specialization(this.getSpecialization().toCommonDTO())
                 .courses(this.specialization.getCourse().toCommonDTO())
+                .academicYear(this.section.getAcademicYear().toCommonDTO())
+                .department(
+                        this.specialization.getCourse()
+                                .getDepartment().toCommonDTO()
+                )
+                .school(
+                        this.specialization.getCourse()
+                                .getDepartment().getSchool().toCommonDTO()
+                )
+                .university(
+                        this.specialization.getCourse()
+                                .getDepartment().getSchool()
+                                .getUniversity().toCommonDTO()
+                )
                 .build();
     }
 
-    public static String mergeForCode(String sectionCode, String specializationCode) {
-        int i = 0;
-
-        while (i < sectionCode.length()
-                && i < specializationCode.length()
-                && sectionCode.charAt(i) == specializationCode.charAt(i)) {
-            i++;
-        }
-
-        return sectionCode + specializationCode.substring(i);
-    }
-
     public University getUniversity() {
-        return specialization.getCourse().getAcademicYear().getDepartment().getSchool().getUniversity();
+        return section.getAcademicYear().getUniversity();
     }
 }

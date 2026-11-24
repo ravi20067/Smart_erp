@@ -1,9 +1,30 @@
 import api from "@/services/axiosConfig";
 import { getBaseUrl } from "@/services/authutil";
 
+/* -------------------------------------------------------------------------- */
+/* Types                                                                      */
+/* -------------------------------------------------------------------------- */
+
 export type PermissionAction = string;
-export type FeeFrequency = string;
-export type FeeCategoryType = string;
+export type FeeFrequency =
+    | "ONE_TIME"
+    | "ANNUAL"
+    | "SEMESTER"
+    | "QUARTERLY"
+    | "MONTHLY"
+    | string;
+
+export type FeeCategoryType =
+    | "TUITION"
+    | "ADMISSION"
+    | "EXAMINATION"
+    | "LABORATORY"
+    | "LIBRARY"
+    | "SPORTS"
+    | "TRANSPORT"
+    | "HOSTEL"
+    | "MISCELLANEOUS"
+    | string;
 
 export interface CommonDTO {
     id: number;
@@ -22,7 +43,7 @@ export interface FeeEnums {
 }
 
 export interface FeeComponentRequest {
-    feeCategoryType: FeeCategoryType;
+    feeCategoryType: string;
     componentName: string;
     amount: number;
     isMandatory: boolean;
@@ -33,7 +54,7 @@ export interface FeeComponent extends FeeComponentRequest {
     id: number;
 }
 
-export interface FeeStructure {
+export interface FeeStructureResponse {
     id: number;
     name: string;
     frequency: FeeFrequency;
@@ -45,13 +66,18 @@ export interface FeeStructure {
     school: CommonDTO | null;
     university: CommonDTO | null;
     academicYear: CommonDTO | null;
-    lastModifiedBy: CommonDTO | null;
     permissionActions: PermissionAction[];
+    createdAt?: string | null;
+    updatedAt?: string | null;
+    createdBy?: CommonDTO | null;
+    updatedBy?: CommonDTO | null;
 }
+
+export type FeeStructure = FeeStructureResponse;
 
 export interface FeeStructureCreateRequest {
     name: string;
-    frequency: FeeFrequency;
+    frequency: string;
     totalNoOfInstallments: number;
     specializationId: number[];
     components: FeeComponentRequest[];
@@ -59,157 +85,32 @@ export interface FeeStructureCreateRequest {
 
 export interface FeeStructureUpdateRequest {
     name: string;
-    frequency: FeeFrequency;
+    frequency: string;
     totalNoOfInstallments: number;
     specializationId: number[];
     componentToAdd: FeeComponentRequest[];
     componentToRemove: number[];
 }
 
-const baseUrl = () => getBaseUrl().replace(/\/+$/, "");
-const feeUrl = () => `${baseUrl()}/fee-structures`;
+const getBase = () => getBaseUrl().replace(/\/+$/, "");
+const getFeeUrl = () => `${getBase()}/fee-structures`;
+const getFilterUrl = () => `${getBase()}/filter`;
 
-function unwrap(value: unknown): unknown {
-    let current = value;
+/* -------------------------------------------------------------------------- */
+/* Error handling                                                             */
+/* -------------------------------------------------------------------------- */
 
-    // Axios response.data may itself contain an API { data: ... } wrapper.
-    for (let depth = 0; depth < 3; depth += 1) {
-        if (
-            current &&
-            typeof current === "object" &&
-            !Array.isArray(current) &&
-            "data" in current
-        ) {
-            current = (current as Record<string, unknown>).data;
-        } else {
-            break;
-        }
+export function extractErrorMessage(
+    error: unknown,
+    fallback = "An unexpected error occurred. Please try again."
+): string {
+    if (typeof error === "string" && error.trim()) {
+        return error.trim();
     }
 
-    return current;
-}
-
-function asRecord(value: unknown): Record<string, unknown> | null {
-    return value !== null && typeof value === "object" && !Array.isArray(value)
-        ? value as Record<string, unknown>
-        : null;
-}
-
-function normalizeCommon(value: unknown): CommonDTO | null {
-    const item = asRecord(value);
-    if (!item) return null;
-
-    const id = Number(item.id);
-    if (!Number.isSafeInteger(id) || id <= 0) return null;
-
-    return {
-        id,
-        name: typeof item.name === "string" ? item.name : "",
-        code: typeof item.code === "string" ? item.code : null,
-    };
-}
-
-function normalizeComponent(value: unknown): FeeComponent {
-    const item = asRecord(value);
-
-    if (!item) {
-        throw new Error("The server returned an invalid fee component.");
+    if (!error || typeof error !== "object") {
+        return fallback;
     }
-
-    const id = Number(item.id);
-
-    if (!Number.isSafeInteger(id) || id <= 0) {
-        throw new Error("A fee component returned by the server has no valid ID.");
-    }
-
-    return {
-        id,
-        feeCategoryType:
-            typeof item.feeCategoryType === "string"
-                ? item.feeCategoryType
-                : "",
-        componentName:
-            typeof item.componentName === "string"
-                ? item.componentName
-                : "",
-        amount: Number(item.amount),
-        isMandatory: item.isMandatory === true,
-        isRefundable: item.isRefundable === true,
-    };
-}
-
-function normalizeStructure(value: unknown): FeeStructure {
-    const item = asRecord(value);
-
-    if (!item) {
-        throw new Error("The server returned an invalid fee structure.");
-    }
-
-    const id = Number(item.id);
-
-    if (!Number.isSafeInteger(id) || id <= 0) {
-        throw new Error("A fee structure returned by the server has no valid ID.");
-    }
-
-    if (!Array.isArray(item.feeComponent)) {
-        throw new Error(
-            `Fee structure ${id} has an invalid feeComponent response.`,
-        );
-    }
-
-    if (!Array.isArray(item.specialization)) {
-        throw new Error(
-            `Fee structure ${id} has an invalid specialization response.`,
-        );
-    }
-
-    const components = item.feeComponent.map(normalizeComponent);
-    const specializations = item.specialization.map(normalizeCommon);
-
-    return {
-        id,
-        name: typeof item.name === "string" ? item.name : "",
-        frequency: typeof item.frequency === "string" ? item.frequency : "",
-        totalNoOfInstallments: Number(item.totalNoOfInstallments),
-        feeComponent: components,
-        specialization: specializations.filter(
-            (value): value is CommonDTO => value !== null,
-        ),
-        courses: normalizeCommon(item.courses),
-        department: normalizeCommon(item.department),
-        school: normalizeCommon(item.school),
-        university: normalizeCommon(item.university),
-        academicYear: normalizeCommon(item.academicYear),
-        lastModifiedBy: normalizeCommon(item.lastModifiedBy),
-        permissionActions: Array.isArray(item.permissionActions)
-            ? item.permissionActions.filter(
-                (action): action is string => typeof action === "string",
-            )
-            : [],
-    };
-}
-
-function normalizeEnumOptions(value: unknown): FeeEnumOption[] {
-    if (!Array.isArray(value)) return [];
-
-    return value.flatMap((entry) => {
-        const item = asRecord(entry);
-        if (!item) return [];
-
-        const enumValue =
-            typeof item.enumValue === "string" ? item.enumValue : "";
-        const name = typeof item.name === "string" ? item.name : enumValue;
-
-        if (!enumValue) return [];
-
-        return [{ name, enumValue }];
-    });
-}
-
-export function extractErrorMessage(error: unknown): string {
-    const fallback = "An unexpected error occurred. Please try again.";
-
-    if (!error || typeof error !== "object") return fallback;
 
     const err = error as {
         message?: string;
@@ -219,39 +120,37 @@ export function extractErrorMessage(error: unknown): string {
         };
     };
 
-    const responseData = err.response?.data;
-    const body = asRecord(responseData);
+    const data = err.response?.data;
 
-    if (typeof responseData === "string" && responseData.trim()) {
-        return responseData.trim();
+    if (typeof data === "string" && data.trim()) {
+        return data.trim();
     }
 
-    if (body) {
-        for (const key of [
-            "message",
-            "error",
-            "detail",
-            "description",
-            "title",
-        ]) {
-            const message = body[key];
+    if (data && typeof data === "object") {
+        const body = data as Record<string, unknown>;
 
-            if (typeof message === "string" && message.trim()) {
-                return message.trim();
+        for (const key of ["message", "error", "detail", "description", "title"]) {
+            const val = body[key];
+            if (typeof val === "string" && val.trim()) {
+                return val.trim();
             }
         }
 
-        if (Array.isArray(body.errors)) {
-            const messages = body.errors.map((entry) => {
-                if (typeof entry === "string") return entry;
+        if (Array.isArray(body.errors) && body.errors.length > 0) {
+            const messages = body.errors
+                .map((entry) => {
+                    if (typeof entry === "string") return entry;
+                    if (entry && typeof entry === "object") {
+                        const item = entry as Record<string, unknown>;
+                        return String(item.defaultMessage ?? item.message ?? item.field ?? "");
+                    }
+                    return "";
+                })
+                .filter(Boolean);
 
-                const fieldError = asRecord(entry);
-                return typeof fieldError?.defaultMessage === "string"
-                    ? fieldError.defaultMessage
-                    : "";
-            }).filter(Boolean);
-
-            if (messages.length) return messages.join(", ");
+            if (messages.length > 0) {
+                return messages.join(", ");
+            }
         }
     }
 
@@ -263,31 +162,304 @@ export function extractErrorMessage(error: unknown): string {
         case 403:
             return "You do not have permission to perform this action.";
         case 404:
-            return "The requested resource or API endpoint was not found.";
+            return "The requested fee structure or resource was not found.";
         case 409:
-            return "This operation conflicts with existing data.";
+            return "This operation conflicts with existing academic records.";
+        case 422:
+            return "The server could not process the provided fee structure details.";
+        case 500:
+            return "A server error occurred. Please try again later.";
         default:
-            break;
+            return err.message?.trim() || fallback;
     }
-
-    if (err.response?.status && err.response.status >= 500) {
-        return "The server encountered an error. Please try again later.";
-    }
-
-    if (err.message === "Network Error") {
-        return "Unable to connect to the server. Check your network connection.";
-    }
-
-    return err.message?.trim() || fallback;
 }
 
-export function normalizeText(value: unknown): string {
-    return typeof value === "string" ? value.trim().toLocaleLowerCase() : "";
+/* -------------------------------------------------------------------------- */
+/* Normalization helpers                                                      */
+/* -------------------------------------------------------------------------- */
+
+function ensureArray<T>(value: unknown): T[] {
+    return Array.isArray(value) ? (value as T[]) : [];
+}
+
+function normalizeCommon(value: unknown): CommonDTO | null {
+    if (!value || typeof value !== "object") return null;
+    const item = value as Record<string, unknown>;
+    const id = Number(item.id);
+    if (!Number.isSafeInteger(id) || id <= 0) return null;
+
+    return {
+        id,
+        name: typeof item.name === "string" ? item.name.trim() : "",
+        code: typeof item.code === "string" ? item.code.trim() : null,
+    };
+}
+
+function normalizeComponent(value: unknown): FeeComponent {
+    const item = (value && typeof value === "object" ? value : {}) as Record<string, unknown>;
+    const id = Number(item.id);
+
+    return {
+        id: Number.isSafeInteger(id) && id > 0 ? id : 0,
+        feeCategoryType: String(item.feeCategoryType ?? item.categoryType ?? "TUITION").trim(),
+        componentName: String(item.componentName ?? "").trim(),
+        amount: Number.isFinite(Number(item.amount)) ? Number(item.amount) : 0,
+        isMandatory: item.isMandatory === true,
+        isRefundable: item.isRefundable === true,
+    };
+}
+
+function normalizeStructure(value: unknown): FeeStructureResponse {
+    const item = (value && typeof value === "object" ? value : {}) as Record<string, unknown>;
+    const id = Number(item.id);
+
+    return {
+        id: Number.isSafeInteger(id) && id > 0 ? id : 0,
+        name: String(item.name ?? "").trim(),
+        frequency: String(item.frequency ?? "SEMESTER").trim(),
+        totalNoOfInstallments: Number.isFinite(Number(item.totalNoOfInstallments))
+            ? Number(item.totalNoOfInstallments)
+            : 1,
+        feeComponent: ensureArray(item.feeComponent ?? item.components).map(normalizeComponent),
+        specialization: ensureArray(item.specialization ?? item.specializations)
+            .map(normalizeCommon)
+            .filter((s): s is CommonDTO => s !== null),
+        courses: normalizeCommon(item.courses ?? item.course),
+        department: normalizeCommon(item.department),
+        school: normalizeCommon(item.school),
+        university: normalizeCommon(item.university),
+        academicYear: normalizeCommon(item.academicYear),
+        permissionActions: ensureArray(item.permissionActions).filter(
+            (a): a is string => typeof a === "string"
+        ),
+        createdAt: typeof item.createdAt === "string" ? item.createdAt : null,
+        updatedAt: typeof item.updatedAt === "string" ? item.updatedAt : null,
+        createdBy: normalizeCommon(item.createdBy),
+        updatedBy: normalizeCommon(item.updatedBy),
+    };
+}
+
+function normalizeEnumOptions(value: unknown): FeeEnumOption[] {
+    return ensureArray(value).flatMap((entry) => {
+        if (!entry || typeof entry !== "object") return [];
+        const item = entry as Record<string, unknown>;
+        const enumValue = typeof item.enumValue === "string" ? item.enumValue : "";
+        const name = typeof item.name === "string" ? item.name : enumValue;
+        if (!enumValue) return [];
+        return [{ name, enumValue }];
+    });
+}
+
+/* -------------------------------------------------------------------------- */
+/* API Methods                                                                */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * GET /{role}/fee-structures
+ */
+export async function getFeeStructures(): Promise<FeeStructureResponse[]> {
+    try {
+        const response = await api.get<unknown>(getFeeUrl());
+        return ensureArray(response.data).map(normalizeStructure);
+    } catch (error) {
+        throw new Error(extractErrorMessage(error, "Unable to load fee structures."));
+    }
+}
+
+/**
+ * GET /{role}/fee-structures/enums
+ */
+export async function getFeeEnums(): Promise<FeeEnums> {
+    try {
+        const response = await api.get<unknown>(`${getFeeUrl()}/enums`);
+        const body = (response.data && typeof response.data === "object" ? response.data : {}) as Record<string, unknown>;
+
+        return {
+            feeFrequency: normalizeEnumOptions(body.feeFrequency),
+            feeComponentType: normalizeEnumOptions(body.feeComponentType),
+        };
+    } catch (error) {
+        console.warn("Could not load fee enums from backend, using fallbacks:", error);
+        return {
+            feeFrequency: [
+                { name: "One Time", enumValue: "ONE_TIME" },
+                { name: "Annual", enumValue: "ANNUAL" },
+                { name: "Semester", enumValue: "SEMESTER" },
+                { name: "Quarterly", enumValue: "QUARTERLY" },
+                { name: "Monthly", enumValue: "MONTHLY" },
+            ],
+            feeComponentType: [
+                { name: "Tuition", enumValue: "TUITION" },
+                { name: "Admission", enumValue: "ADMISSION" },
+                { name: "Examination", enumValue: "EXAMINATION" },
+                { name: "Laboratory", enumValue: "LABORATORY" },
+                { name: "Library", enumValue: "LIBRARY" },
+                { name: "Sports", enumValue: "SPORTS" },
+                { name: "Transport", enumValue: "TRANSPORT" },
+                { name: "Hostel", enumValue: "HOSTEL" },
+                { name: "Miscellaneous", enumValue: "MISCELLANEOUS" },
+            ],
+        };
+    }
+}
+
+/**
+ * GET /{role}/filter/courses
+ */
+export async function getCourseFilter(): Promise<CommonDTO[]> {
+    try {
+        const response = await api.get<unknown>(`${getFilterUrl()}/courses`);
+        return ensureArray(response.data)
+            .map(normalizeCommon)
+            .filter((c): c is CommonDTO => c !== null);
+    } catch (error) {
+        throw new Error(extractErrorMessage(error, "Unable to load course options."));
+    }
+}
+
+/**
+ * GET /{role}/fee-structures/academic-year/filter?courseId={courseId}
+ */
+export async function getAcademicYearFilter(courseId: number): Promise<CommonDTO[]> {
+    if (!Number.isSafeInteger(courseId) || courseId <= 0) {
+        return [];
+    }
+
+    try {
+        const response = await api.get<unknown>(`${getFeeUrl()}/academic-year/filter`, {
+            params: { courseId },
+        });
+
+        return ensureArray(response.data)
+            .map(normalizeCommon)
+            .filter((y): y is CommonDTO => y !== null);
+    } catch (error) {
+        throw new Error(extractErrorMessage(error, "Unable to load academic years for this course."));
+    }
+}
+
+/**
+ * GET /{role}/fee-structures/specialization/filter?courseId={courseId}&academicYearId={academicYearId}
+ */
+export async function getSpecializationFilter(
+    courseId: number,
+    academicYearId: number
+): Promise<CommonDTO[]> {
+    if (!Number.isSafeInteger(courseId) || courseId <= 0) {
+        return [];
+    }
+    if (!Number.isSafeInteger(academicYearId) || academicYearId <= 0) {
+        return [];
+    }
+
+    try {
+        const response = await api.get<unknown>(`${getFeeUrl()}/specialization/filter`, {
+            params: { courseId, academicYearId },
+        });
+
+        return ensureArray(response.data)
+            .map(normalizeCommon)
+            .filter((s): s is CommonDTO => s !== null);
+    } catch (error) {
+        throw new Error(extractErrorMessage(error, "Unable to load specializations for this fee structure."));
+    }
+}
+
+/**
+ * POST /{role}/fee-structures?courseId={courseId}&academicYearId={academicYearId}
+ */
+export async function createFeeStructure(
+    courseId: number,
+    academicYearId: number,
+    request: FeeStructureCreateRequest
+): Promise<FeeStructureResponse> {
+    if (!Number.isSafeInteger(courseId) || courseId <= 0) {
+        throw new Error("Select a valid course.");
+    }
+    if (!Number.isSafeInteger(academicYearId) || academicYearId <= 0) {
+        throw new Error("Select a valid academic year.");
+    }
+
+    try {
+        const response = await api.post<unknown>(getFeeUrl(), request, {
+            params: { courseId, academicYearId },
+        });
+        return normalizeStructure(response.data);
+    } catch (error) {
+        throw new Error(extractErrorMessage(error, "Unable to create fee structure."));
+    }
+}
+
+/**
+ * PUT /{role}/fee-structures?id={id}
+ */
+export async function updateFeeStructure(
+    id: number,
+    request: FeeStructureUpdateRequest
+): Promise<FeeStructureResponse> {
+    if (!Number.isSafeInteger(id) || id <= 0) {
+        throw new Error("Invalid fee structure ID.");
+    }
+
+    try {
+        const response = await api.put<unknown>(getFeeUrl(), request, {
+            params: { id },
+        });
+        return normalizeStructure(response.data);
+    } catch (error) {
+        throw new Error(extractErrorMessage(error, "Unable to update fee structure."));
+    }
+}
+
+/**
+ * DELETE /{role}/fee-structures?id={id}
+ */
+export async function deleteFeeStructure(id: number): Promise<string> {
+    if (!Number.isSafeInteger(id) || id <= 0) {
+        throw new Error("Invalid fee structure ID.");
+    }
+
+    try {
+        await api.delete(getFeeUrl(), { params: { id } });
+        return "Fee structure deleted successfully.";
+    } catch (error) {
+        throw new Error(
+            extractErrorMessage(
+                error,
+                "Unable to delete fee structure. It may have assigned specializations or enrolled students."
+            )
+        );
+    }
+}
+
+/* -------------------------------------------------------------------------- */
+/* Shared Helpers                                                             */
+/* -------------------------------------------------------------------------- */
+
+export function uniqueCommonDTOs(
+    items: Array<CommonDTO | null | undefined>
+): CommonDTO[] {
+    const unique = new Map<number, CommonDTO>();
+    for (const item of items) {
+        if (
+            item &&
+            Number.isFinite(Number(item.id)) &&
+            Number(item.id) > 0 &&
+            typeof item.name === "string"
+        ) {
+            const id = Number(item.id);
+            if (!unique.has(id)) {
+                unique.set(id, { ...item, id });
+            }
+        }
+    }
+    return Array.from(unique.values()).sort((a, b) =>
+        a.name.localeCompare(b.name)
+    );
 }
 
 export function formatCurrency(value: number): string {
     if (!Number.isFinite(value)) return "—";
-
     return new Intl.NumberFormat("en-IN", {
         style: "currency",
         currency: "INR",
@@ -295,126 +467,60 @@ export function formatCurrency(value: number): string {
     }).format(value);
 }
 
+export function formatAuditActor(actor?: CommonDTO | null): string {
+    if (!actor) return "System";
+    const name = actor.name?.trim();
+    const code = actor.code?.trim();
+    if (name && code) return `${name} (${code})`;
+    if (name) return name;
+    if (code) return code;
+    if (actor.id) return `ID: #${actor.id}`;
+    return "System";
+}
+
+export function formatDate(dateStr?: string | null): string {
+    if (!dateStr) return "—";
+    try {
+        const d = new Date(dateStr);
+        if (isNaN(d.getTime())) return "—";
+        return new Intl.DateTimeFormat("en-IN", {
+            day: "2-digit",
+            month: "short",
+            year: "numeric",
+        }).format(d);
+    } catch {
+        return "—";
+    }
+}
+
+export function formatDateTime(dateStr?: string | null): string {
+    if (!dateStr) return "—";
+    try {
+        const d = new Date(dateStr);
+        if (isNaN(d.getTime())) return "—";
+        return new Intl.DateTimeFormat("en-IN", {
+            day: "2-digit",
+            month: "short",
+            year: "numeric",
+            hour: "2-digit",
+            minute: "2-digit",
+        }).format(d);
+    } catch {
+        return "—";
+    }
+}
+
+export function getInitials(name?: string): string {
+    if (!name) return "FS";
+    const parts = name.trim().split(/\s+/).filter(Boolean);
+    if (parts.length === 0) return "FS";
+    if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+    return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+}
+
 export function hasPermission(
-    item: Pick<FeeStructure, "permissionActions">,
-    action: PermissionAction,
+    item: Pick<FeeStructureResponse, "permissionActions">,
+    action: PermissionAction
 ): boolean {
-    return item.permissionActions.includes(action);
-}
-
-/** GET /{role}/fee-structures */
-export async function getFeeStructures(): Promise<FeeStructure[]> {
-    const response = await api.get(feeUrl());
-    const data = unwrap(response.data);
-
-    if (!Array.isArray(data)) {
-        throw new Error(
-            "Invalid fee structure response: expected a list from the server.",
-        );
-    }
-
-    return data.map(normalizeStructure);
-}
-
-/** GET /{role}/fee-structures/enums */
-export async function getFeeEnums(): Promise<FeeEnums> {
-    const response = await api.get(`${feeUrl()}/enums`);
-    const data = unwrap(response.data);
-    const body = asRecord(data);
-
-    if (!body) {
-        throw new Error("Invalid enum response from the server.");
-    }
-
-    return {
-        feeFrequency: normalizeEnumOptions(body.feeFrequency),
-        feeComponentType: normalizeEnumOptions(body.feeComponentType),
-    };
-}
-
-/** GET /{role}/filter/courses */
-export async function getCourseFilter(): Promise<CommonDTO[]> {
-    const response = await api.get(`${baseUrl()}/filter/courses`);
-    const data = unwrap(response.data);
-
-    if (!Array.isArray(data)) {
-        throw new Error(
-            "Invalid course-filter response: expected a List<CommonDTO>.",
-        );
-    }
-
-    return data
-        .map(normalizeCommon)
-        .filter((value): value is CommonDTO => value !== null);
-}
-
-/** GET /{role}/fee-structures/specialization/filter?courseId=... */
-export async function getSpecializationFilter(
-    courseId: number,
-): Promise<CommonDTO[]> {
-    if (!Number.isSafeInteger(courseId) || courseId <= 0) {
-        throw new Error("Select a valid course before loading specializations.");
-    }
-
-    const response = await api.get(
-        `${feeUrl()}/specialization/filter`,
-        { params: { courseId } },
-    );
-
-    const data = unwrap(response.data);
-
-    if (!Array.isArray(data)) {
-        throw new Error(
-            "Invalid specialization response: expected a list from the server.",
-        );
-    }
-
-    return data
-        .map(normalizeCommon)
-        .filter((value): value is CommonDTO => value !== null);
-}
-
-/** POST /{role}/fee-structures?courseId=... */
-export async function createFeeStructure(
-    courseId: number,
-    request: FeeStructureCreateRequest,
-): Promise<FeeStructure> {
-    if (!Number.isSafeInteger(courseId) || courseId <= 0) {
-        throw new Error("Select a valid course.");
-    }
-
-    const response = await api.post(
-        feeUrl(),
-        request,
-        { params: { courseId } },
-    );
-
-    return normalizeStructure(unwrap(response.data));
-}
-
-/** PUT /{role}/fee-structures?id=... */
-export async function updateFeeStructure(
-    id: number,
-    request: FeeStructureUpdateRequest,
-): Promise<FeeStructure> {
-    if (!Number.isSafeInteger(id) || id <= 0) {
-        throw new Error("Invalid fee structure ID.");
-    }
-
-    const response = await api.put(
-        feeUrl(),
-        request,
-        { params: { id } },
-    );
-
-    return normalizeStructure(unwrap(response.data));
-}
-
-/** DELETE /{role}/fee-structures?id=... */
-export async function deleteFeeStructure(id: number): Promise<void> {
-    if (!Number.isSafeInteger(id) || id <= 0) {
-        throw new Error("Invalid fee structure ID.");
-    }
-
-    await api.delete(feeUrl(), { params: { id } });
+    return Array.isArray(item.permissionActions) && item.permissionActions.includes(action);
 }

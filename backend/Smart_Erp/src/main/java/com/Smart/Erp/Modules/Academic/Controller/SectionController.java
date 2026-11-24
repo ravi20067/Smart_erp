@@ -1,5 +1,6 @@
 package com.Smart.Erp.Modules.Academic.Controller;
 
+import com.Smart.Erp.Core.Common.CommonDTO;
 import com.Smart.Erp.Modules.Academic.DTO.Sections.SectionRequest;
 import com.Smart.Erp.Modules.Academic.DTO.Sections.SectionResponse;
 import com.Smart.Erp.Modules.Academic.Services.SectionService;
@@ -21,16 +22,22 @@ public class SectionController {
         return ResponseEntity.ok(sectionService.getAll());
     }
 
+    //First take the courseId from common controller then select and pass it to this endpoint academic year filter last in this class to create a new section for that course.
     @PreAuthorize("@authVerifier.can(" +
             "T(com.Smart.Erp.Modules.User.Enum.PermissionAction).CREATE_CHILD, " +
             "T(com.Smart.Erp.Modules.User.Enum.ResourceType).COURSE, " +
-            "#courseId)")
+            "#courseId) &&" +
+            "@authVerifier.can(" +
+            "T(com.Smart.Erp.Modules.User.Enum.PermissionAction).CREATE_CHILD, " +
+            "T(com.Smart.Erp.Modules.User.Enum.ResourceType).ACADEMIC_YEAR, " +
+            "#academicYearId)")
     @PostMapping
     public ResponseEntity<SectionResponse> create(
             @RequestParam Long courseId,
+            @RequestParam Long academicYearId,
             @RequestBody SectionRequest request
     ){
-        return ResponseEntity.ok(sectionService.create(courseId,request));
+        return ResponseEntity.ok(sectionService.create(courseId,request,academicYearId));
     }
     @PreAuthorize("@authVerifier.can(" +
             "T(com.Smart.Erp.Modules.User.Enum.PermissionAction).UPDATE, " +
@@ -56,10 +63,14 @@ public class SectionController {
     }
 
     @PreAuthorize(
-            "@authVerifier.can(" +
+            "(@authVerifier.can(" +
                     "T(com.Smart.Erp.Modules.User.Enum.PermissionAction).CREATE_CHILD, " +
                     "T(com.Smart.Erp.Modules.User.Enum.ResourceType).COURSE, " +
-                    "#courseId) || " +
+                    "#courseId) && " +
+                    "(@authVerifier.can(" +
+                    "T(com.Smart.Erp.Modules.User.Enum.PermissionAction).CREATE_CHILD, " +
+                    "T(com.Smart.Erp.Modules.User.Enum.ResourceType).ACADEMIC_YEAR, " +
+                    "#academicYearId))) || " +
                     "(#sectionId != null && " +
                     "@authVerifier.can(" +
                     "T(com.Smart.Erp.Modules.User.Enum.PermissionAction).UPDATE, " +
@@ -69,10 +80,21 @@ public class SectionController {
     @GetMapping("/prefix")
     public ResponseEntity<String> getPrefix(
             @RequestParam(required = false) Long sectionId,
+            @RequestParam Long academicYearId,
             @RequestParam Long courseId
     ) {
-        return ResponseEntity.ok(sectionService.getPrefix(courseId));
+        return ResponseEntity.ok(sectionService.getPrefix(academicYearId,courseId));
     }
 
+
+    //It is used to get the academic year filter for the given course id. It is used in the section creation and update.
+    @PreAuthorize("@authVerifier.can(" +
+            "T(com.Smart.Erp.Modules.User.Enum.PermissionAction).CREATE_CHILD, " +
+            "T(com.Smart.Erp.Modules.User.Enum.ResourceType).COURSE, " +
+            "#courseId)")
+    @GetMapping("/academic-year/filter")
+    public ResponseEntity<List<CommonDTO>> getAcademicYearFilter(@RequestParam Long courseId){
+        return ResponseEntity.ok(sectionService.getAcademicYearFilter(courseId));
+    }
 
 }

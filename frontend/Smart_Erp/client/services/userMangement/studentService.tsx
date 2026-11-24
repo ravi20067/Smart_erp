@@ -47,6 +47,10 @@ export interface StudentIdentity {
     id: number;
     registrationNumber: string;
     basicDetailRequest: UserProfileResponse;
+    createdAt?: string | null;
+    updatedAt?: string | null;
+    createdBy?: CommonDTO | null;
+    updatedBy?: CommonDTO | null;
 }
 
 export interface FeeResponse {
@@ -78,6 +82,10 @@ export interface StudentEnrollmentResponse {
     frequency?: string | null;
     student: StudentIdentity;
     permissionActions: StudentPermissionAction[];
+    createdAt?: string | null;
+    updatedAt?: string | null;
+    createdBy?: CommonDTO | null;
+    updatedBy?: CommonDTO | null;
 }
 
 export interface SectionGroupFilter {
@@ -153,6 +161,10 @@ function normalizeStudent(value: unknown): StudentIdentity {
         id: toPositiveId(item.id),
         registrationNumber: String(item.registrationNumber ?? ""),
         basicDetailRequest: normalizeProfile(item.basicDetailRequest ?? item.profile ?? {}),
+        createdAt: typeof item.createdAt === "string" ? item.createdAt : null,
+        updatedAt: typeof item.updatedAt === "string" ? item.updatedAt : null,
+        createdBy: normalizeCommon(item.createdBy),
+        updatedBy: normalizeCommon(item.updatedBy),
     };
 }
 
@@ -184,7 +196,54 @@ export function normalizeStudentEnrollment(value: unknown): StudentEnrollmentRes
             .filter((action): action is StudentPermissionAction =>
                 STUDENT_PERMISSION_ACTIONS.includes(action as StudentPermissionAction)
             ),
+        createdAt: typeof item.createdAt === "string" ? item.createdAt : null,
+        updatedAt: typeof item.updatedAt === "string" ? item.updatedAt : null,
+        createdBy: normalizeCommon(item.createdBy),
+        updatedBy: normalizeCommon(item.updatedBy),
     };
+}
+
+/* -------------------------------------------------------------------------- */
+/* Audit and Utility Helpers                                                   */
+/* -------------------------------------------------------------------------- */
+
+export function formatDate(dateString?: string | null): string {
+    if (!dateString) return "Not specified";
+    const date = new Date(dateString);
+    if (isNaN(date.getTime())) return dateString;
+    return date.toLocaleDateString("en-US", {
+        month: "short",
+        day: "numeric",
+        year: "numeric",
+    });
+}
+
+export function formatDateTime(dateString?: string | null): string {
+    if (!dateString) return "Not specified";
+    const date = new Date(dateString);
+    if (isNaN(date.getTime())) return dateString;
+    return date.toLocaleDateString("en-US", {
+        month: "short",
+        day: "numeric",
+        year: "numeric",
+        hour: "2-digit",
+        minute: "2-digit",
+    });
+}
+
+export function formatAuditActor(actor?: CommonDTO | null): string {
+    if (!actor) return "System Administrator";
+    if (actor.name && actor.code) return `${actor.name} (${actor.code})`;
+    if (actor.name) return actor.name;
+    if (actor.code) return actor.code;
+    return `User #${actor.id}`;
+}
+
+export function getInitials(name: string): string {
+    const parts = (name || "").trim().split(/\s+/).filter(Boolean);
+    if (parts.length === 0) return "S";
+    if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+    return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
 }
 
 export function extractStudentErrorMessage(

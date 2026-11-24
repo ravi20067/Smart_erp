@@ -2,8 +2,8 @@ package com.Smart.Erp.Modules.User.Services;
 
 import com.Smart.Erp.Core.Exception.OperationNotAllowedException;
 import com.Smart.Erp.Modules.Academic.Services.AcademicCommonService;
-import com.Smart.Erp.Modules.User.DTO.Role.RoleRequest;
 import com.Smart.Erp.Modules.User.DTO.Role.RoleResponse;
+import com.Smart.Erp.Modules.User.DTO.Role.RoleRequest;
 import com.Smart.Erp.Modules.User.DTO.Role.UserRoleEnumResponse;
 import com.Smart.Erp.Modules.User.Entity.*;
 import com.Smart.Erp.Modules.User.Enum.PermissionAction;
@@ -66,6 +66,11 @@ public class RoleService {
         Role role = userCommonService.getRole(roleId);
         role.setName(roleRequest.getName());
         role.setDescription(roleRequest.getDescription());
+        if (role.getActive() != roleRequest.getActive()) {
+            if (!roleRequest.getActive() && !role.getUsers().isEmpty()) {
+                throw new OperationNotAllowedException("Role is assigned to users, cannot deactivate");
+            }
+        }
         role.setActive(roleRequest.getActive());
 
         if (role.getUserRole() != roleRequest.getUserRole()) {

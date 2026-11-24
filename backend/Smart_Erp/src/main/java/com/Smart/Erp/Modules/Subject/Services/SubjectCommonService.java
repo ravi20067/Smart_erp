@@ -1,10 +1,13 @@
 package com.Smart.Erp.Modules.Subject.Services;
 
 import com.Smart.Erp.Core.Exception.ResourceNotFoundException;
+import com.Smart.Erp.Modules.Academic.Entity.University;
 import com.Smart.Erp.Modules.Subject.Entity.Subject;
 import com.Smart.Erp.Modules.Subject.Repo.SubjectRepo;
 import lombok.AllArgsConstructor;
 import org.springframework.stereotype.Service;
+
+import java.util.List;
 
 @Service
 @AllArgsConstructor
@@ -16,5 +19,8 @@ public class SubjectCommonService {
                 () ->
                         new ResourceNotFoundException("Subject not found with id : " + subjectId)
         );
+    }
+    public List<Subject> getSubjectsByUniversity(University university) {
+        return subjectRepo.findByCodeContainingIgnoreCase(university.getCode());
     }
 }

@@ -81,6 +81,10 @@ export interface RoleResponse {
     university: CommonDTO | null;
     permissions: Permission[];
     permissionActions: PermissionAction[];
+    createdAt?: string | null;
+    updatedAt?: string | null;
+    createdBy?: CommonDTO | null;
+    updatedBy?: CommonDTO | null;
 }
 
 export interface RoleRequest {
@@ -350,7 +354,54 @@ export function normalizeRole(value: unknown): RoleResponse {
             };
         }),
         permissionActions: asArray<PermissionAction>(item.permissionActions),
+        createdAt: typeof item.createdAt === "string" ? item.createdAt : null,
+        updatedAt: typeof item.updatedAt === "string" ? item.updatedAt : null,
+        createdBy: normalizeCommonDTO(item.createdBy),
+        updatedBy: normalizeCommonDTO(item.updatedBy),
     };
+}
+
+/* -------------------------------------------------------------------------- */
+/* Audit and Utility Helpers                                                   */
+/* -------------------------------------------------------------------------- */
+
+export function formatDate(dateString?: string | null): string {
+    if (!dateString) return "Not specified";
+    const date = new Date(dateString);
+    if (isNaN(date.getTime())) return dateString;
+    return date.toLocaleDateString("en-US", {
+        month: "short",
+        day: "numeric",
+        year: "numeric",
+    });
+}
+
+export function formatDateTime(dateString?: string | null): string {
+    if (!dateString) return "Not specified";
+    const date = new Date(dateString);
+    if (isNaN(date.getTime())) return dateString;
+    return date.toLocaleDateString("en-US", {
+        month: "short",
+        day: "numeric",
+        year: "numeric",
+        hour: "2-digit",
+        minute: "2-digit",
+    });
+}
+
+export function formatAuditActor(actor?: CommonDTO | null): string {
+    if (!actor) return "System Administrator";
+    if (actor.name && actor.code) return `${actor.name} (${actor.code})`;
+    if (actor.name) return actor.name;
+    if (actor.code) return actor.code;
+    return `User #${actor.id}`;
+}
+
+export function getInitials(name: string): string {
+    const parts = (name || "").trim().split(/\s+/).filter(Boolean);
+    if (parts.length === 0) return "R";
+    if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+    return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
 }
 
 export function normalizeRoles(value: unknown): RoleResponse[] {

@@ -22,16 +22,18 @@ public class CoursesController {
         return ResponseEntity.ok(coursesService.getAll());
     }
 
+
+    //First take the departmentId from common controller then select and pass it to this endpoint to create a new course for that department.
     @PreAuthorize("@authVerifier.can(" +
             "T(com.Smart.Erp.Modules.User.Enum.PermissionAction).CREATE_CHILD, " +
-            "T(com.Smart.Erp.Modules.User.Enum.ResourceType).ACADEMIC_YEAR, " +
-            "#academicYear)")
+            "T(com.Smart.Erp.Modules.User.Enum.ResourceType).DEPARTMENT, " +
+            "#departmentId)")
     @PostMapping
     public ResponseEntity<CourseResponse> create(
-            @RequestParam Long academicYear,
+            @RequestParam Long departmentId,
             @RequestBody CommonRequest request
             ){
-        return ResponseEntity.ok(coursesService.create(academicYear,request));
+        return ResponseEntity.ok(coursesService.create(departmentId,request));
     }
 
     @PreAuthorize("@authVerifier.can(" +
@@ -59,8 +61,8 @@ public class CoursesController {
     @PreAuthorize(
             "@authVerifier.can(" +
                     "T(com.Smart.Erp.Modules.User.Enum.PermissionAction).CREATE_CHILD, " +
-                    "T(com.Smart.Erp.Modules.User.Enum.ResourceType).ACADEMIC_YEAR, " +
-                    "#academicYearId) || " +
+                    "T(com.Smart.Erp.Modules.User.Enum.ResourceType).DEPARTMENT, " +
+                    "#departmentId) || " +
                     "(#courseId != null && " +
                     "@authVerifier.can(" +
                     "T(com.Smart.Erp.Modules.User.Enum.PermissionAction).UPDATE, " +
@@ -70,8 +72,8 @@ public class CoursesController {
     @GetMapping("/prefix")
     public ResponseEntity<String> getPrefix(
             @RequestParam(required = false) Long courseId,
-            @RequestParam Long academicYearId
+            @RequestParam Long departmentId
     ) {
-        return ResponseEntity.ok(coursesService.getPrefix(academicYearId));
+        return ResponseEntity.ok(coursesService.getPrefix(departmentId));
     }
 }

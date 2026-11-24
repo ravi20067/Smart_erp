@@ -192,7 +192,7 @@ public class StudentFeeAccount extends BaseAuditableEntity {
     }
     public static StudentFeeAccount initializeFeeAccount(SectionGroup sectionGroup, Set<Scholarship> scholarships, LocalDate dueDate) {
         return StudentFeeAccount.builder()
-                .feeStructure(sectionGroup.getSpecialization().getFeeStructure())
+                .feeStructure(sectionGroup.getSpecialization().getFeeStructure(sectionGroup.getSection().getAcademicYear()))
                 .scholarships(scholarships)
                 .dueDate(dueDate)
                 .build();

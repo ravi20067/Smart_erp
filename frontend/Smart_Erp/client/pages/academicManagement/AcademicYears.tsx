@@ -1,4 +1,4 @@
-// src/pages/AcademicYears.tsx
+// src/pages/academicManagement/AcademicYears.tsx
 
 import {
     useCallback,
@@ -15,8 +15,8 @@ import {
     AlertCircle,
     AlertTriangle,
     ArrowDownUp,
-    BookOpen,
     Building2,
+    Calendar,
     CalendarDays,
     Check,
     CheckCircle2,
@@ -25,7 +25,7 @@ import {
     ChevronRight,
     ChevronsLeft,
     ChevronsRight,
-    Clock3,
+    Clock,
     Eye,
     GraduationCap,
     LoaderCircle,
@@ -35,8 +35,10 @@ import {
     RotateCcw,
     Search,
     ShieldCheck,
+    Sparkles,
     Star,
     Trash2,
+    UserCheck,
     X,
 } from "lucide-react";
 
@@ -45,9 +47,10 @@ import {
     deleteAcademicYear,
     extractEditableCode,
     extractErrorMessage,
-    getAllAcademicYears,
+    formatAuditActor,
     getAcademicYearPostfix,
-    getDepartmentFilter,
+    getAllAcademicYears,
+    getUniversityFilter,
     getStatusLabel,
     hasPermission,
     normalizeText,
@@ -67,10 +70,10 @@ import {
 
 type DialogMode = "CREATE" | "EDIT" | "VIEW" | "DELETE";
 type StatusFilter = "ALL" | ActiveStatus;
-type SortOption = "NEWEST" | "NAME_ASC" | "NAME_DESC" | "CODE_ASC";
+type SortOption = "NEWEST" | "NAME_ASC" | "NAME_DESC" | "CODE_ASC" | "START_DATE_DESC";
 
 interface YearForm {
-    departmentId: number | "";
+    universityId: number | "";
     name: string;
     code: string;
     startDate: string;
@@ -79,7 +82,7 @@ interface YearForm {
 }
 
 interface FormErrors {
-    departmentId?: string;
+    universityId?: string;
     name?: string;
     code?: string;
     startDate?: string;
@@ -87,29 +90,23 @@ interface FormErrors {
     activeStatus?: string;
 }
 
-const PAGE_SIZE = 5;
-
-const EMPTY_FORM: YearForm = {
-    departmentId: "",
-    name: "",
-    code: "",
-    startDate: "",
-    endDate: "",
-    activeStatus: "ENABLE",
-};
+const PAGE_SIZE = 8;
 
 /* -------------------------------------------------------------------------- */
 /* Helpers                                                                    */
 /* -------------------------------------------------------------------------- */
 
-function formatNumber(value: number): string {
+function formatNumber(value: number | null | undefined): string {
+    if (typeof value !== "number" || !Number.isFinite(value)) {
+        return "0";
+    }
     return new Intl.NumberFormat("en-IN").format(value);
 }
 
 function formatDate(value?: string | null): string {
     if (!value) return "—";
 
-    const date = new Date(`${value}T00:00:00`);
+    const date = new Date(value.includes("T") ? value : `${value}T00:00:00`);
 
     if (Number.isNaN(date.getTime())) return value;
 
@@ -118,6 +115,31 @@ function formatDate(value?: string | null): string {
         month: "short",
         year: "numeric",
     }).format(date);
+}
+
+function formatDateTime(dateStr?: string | null): string {
+    if (!dateStr) return "—";
+    try {
+        const d = new Date(dateStr);
+        if (isNaN(d.getTime())) return "—";
+        return new Intl.DateTimeFormat("en-IN", {
+            day: "2-digit",
+            month: "short",
+            year: "numeric",
+            hour: "2-digit",
+            minute: "2-digit",
+        }).format(d);
+    } catch {
+        return "—";
+    }
+}
+
+function getInitials(name?: string): string {
+    if (!name) return "AY";
+    const parts = name.trim().split(/\s+/).filter(Boolean);
+    if (parts.length === 0) return "AY";
+    if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+    return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
 }
 
 function getYearActions(year: AcademicYearResponse): PermissionAction[] {
@@ -130,9 +152,8 @@ function getYearCode(year: AcademicYearResponse): string {
     return typeof year.code === "string" ? year.code : "";
 }
 
-function getDepartmentId(year: AcademicYearResponse): number | null {
-    const id = year.department?.id;
-
+function getUniversityId(year: AcademicYearResponse): number | null {
+    const id = year.university?.id;
     return typeof id === "number" && id > 0 ? id : null;
 }
 
@@ -190,7 +211,7 @@ function StatusBadge({ status }: { status?: ActiveStatus | null }) {
 
     return (
         <span
-            className={`inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-xs font-semibold ${classes}`}
+            className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-semibold ${classes}`}
         >
             <span className={`h-1.5 w-1.5 rounded-full ${dot}`} />
             {getStatusLabel(status)}
@@ -260,6 +281,17 @@ function ErrorBanner({
     );
 }
 
+function InfoTile({ label, value }: { label: string; value: string }) {
+    return (
+        <div className="min-w-0 rounded-xl border border-white/10 bg-white/[0.03] p-3">
+            <p className="text-xs text-slate-400">{label}</p>
+            <p className="mt-1 break-words text-sm font-medium text-white">
+                {value}
+            </p>
+        </div>
+    );
+}
+
 /* -------------------------------------------------------------------------- */
 /* Academic Year Dialog                                                       */
 /* -------------------------------------------------------------------------- */
@@ -267,11 +299,12 @@ function ErrorBanner({
 interface YearDialogProps {
     mode: DialogMode;
     year: AcademicYearResponse | null;
-    departments: CommonDTO[];
-    departmentsLoading: boolean;
+    defaultUniversityId?: number | "";
+    universities: CommonDTO[];
+    universitiesLoading: boolean;
     busy: boolean;
     onClose: () => void;
-    onCreate: (departmentId: number, request: AcademicYearRequest) => Promise<void>;
+    onCreate: (universityId: number, request: AcademicYearRequest) => Promise<void>;
     onUpdate: (yearId: number, request: AcademicYearRequest) => Promise<void>;
     onDelete: (yearId: number) => Promise<void>;
     onSwitch?: (year: AcademicYearResponse) => Promise<void>;
@@ -280,8 +313,9 @@ interface YearDialogProps {
 function AcademicYearDialog({
     mode,
     year,
-    departments,
-    departmentsLoading,
+    defaultUniversityId,
+    universities,
+    universitiesLoading,
     busy,
     onClose,
     onCreate,
@@ -295,77 +329,110 @@ function AcademicYearDialog({
     const isDelete = mode === "DELETE";
     const readOnly = isView || isDelete;
 
+    const initialUniversityId: number | "" = isCreate
+        ? defaultUniversityId && Number(defaultUniversityId) > 0
+            ? Number(defaultUniversityId)
+            : universities.length === 1
+                ? universities[0].id
+                : ""
+        : getUniversityId(year as AcademicYearResponse) ?? "";
+
+    const initialPostfix = year?.university?.code ?? "";
+
     const [form, setForm] = useState<YearForm>(() => ({
-        departmentId: isCreate
-            ? ""
-            : getDepartmentId(year as AcademicYearResponse) ?? "",
+        universityId: initialUniversityId,
         name: year?.name ?? "",
-        code: year?.code ?? "",
+        code:
+            (isEdit || isView) && year
+                ? extractEditableCode(getYearCode(year), initialPostfix)
+                : getYearCode(year),
         startDate: year?.startDate ?? "",
         endDate: year?.endDate ?? "",
         activeStatus: year?.activeStatus ?? "ENABLE",
     }));
 
-    const [postfix, setPostfix] = useState("");
+    const [postfix, setPostfix] = useState(initialPostfix);
     const [codeLoading, setCodeLoading] = useState(false);
     const [codeError, setCodeError] = useState("");
     const [dialogError, setDialogError] = useState("");
     const [fieldErrors, setFieldErrors] = useState<FormErrors>({});
 
+    // Identify the active university object
+    const selectedUniversity = useMemo(() => {
+        const uId = Number(isCreate ? form.universityId : year?.university?.id);
+        if (!uId || uId <= 0) return null;
+        return universities.find((u) => u.id === uId) || year?.university || null;
+    }, [isCreate, form.universityId, universities, year?.university]);
+
     /*
-     * Postfix is fetched from the backend.
-     *
-     * Display: EDITABLE CODE | POSTFIX
-     * Payload: EDITABLE CODE only.
+     * Resolve Postfix:
+     * 1. Immediate resolution from selected university DTO's .code
+     * 2. Background verification from backend /postfix?universityId=...
+     * Works for CREATE, EDIT, and VIEW modes so postfix is always cleanly handled.
      */
     useEffect(() => {
         let cancelled = false;
 
-        async function loadCodeParts() {
-            const departmentId = Number(
-                isCreate ? form.departmentId : year?.department?.id
+        async function resolvePostfix() {
+            const universityId = Number(
+                isCreate ? form.universityId : year?.university?.id
             );
 
             setPostfix("");
             setCodeError("");
 
-            if (!Number.isFinite(departmentId) || departmentId <= 0) {
+            if (!Number.isFinite(universityId) || universityId <= 0) {
                 setCodeLoading(false);
                 return;
+            }
+
+            // Instant local resolve from CommonController DTO or year.university
+            const matchingUni =
+                universities.find((u) => u.id === universityId) ||
+                year?.university;
+            if (matchingUni?.code) {
+                setPostfix(matchingUni.code);
             }
 
             setCodeLoading(true);
 
             try {
                 const loadedPostfix = await getAcademicYearPostfix(
-                    departmentId,
-                    isEdit && year ? year.id : undefined
+                    universityId,
+                    (isEdit || isView) && year ? year.id : undefined
                 );
 
                 if (cancelled) return;
 
-                setPostfix(loadedPostfix);
+                const resolved = loadedPostfix || matchingUni?.code || "";
+                if (resolved) {
+                    setPostfix(resolved);
+                }
 
-                if (isEdit && year) {
+                if ((isEdit || isView) && year && resolved) {
                     setForm((current) => ({
                         ...current,
                         code: extractEditableCode(
                             getYearCode(year),
-                            loadedPostfix
+                            resolved
                         ),
                     }));
                 }
             } catch (error) {
                 if (!cancelled) {
-                    setCodeError(extractErrorMessage(error));
+                    if (matchingUni?.code) {
+                        setPostfix(matchingUni.code);
+                    } else {
+                        setCodeError(extractErrorMessage(error));
+                    }
                 }
             } finally {
                 if (!cancelled) setCodeLoading(false);
             }
         }
 
-        if (isCreate || isEdit) {
-            void loadCodeParts();
+        if (isCreate || isEdit || isView) {
+            void resolvePostfix();
         } else {
             setCodeLoading(false);
         }
@@ -376,9 +443,12 @@ function AcademicYearDialog({
     }, [
         isCreate,
         isEdit,
-        form.departmentId,
+        isView,
+        form.universityId,
+        universities,
         year?.id,
-        year?.department?.id,
+        year?.university?.id,
+        year?.university?.code,
     ]);
 
     useEffect(() => {
@@ -405,13 +475,13 @@ function AcademicYearDialog({
         const code = form.code.trim();
 
         if (isCreate) {
-            const departmentId = Number(form.departmentId);
+            const universityId = Number(form.universityId);
 
-            if (!form.departmentId || departmentId <= 0) {
-                errors.departmentId = "Please select a department.";
-            } else if (!departments.some((item) => item.id === departmentId)) {
-                errors.departmentId =
-                    "The selected department is no longer available. Reload the options.";
+            if (!form.universityId || universityId <= 0) {
+                errors.universityId = "Please select a university first.";
+            } else if (!universities.some((item) => item.id === universityId)) {
+                errors.universityId =
+                    "The selected university is no longer available. Please reload.";
             }
         }
 
@@ -423,12 +493,10 @@ function AcademicYearDialog({
             errors.name = "Name cannot exceed 150 characters.";
         }
 
-        if (!postfix) {
-            errors.code = "The fixed postfix could not be loaded.";
-        } else if (!code) {
-            errors.code = "The editable code is required.";
+        if (!code) {
+            errors.code = "The session code prefix is required.";
         } else if (code.length > 40) {
-            errors.code = "Editable code cannot exceed 40 characters.";
+            errors.code = "Session code cannot exceed 40 characters.";
         } else if (!/^[A-Za-z0-9_-]+$/.test(code)) {
             errors.code =
                 "Use only letters, numbers, hyphens, and underscores.";
@@ -471,8 +539,9 @@ function AcademicYearDialog({
                 setDialogError(
                     lower.includes("constraint") ||
                         lower.includes("foreign key") ||
-                        lower.includes("cannot delete")
-                        ? "This academic year has related records. Remove or reassign those records before deleting it."
+                        lower.includes("cannot delete") ||
+                        lower.includes("delete its courses first")
+                        ? "This academic year has associated courses or sections. Delete or reassign those records first."
                         : message
                 );
             }
@@ -485,21 +554,11 @@ function AcademicYearDialog({
             return;
         }
 
-        if (codeLoading) {
-            setDialogError("Please wait while the fixed code parts load.");
-            return;
-        }
-
-        if (codeError) {
-            setDialogError(codeError);
-            return;
-        }
-
         if (!validate()) return;
 
         const request: AcademicYearRequest = {
             name: form.name.trim(),
-            // Never send the postfix.
+            // Only send the prefix; backend automatically appends the university code
             code: form.code.trim(),
             startDate: form.startDate,
             endDate: form.endDate,
@@ -508,7 +567,8 @@ function AcademicYearDialog({
 
         try {
             if (isCreate) {
-                await onCreate(Number(form.departmentId), request);
+                // Must pass universityId as required by @RequestParam Long universityId
+                await onCreate(Number(form.universityId), request);
             } else if (isEdit && year) {
                 await onUpdate(year.id, request);
             }
@@ -619,8 +679,7 @@ function AcademicYearDialog({
                                         <strong className="text-white">
                                             {year?.name}
                                         </strong>
-                                        . This operation may be blocked if
-                                        related records exist.
+                                        . This action cannot be reversed and requires all linked courses to be deleted first.
                                     </p>
                                     <p className="mt-2 break-all font-mono text-xs text-cyan-300">
                                         {year?.code}
@@ -630,50 +689,48 @@ function AcademicYearDialog({
                         </div>
                     ) : (
                         <>
+                            {/* Select University (CREATE mode) */}
                             {isCreate && (
                                 <div>
                                     <label
-                                        htmlFor="academic-year-department"
+                                        htmlFor="academic-year-university"
                                         className="mb-2 block text-sm font-medium text-slate-300"
                                     >
-                                        Department{" "}
+                                        University{" "}
                                         <span className="text-cyan-400">*</span>
                                     </label>
 
                                     <div className="relative">
                                         <select
-                                            id="academic-year-department"
-                                            value={form.departmentId}
+                                            id="academic-year-university"
+                                            value={form.universityId}
                                             onChange={(event) => {
-                                                changeField(
-                                                    "departmentId",
-                                                    event.target.value
-                                                        ? Number(event.target.value)
-                                                        : ""
-                                                );
-                                                changeField("code", "");
+                                                const uId = event.target.value
+                                                    ? Number(event.target.value)
+                                                    : "";
+                                                changeField("universityId", uId);
                                             }}
                                             disabled={
                                                 busy ||
-                                                departmentsLoading ||
-                                                departments.length === 0
+                                                universitiesLoading ||
+                                                universities.length === 0
                                             }
                                             className={`${inputClass} appearance-none pr-10`}
                                         >
                                             <option value="">
-                                                {departmentsLoading
-                                                    ? "Loading departments..."
-                                                    : "Select department"}
+                                                {universitiesLoading
+                                                    ? "Loading universities..."
+                                                    : "Select University"}
                                             </option>
 
-                                            {departments.map((department) => (
+                                            {universities.map((uni) => (
                                                 <option
-                                                    key={department.id}
-                                                    value={department.id}
+                                                    key={uni.id}
+                                                    value={uni.id}
                                                 >
-                                                    {department.name}
-                                                    {department.code
-                                                        ? ` (${department.code})`
+                                                    {uni.name}
+                                                    {uni.code
+                                                        ? ` (${uni.code})`
                                                         : ""}
                                                 </option>
                                             ))}
@@ -682,37 +739,41 @@ function AcademicYearDialog({
                                     </div>
 
                                     <FieldError>
-                                        {fieldErrors.departmentId}
+                                        {fieldErrors.universityId}
                                     </FieldError>
-
-                                    {!departmentsLoading &&
-                                        departments.length === 0 && (
-                                            <p className="mt-2 text-xs text-amber-300">
-                                                No departments are available.
-                                                Academic year creation is unavailable.
-                                            </p>
-                                        )}
                                 </div>
                             )}
 
+                            {/* Linked University Display (EDIT / VIEW mode) */}
                             {!isCreate && (
                                 <div>
                                     <label className="mb-2 block text-sm font-medium text-slate-300">
-                                        Department
+                                        Associated University
                                     </label>
-                                    <div className="rounded-xl border border-white/10 bg-white/[0.035] px-4 py-3">
-                                        <p className="font-medium text-white">
-                                            {year?.department?.name ?? "—"}
-                                        </p>
-                                        {year?.department?.code && (
-                                            <p className="mt-1 font-mono text-xs text-cyan-300">
-                                                {year.department.code}
-                                            </p>
+                                    <div className="rounded-xl border border-white/10 bg-white/[0.035] px-4 py-3 flex items-center justify-between">
+                                        <div className="flex items-center gap-2.5">
+                                            <Building2 size={16} className="text-cyan-400" />
+                                            <div>
+                                                <p className="font-medium text-white text-sm">
+                                                    {year?.university?.name ?? "—"}
+                                                </p>
+                                                {year?.university?.id && (
+                                                    <p className="text-xs text-slate-400 font-mono">
+                                                        University ID #{year.university.id}
+                                                    </p>
+                                                )}
+                                            </div>
+                                        </div>
+                                        {year?.university?.code && (
+                                            <span className="rounded-md border border-cyan-400/30 bg-cyan-400/10 px-2 py-0.5 font-mono text-xs text-cyan-300">
+                                                {year.university.code}
+                                            </span>
                                         )}
                                     </div>
                                 </div>
                             )}
 
+                            {/* Academic Year Name */}
                             <div>
                                 <div className="mb-2 flex items-center justify-between gap-3">
                                     <label
@@ -741,6 +802,7 @@ function AcademicYearDialog({
                                 <FieldError>{fieldErrors.name}</FieldError>
                             </div>
 
+                            {/* Academic Year Code with Postfix */}
                             <div>
                                 <label
                                     htmlFor="academic-year-code"
@@ -750,63 +812,63 @@ function AcademicYearDialog({
                                     <span className="text-cyan-400">*</span>
                                 </label>
 
-                                {isCreate || isEdit ? (
-                                    <div className="flex min-w-0 overflow-hidden rounded-xl border border-white/10 bg-slate-950/60 focus-within:border-cyan-400/60">
-                                        {/* Editable code: LEFT */}
-                                        <input
-                                            id="academic-year-code"
-                                            value={form.code}
-                                            onChange={(event) =>
-                                                changeField(
-                                                    "code",
-                                                    event.target.value.toUpperCase()
-                                                )
-                                            }
-                                            readOnly={busy}
-                                            maxLength={40}
-                                            placeholder="2026"
-                                            className="min-w-0 flex-1 bg-transparent px-3 py-3 font-mono text-sm uppercase text-white outline-none placeholder:text-slate-600 sm:px-4"
-                                        />
-
-                                        {/* Fixed postfix: RIGHT */}
-                                        <div className="flex max-w-[45%] shrink-0 items-center border-l border-white/10 bg-white/[0.04] px-3 font-mono text-xs text-cyan-300 sm:px-4 sm:text-sm">
-                                            <span className="truncate">
-                                                {codeLoading ? "Loading…" : postfix || "POSTFIX"}
-                                            </span>
-                                        </div>
-                                    </div>
-                                ) : (
+                                <div className="flex min-w-0 overflow-hidden rounded-xl border border-white/10 bg-slate-950/60 focus-within:border-cyan-400/60">
+                                    {/* Code prefix (editable in create/edit, readOnly in view) */}
                                     <input
                                         id="academic-year-code"
                                         value={form.code}
-                                        readOnly
-                                        className={inputClass}
+                                        onChange={(event) =>
+                                            changeField(
+                                                "code",
+                                                event.target.value.toUpperCase()
+                                            )
+                                        }
+                                        readOnly={readOnly || busy}
+                                        maxLength={40}
+                                        placeholder="2026"
+                                        className="min-w-0 flex-1 bg-transparent px-3 py-3 font-mono text-sm uppercase text-white outline-none placeholder:text-slate-600 sm:px-4 read-only:opacity-75"
                                     />
-                                )}
+
+                                    {/* Fixed postfix (University Code): RIGHT */}
+                                    <div className="flex max-w-[45%] shrink-0 items-center border-l border-white/10 bg-white/[0.04] px-3 font-mono text-xs text-cyan-300 sm:px-4 sm:text-sm">
+                                        <span className="truncate">
+                                            {codeLoading
+                                                ? "Loading…"
+                                                : postfix ||
+                                                  selectedUniversity?.code ||
+                                                  year?.university?.code ||
+                                                  "UNI-CODE"}
+                                        </span>
+                                    </div>
+                                </div>
 
                                 <FieldError>
                                     {fieldErrors.code || codeError}
                                 </FieldError>
 
                                 <p className="mt-2 text-[11px] leading-relaxed text-slate-500">
-                                    The postfix is generated by the backend
-                                    from the selected department and placed on the
-                                    right. Only the code before the postfix is entered.
+                                    Backend automatically appends the selected university code postfix. Only enter the session prefix.
                                 </p>
 
-                                {!codeLoading && postfix && (
-                                    <div className="mt-3 rounded-xl border border-cyan-400/15 bg-cyan-400/[0.04] p-3">
-                                        <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-500">
-                                            Preview
-                                        </p>
-                                        <p className="mt-1 break-all font-mono text-sm text-cyan-200">
-                                            {form.code.trim() || "CODE"}
-                                            {postfix}
-                                        </p>
+                                {(postfix || selectedUniversity?.code) && (
+                                    <div className="mt-3 rounded-xl border border-cyan-400/15 bg-cyan-400/[0.04] p-3 flex items-center justify-between">
+                                        <div>
+                                            <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-500">
+                                                Resulting Code
+                                            </p>
+                                            <p className="mt-0.5 break-all font-mono text-sm font-semibold text-cyan-200">
+                                                {form.code.trim() || "SESSION"}
+                                                {postfix || selectedUniversity?.code}
+                                            </p>
+                                        </div>
+                                        <span className="text-[10px] font-mono text-slate-500">
+                                            Auto-Postfix
+                                        </span>
                                     </div>
                                 )}
                             </div>
 
+                            {/* Dates */}
                             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                                 <div>
                                     <label
@@ -854,6 +916,7 @@ function AcademicYearDialog({
                                 </div>
                             </div>
 
+                            {/* Active Status */}
                             {!isCreate && (
                                 <div>
                                     <label
@@ -887,29 +950,45 @@ function AcademicYearDialog({
                                 </div>
                             )}
 
+                            {/* View Mode Details & Audit Showcase */}
                             {isView && year && (
-                                <div className="space-y-3">
+                                <div className="space-y-4 pt-2">
                                     <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">
                                         Academic Year Information
                                     </p>
                                     <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                                        <InfoTile label="ID" value={String(year.id)} />
+                                        <InfoTile label="Academic Year ID" value={`#${year.id}`} />
                                         <InfoTile
-                                            label="Current Year"
-                                            value={year.current ? "Yes" : "No"}
-                                        />
-                                        <InfoTile
-                                            label="School"
-                                            value={year.school?.name ?? "—"}
+                                            label="Current Active Year"
+                                            value={year.current ? "Yes (Current Session)" : "No"}
                                         />
                                         <InfoTile
                                             label="University"
-                                            value={year.university?.name ?? "—"}
+                                            value={year.university ? `${year.university.name}${year.university.code ? ` (${year.university.code})` : ""}` : "—"}
                                         />
                                         <InfoTile
-                                            label="Courses"
+                                            label="Duration"
+                                            value={`${formatDate(year.startDate)} to ${formatDate(year.endDate)}`}
+                                        />
+                                        <InfoTile
+                                            label="Full System Code"
+                                            value={year.code || "—"}
+                                        />
+                                        <InfoTile
+                                            label="Session Prefix"
                                             value={
-                                                year.courses?.map((item) => item.name).join(", ") ||
+                                                extractEditableCode(
+                                                    getYearCode(year),
+                                                    postfix ||
+                                                        year.university?.code
+                                                ) || "—"
+                                            }
+                                        />
+                                        <InfoTile
+                                            label="University Postfix"
+                                            value={
+                                                postfix ||
+                                                year.university?.code ||
                                                 "—"
                                             }
                                         />
@@ -917,6 +996,91 @@ function AcademicYearDialog({
                                             label="Permissions"
                                             value={getYearActions(year).join(", ") || "View only"}
                                         />
+                                    </div>
+
+                                    {/* Audit & Governance Showcase */}
+                                    <div className="rounded-xl border border-white/10 bg-slate-950/40 p-3 space-y-2.5">
+                                        <div className="flex items-center justify-between">
+                                            <span className="text-xs font-semibold text-slate-300 flex items-center gap-1.5">
+                                                <ShieldCheck size={13} className="text-emerald-400" />
+                                                Audit Trail & Governance
+                                            </span>
+                                            <span className="text-[10px] uppercase tracking-wider text-slate-500 font-mono">
+                                                System Records
+                                            </span>
+                                        </div>
+
+                                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
+                                            {/* Created By Card */}
+                                            <div className="rounded-lg border border-emerald-500/20 bg-emerald-500/5 p-2.5 space-y-1.5">
+                                                <div className="flex items-center justify-between text-[10px] text-emerald-400 font-medium">
+                                                    <span className="flex items-center gap-1">
+                                                        <UserCheck size={11} /> Created By
+                                                    </span>
+                                                    {year.createdAt && (
+                                                        <span className="text-slate-400 font-mono text-[10px]">
+                                                            {formatDate(year.createdAt)}
+                                                        </span>
+                                                    )}
+                                                </div>
+                                                <div className="flex items-center gap-2">
+                                                    <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-emerald-500/20 text-[10px] font-bold text-emerald-300">
+                                                        {getInitials(year.createdBy?.name || "System")}
+                                                    </div>
+                                                    <div className="min-w-0 flex-1">
+                                                        <p className="truncate font-semibold text-slate-200 text-xs">
+                                                            {year.createdBy?.name || "System Administrator"}
+                                                        </p>
+                                                        {(year.createdBy?.code || year.createdBy?.id) && (
+                                                            <p className="text-[10px] text-slate-400 font-mono truncate">
+                                                                {year.createdBy.code ? `Code: ${year.createdBy.code}` : `ID: #${year.createdBy.id}`}
+                                                            </p>
+                                                        )}
+                                                    </div>
+                                                </div>
+                                                {year.createdAt && (
+                                                    <div className="text-[10px] text-slate-500 flex items-center gap-1 pt-0.5 border-t border-emerald-500/10">
+                                                        <Clock size={10} className="text-slate-400 shrink-0" />
+                                                        <span className="truncate">Timestamp: {formatDateTime(year.createdAt)}</span>
+                                                    </div>
+                                                )}
+                                            </div>
+
+                                            {/* Updated By Card */}
+                                            <div className="rounded-lg border border-cyan-500/20 bg-cyan-500/5 p-2.5 space-y-1.5">
+                                                <div className="flex items-center justify-between text-[10px] text-cyan-400 font-medium">
+                                                    <span className="flex items-center gap-1">
+                                                        <RotateCcw size={11} /> Last Modified By
+                                                    </span>
+                                                    {(year.updatedAt || year.createdAt) && (
+                                                        <span className="text-slate-400 font-mono text-[10px]">
+                                                            {formatDate(year.updatedAt || year.createdAt)}
+                                                        </span>
+                                                    )}
+                                                </div>
+                                                <div className="flex items-center gap-2">
+                                                    <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-cyan-500/20 text-[10px] font-bold text-cyan-300">
+                                                        {getInitials(year.updatedBy?.name || year.createdBy?.name || "System")}
+                                                    </div>
+                                                    <div className="min-w-0 flex-1">
+                                                        <p className="truncate font-semibold text-slate-200 text-xs">
+                                                            {year.updatedBy?.name || year.createdBy?.name || "System Administrator"}
+                                                        </p>
+                                                        {(year.updatedBy?.code || year.updatedBy?.id) && (
+                                                            <p className="text-[10px] text-slate-400 font-mono truncate">
+                                                                {year.updatedBy.code ? `Code: ${year.updatedBy.code}` : `ID: #${year.updatedBy.id}`}
+                                                            </p>
+                                                        )}
+                                                    </div>
+                                                </div>
+                                                {(year.updatedAt || year.createdAt) && (
+                                                    <div className="text-[10px] text-slate-500 flex items-center gap-1 pt-0.5 border-t border-cyan-500/10">
+                                                        <Clock size={10} className="text-slate-400 shrink-0" />
+                                                        <span className="truncate">Timestamp: {formatDateTime(year.updatedAt || year.createdAt)}</span>
+                                                    </div>
+                                                )}
+                                            </div>
+                                        </div>
                                     </div>
                                 </div>
                             )}
@@ -955,8 +1119,9 @@ function AcademicYearDialog({
                                     busy ||
                                     codeLoading ||
                                     (isCreate &&
-                                        (departmentsLoading ||
-                                            departments.length === 0))
+                                        (universitiesLoading ||
+                                            universities.length === 0 ||
+                                            !form.universityId))
                                 }
                                 className={`inline-flex items-center justify-center gap-2 rounded-xl px-5 py-2.5 text-sm font-semibold text-white shadow-lg transition hover:-translate-y-0.5 hover:brightness-110 active:translate-y-0 disabled:cursor-not-allowed disabled:opacity-50 ${isDelete
                                     ? "bg-gradient-to-r from-red-600 to-rose-500 shadow-red-500/20"
@@ -989,17 +1154,6 @@ function AcademicYearDialog({
     );
 }
 
-function InfoTile({ label, value }: { label: string; value: string }) {
-    return (
-        <div className="min-w-0 rounded-xl border border-white/10 bg-white/[0.03] p-3">
-            <p className="text-xs text-slate-500">{label}</p>
-            <p className="mt-1 break-words text-sm font-medium text-white">
-                {value}
-            </p>
-        </div>
-    );
-}
-
 /* -------------------------------------------------------------------------- */
 /* Main Academic Year Page                                                    */
 /* -------------------------------------------------------------------------- */
@@ -1008,23 +1162,20 @@ export default function AcademicYears() {
     const reduceMotion = useReducedMotion();
 
     const [years, setYears] = useState<AcademicYearResponse[]>([]);
-    const [departmentsForCreate, setDepartmentsForCreate] = useState<CommonDTO[]>([]);
+    const [universities, setUniversities] = useState<CommonDTO[]>([]);
 
     const [loading, setLoading] = useState(true);
     const [refreshing, setRefreshing] = useState(false);
-    const [departmentsLoading, setDepartmentsLoading] = useState(false);
+    const [universitiesLoading, setUniversitiesLoading] = useState(false);
     const [busy, setBusy] = useState(false);
 
     const [pageError, setPageError] = useState("");
-    const [departmentOptionsError, setDepartmentOptionsError] = useState("");
     const [notice, setNotice] = useState("");
 
-    /* Table filters are all local; they never make filter API calls. */
+    /* Local Filters */
     const [search, setSearch] = useState("");
     const [statusFilter, setStatusFilter] = useState<StatusFilter>("ALL");
-    const [universityFilter, setUniversityFilter] = useState("ALL");
-    const [schoolFilter, setSchoolFilter] = useState("ALL");
-    const [departmentFilter, setDepartmentFilter] = useState("ALL");
+    const [universityFilter, setUniversityFilter] = useState<string>("ALL");
     const [currentFilter, setCurrentFilter] = useState("ALL");
     const [sort, setSort] = useState<SortOption>("NEWEST");
     const [page, setPage] = useState(1);
@@ -1032,10 +1183,32 @@ export default function AcademicYears() {
     const [dialog, setDialog] = useState<{
         mode: DialogMode;
         year: AcademicYearResponse | null;
+        defaultUniversityId?: number | "";
     } | null>(null);
 
     /* ---------------------------------------------------------------------- */
-    /* Load academic years                                                     */
+    /* Load universities from CommonController (Only used while creating)     */
+    /* ---------------------------------------------------------------------- */
+
+    const loadUniversities = useCallback(async () => {
+        setUniversitiesLoading(true);
+
+        try {
+            const result = await getUniversityFilter();
+            const options = uniqueDTOs(result);
+            setUniversities(options);
+            return options;
+        } catch (error) {
+            const message = extractErrorMessage(error);
+            toast.error(`Could not load universities: ${message}`);
+            return [];
+        } finally {
+            setUniversitiesLoading(false);
+        }
+    }, []);
+
+    /* ---------------------------------------------------------------------- */
+    /* Load academic years                                                    */
     /* ---------------------------------------------------------------------- */
 
     const loadData = useCallback(async (background = false) => {
@@ -1057,6 +1230,7 @@ export default function AcademicYears() {
         }
     }, []);
 
+    // Load academic years on mount
     useEffect(() => {
         void loadData();
     }, [loadData]);
@@ -1068,47 +1242,36 @@ export default function AcademicYears() {
         return () => window.clearTimeout(timer);
     }, [notice]);
 
-    /* ---------------------------------------------------------------------- */
-    /* Load department options only for creation                              */
-    /* ---------------------------------------------------------------------- */
-
-    const loadDepartmentOptions = useCallback(async () => {
-        setDepartmentsLoading(true);
-        setDepartmentOptionsError("");
-
-        try {
-            const result = await getDepartmentFilter();
-            const options = uniqueDTOs(result);
-            setDepartmentsForCreate(options);
-            return options;
-        } catch (error) {
-            const message = extractErrorMessage(error);
-            setDepartmentOptionsError(message);
-            toast.error(`Could not load department options: ${message}`);
-            throw error;
-        } finally {
-            setDepartmentsLoading(false);
+    /* Unique universities from loaded academic years data for local filter */
+    const tableUniversities = useMemo(() => {
+        const map = new Map<number, CommonDTO>();
+        for (const year of years) {
+            if (year.university && typeof year.university.id === "number") {
+                map.set(year.university.id, year.university);
+            }
         }
-    }, []);
+        return Array.from(map.values()).sort((a, b) =>
+            (a.name || "").localeCompare(b.name || "")
+        );
+    }, [years]);
 
-    async function openCreateDialog() {
+    function openCreateDialog() {
         setPageError("");
         setNotice("");
 
-        try {
-            const options = await loadDepartmentOptions();
-
-            if (options.length === 0) {
-                toast.error(
-                    "No departments are available. An academic year cannot be created."
-                );
-                return;
-            }
-
-            setDialog({ mode: "CREATE", year: null });
-        } catch {
-            // The department-options error is displayed separately.
+        // Fetch universities from common controller if not already loaded
+        if (universities.length === 0) {
+            void loadUniversities();
         }
+
+        // If a university is selected in table filter, pre-select it
+        const defaultUni =
+            universityFilter !== "ALL" ? Number(universityFilter) : "";
+        setDialog({
+            mode: "CREATE",
+            year: null,
+            defaultUniversityId: defaultUni,
+        });
     }
 
     function openDialog(
@@ -1119,25 +1282,6 @@ export default function AcademicYears() {
         setNotice("");
         setDialog({ mode, year });
     }
-
-    /* ---------------------------------------------------------------------- */
-    /* Derive table filter options from the loaded academic-year data          */
-    /* ---------------------------------------------------------------------- */
-
-    const tableUniversities = useMemo(
-        () => uniqueDTOs(years.map((year) => year.university)),
-        [years]
-    );
-
-    const tableSchools = useMemo(
-        () => uniqueDTOs(years.map((year) => year.school)),
-        [years]
-    );
-
-    const tableDepartments = useMemo(
-        () => uniqueDTOs(years.map((year) => year.department)),
-        [years]
-    );
 
     /* ---------------------------------------------------------------------- */
     /* Statistics                                                             */
@@ -1163,7 +1307,7 @@ export default function AcademicYears() {
                 tone: "green",
             },
             {
-                label: "Current Academic Years",
+                label: "Current Sessions",
                 value: formatNumber(current),
                 icon: Star,
                 tone: "purple",
@@ -1190,14 +1334,10 @@ export default function AcademicYears() {
                 normalizeText(year.name).includes(query) ||
                 normalizeText(year.code).includes(query) ||
                 String(year.id).includes(query) ||
-                normalizeText(year.department?.name).includes(query) ||
-                normalizeText(year.department?.code).includes(query) ||
-                normalizeText(year.school?.name).includes(query) ||
                 normalizeText(year.university?.name).includes(query) ||
-                (Array.isArray(year.courses) &&
-                    year.courses.some((course) =>
-                        normalizeText(course.name).includes(query)
-                    ));
+                normalizeText(year.university?.code).includes(query) ||
+                normalizeText(year.createdBy?.name).includes(query) ||
+                normalizeText(year.updatedBy?.name).includes(query);
 
             const matchesStatus =
                 statusFilter === "ALL" || year.activeStatus === statusFilter;
@@ -1205,14 +1345,6 @@ export default function AcademicYears() {
             const matchesUniversity =
                 universityFilter === "ALL" ||
                 year.university?.id === Number(universityFilter);
-
-            const matchesSchool =
-                schoolFilter === "ALL" ||
-                year.school?.id === Number(schoolFilter);
-
-            const matchesDepartment =
-                departmentFilter === "ALL" ||
-                year.department?.id === Number(departmentFilter);
 
             const matchesCurrent =
                 currentFilter === "ALL" ||
@@ -1223,8 +1355,6 @@ export default function AcademicYears() {
                 matchesSearch &&
                 matchesStatus &&
                 matchesUniversity &&
-                matchesSchool &&
-                matchesDepartment &&
                 matchesCurrent
             );
         });
@@ -1242,6 +1372,10 @@ export default function AcademicYears() {
                 return (a.code ?? "").localeCompare(b.code ?? "");
             }
 
+            if (sort === "START_DATE_DESC") {
+                return (b.startDate ?? "").localeCompare(a.startDate ?? "");
+            }
+
             return (b.id ?? 0) - (a.id ?? 0);
         });
 
@@ -1251,8 +1385,6 @@ export default function AcademicYears() {
         search,
         statusFilter,
         universityFilter,
-        schoolFilter,
-        departmentFilter,
         currentFilter,
         sort,
     ]);
@@ -1275,8 +1407,6 @@ export default function AcademicYears() {
         search,
         statusFilter,
         universityFilter,
-        schoolFilter,
-        departmentFilter,
         currentFilter,
         sort,
     ]);
@@ -1289,8 +1419,6 @@ export default function AcademicYears() {
         search.trim() !== "" ||
         statusFilter !== "ALL" ||
         universityFilter !== "ALL" ||
-        schoolFilter !== "ALL" ||
-        departmentFilter !== "ALL" ||
         currentFilter !== "ALL" ||
         sort !== "NEWEST";
 
@@ -1298,8 +1426,6 @@ export default function AcademicYears() {
         setSearch("");
         setStatusFilter("ALL");
         setUniversityFilter("ALL");
-        setSchoolFilter("ALL");
-        setDepartmentFilter("ALL");
         setCurrentFilter("ALL");
         setSort("NEWEST");
         setPage(1);
@@ -1310,13 +1436,13 @@ export default function AcademicYears() {
     /* ---------------------------------------------------------------------- */
 
     async function handleCreate(
-        departmentId: number,
+        universityId: number,
         request: AcademicYearRequest
     ) {
         setBusy(true);
 
         try {
-            await createAcademicYear(departmentId, request);
+            await createAcademicYear(universityId, request);
 
             setDialog(null);
             setNotice("Academic year created successfully.");
@@ -1376,10 +1502,10 @@ export default function AcademicYears() {
     }
 
     async function handleSwitch(year: AcademicYearResponse) {
-        const departmentId = getDepartmentId(year);
+        const universityId = getUniversityId(year);
 
-        if (!departmentId) {
-            toast.error("Cannot switch this academic year: department ID is missing.");
+        if (!universityId) {
+            toast.error("Cannot switch this academic year: University ID is missing.");
             return;
         }
 
@@ -1389,7 +1515,7 @@ export default function AcademicYears() {
         }
 
         const confirmed = window.confirm(
-            `Switch the current academic year to "${year.name}"?`
+            `Switch current active academic year for ${year.university?.name || "university"} to "${year.name}"?`
         );
 
         if (!confirmed) return;
@@ -1397,7 +1523,7 @@ export default function AcademicYears() {
         setBusy(true);
 
         try {
-            const message = await switchAcademicYear(departmentId, year.id);
+            const message = await switchAcademicYear(universityId, year.id);
             toast.success(message);
             setNotice(message);
             await loadData(true);
@@ -1444,15 +1570,17 @@ export default function AcademicYears() {
                             Academic Year Management
                         </h1>
                         <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-400 sm:text-base">
-                            Manage academic sessions, review institutional
-                            associations, and switch the current academic year.
+                            Configure university-scoped academic sessions, track audit history, and switch current operational sessions.
                         </p>
                     </div>
 
                     <div className="flex flex-wrap items-center gap-3">
                         <button
                             type="button"
-                            onClick={() => void loadData(true)}
+                            onClick={() => {
+                                void loadUniversities();
+                                void loadData(true);
+                            }}
                             disabled={loading || refreshing || busy}
                             title="Refresh academic years"
                             className="inline-flex items-center justify-center gap-2 rounded-xl border border-white/10 bg-slate-900/60 px-4 py-3 text-sm font-medium text-slate-300 transition hover:bg-white/10 hover:text-white disabled:opacity-50"
@@ -1472,7 +1600,7 @@ export default function AcademicYears() {
 
                         <button
                             type="button"
-                            onClick={() => void openCreateDialog()}
+                            onClick={openCreateDialog}
                             disabled={loading || refreshing || busy}
                             className="inline-flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-violet-600 via-blue-600 to-cyan-500 px-5 py-3 text-sm font-semibold text-white shadow-lg shadow-blue-500/20 transition duration-200 hover:-translate-y-0.5 hover:brightness-110 active:translate-y-0 disabled:cursor-not-allowed disabled:opacity-50"
                         >
@@ -1491,17 +1619,6 @@ export default function AcademicYears() {
                         message={pageError}
                         onRetry={() => void loadData()}
                         onDismiss={() => setPageError("")}
-                    />
-                )}
-
-                {departmentOptionsError && (
-                    <ErrorBanner
-                        title="Department options unavailable"
-                        message={departmentOptionsError}
-                        onRetry={() =>
-                            void loadDepartmentOptions().catch(() => undefined)
-                        }
-                        onDismiss={() => setDepartmentOptionsError("")}
                     />
                 )}
 
@@ -1583,20 +1700,21 @@ export default function AcademicYears() {
                 })}
             </section>
 
-            {/* Table and local filters */}
+            {/* Main Table / Cards Card */}
             <GlassCard>
-                <div className="grid gap-4 border-b border-white/10 p-4 sm:p-5 xl:grid-cols-3 2xl:grid-cols-[minmax(220px,1.5fr)_160px_180px_180px_180px_170px_170px_auto]">
-                    {/* Search by name and code, plus related fields */}
-                    <div className="relative min-w-0">
+                {/* Search & Filter Toolbar */}
+                <div className="grid gap-3 border-b border-white/10 p-4 sm:p-5 sm:grid-cols-2 lg:grid-cols-5">
+                    {/* Search Input */}
+                    <div className="relative min-w-0 sm:col-span-2 lg:col-span-1">
                         <Search
                             size={17}
                             className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400"
                         />
                         <input
-                            aria-label="Search academic years by name or code"
+                            aria-label="Search academic years"
                             value={search}
                             onChange={(event) => setSearch(event.target.value)}
-                            placeholder="Search name, code, department..."
+                            placeholder="Search name, code, author..."
                             className="w-full rounded-xl border border-white/10 bg-slate-950/50 py-3 pl-10 pr-9 text-sm text-white outline-none transition placeholder:text-slate-500 focus:border-cyan-400/50"
                         />
                         {search && (
@@ -1611,6 +1729,28 @@ export default function AcademicYears() {
                         )}
                     </div>
 
+                    {/* University Filter (from loaded academic years data) */}
+                    <div className="relative">
+                        <select
+                            aria-label="Filter by university"
+                            value={universityFilter}
+                            onChange={(event) =>
+                                setUniversityFilter(event.target.value)
+                            }
+                            className="w-full appearance-none rounded-xl border border-white/10 bg-slate-950/50 px-3.5 py-3 pr-9 text-sm text-white outline-none focus:border-cyan-400/50"
+                        >
+                            <option value="ALL">All universities</option>
+                            {tableUniversities.map((uni) => (
+                                <option key={uni.id} value={uni.id}>
+                                    {uni.name}
+                                    {uni.code ? ` (${uni.code})` : ""}
+                                </option>
+                            ))}
+                        </select>
+                        <SelectChevron />
+                    </div>
+
+                    {/* Status Filter */}
                     <div className="relative">
                         <select
                             aria-label="Filter by status"
@@ -1621,66 +1761,16 @@ export default function AcademicYears() {
                             className="w-full appearance-none rounded-xl border border-white/10 bg-slate-950/50 px-3.5 py-3 pr-9 text-sm text-white outline-none focus:border-cyan-400/50"
                         >
                             <option value="ALL">All statuses</option>
-                            <option value="ENABLE">Active</option>
-                            <option value="DISABLE">Inactive</option>
+                            <option value="ENABLE">Active (Enabled)</option>
+                            <option value="DISABLE">Inactive (Disabled)</option>
                         </select>
                         <SelectChevron />
                     </div>
 
+                    {/* Current Year Filter */}
                     <div className="relative">
                         <select
-                            aria-label="Filter by university"
-                            value={universityFilter}
-                            onChange={(event) => setUniversityFilter(event.target.value)}
-                            className="w-full appearance-none rounded-xl border border-white/10 bg-slate-950/50 px-3.5 py-3 pr-9 text-sm text-white outline-none focus:border-cyan-400/50"
-                        >
-                            <option value="ALL">All universities</option>
-                            {tableUniversities.map((item) => (
-                                <option key={item.id} value={item.id}>
-                                    {item.name}
-                                </option>
-                            ))}
-                        </select>
-                        <SelectChevron />
-                    </div>
-
-                    <div className="relative">
-                        <select
-                            aria-label="Filter by school"
-                            value={schoolFilter}
-                            onChange={(event) => setSchoolFilter(event.target.value)}
-                            className="w-full appearance-none rounded-xl border border-white/10 bg-slate-950/50 px-3.5 py-3 pr-9 text-sm text-white outline-none focus:border-cyan-400/50"
-                        >
-                            <option value="ALL">All schools</option>
-                            {tableSchools.map((item) => (
-                                <option key={item.id} value={item.id}>
-                                    {item.name}
-                                </option>
-                            ))}
-                        </select>
-                        <SelectChevron />
-                    </div>
-
-                    <div className="relative">
-                        <select
-                            aria-label="Filter by department"
-                            value={departmentFilter}
-                            onChange={(event) => setDepartmentFilter(event.target.value)}
-                            className="w-full appearance-none rounded-xl border border-white/10 bg-slate-950/50 px-3.5 py-3 pr-9 text-sm text-white outline-none focus:border-cyan-400/50"
-                        >
-                            <option value="ALL">All departments</option>
-                            {tableDepartments.map((item) => (
-                                <option key={item.id} value={item.id}>
-                                    {item.name}
-                                </option>
-                            ))}
-                        </select>
-                        <SelectChevron />
-                    </div>
-
-                    <div className="relative">
-                        <select
-                            aria-label="Filter by current year"
+                            aria-label="Filter by current session"
                             value={currentFilter}
                             onChange={(event) => setCurrentFilter(event.target.value)}
                             className="w-full appearance-none rounded-xl border border-white/10 bg-slate-950/50 px-3.5 py-3 pr-9 text-sm text-white outline-none focus:border-cyan-400/50"
@@ -1692,51 +1782,56 @@ export default function AcademicYears() {
                         <SelectChevron />
                     </div>
 
-                    <div className="relative">
-                        <select
-                            aria-label="Sort academic years"
-                            value={sort}
-                            onChange={(event) =>
-                                setSort(event.target.value as SortOption)
-                            }
-                            className="w-full appearance-none rounded-xl border border-white/10 bg-slate-950/50 px-3.5 py-3 pr-9 text-sm text-white outline-none focus:border-cyan-400/50"
-                        >
-                            <option value="NEWEST">Highest ID first</option>
-                            <option value="NAME_ASC">Name: A to Z</option>
-                            <option value="NAME_DESC">Name: Z to A</option>
-                            <option value="CODE_ASC">Code: A to Z</option>
-                        </select>
-                        <ArrowDownUp
-                            size={15}
-                            className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-slate-400"
-                        />
-                    </div>
+                    {/* Sort Dropdown */}
+                    <div className="relative flex items-center gap-2">
+                        <div className="relative w-full">
+                            <select
+                                aria-label="Sort academic years"
+                                value={sort}
+                                onChange={(event) =>
+                                    setSort(event.target.value as SortOption)
+                                }
+                                className="w-full appearance-none rounded-xl border border-white/10 bg-slate-950/50 px-3.5 py-3 pr-9 text-sm text-white outline-none focus:border-cyan-400/50"
+                            >
+                                <option value="NEWEST">Highest ID first</option>
+                                <option value="NAME_ASC">Name: A to Z</option>
+                                <option value="NAME_DESC">Name: Z to A</option>
+                                <option value="CODE_ASC">Code: A to Z</option>
+                                <option value="START_DATE_DESC">Start Date: Newest</option>
+                            </select>
+                            <ArrowDownUp
+                                size={15}
+                                className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-slate-400"
+                            />
+                        </div>
 
-                    {hasActiveFilters && (
-                        <button
-                            type="button"
-                            onClick={resetFilters}
-                            className="inline-flex items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-xs font-semibold text-slate-300 transition hover:bg-white/10 hover:text-white"
-                        >
-                            <RotateCcw size={14} />
-                            Reset
-                        </button>
-                    )}
+                        {hasActiveFilters && (
+                            <button
+                                type="button"
+                                onClick={resetFilters}
+                                title="Reset all filters"
+                                className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-white/10 bg-white/5 text-slate-300 transition hover:bg-white/10 hover:text-white"
+                            >
+                                <RotateCcw size={15} />
+                            </button>
+                        )}
+                    </div>
                 </div>
 
-                {/* Table */}
-                <div className="w-full min-w-0 overflow-x-auto">
-                    <table className="w-full min-w-[1150px] border-collapse text-left text-sm">
+                {/* ------------------------------------------------------------------ */}
+                {/* View 1: Desktop Table (hidden on mobile, visible md and up)        */}
+                {/* ------------------------------------------------------------------ */}
+                <div className="hidden md:block w-full min-w-0 overflow-x-auto">
+                    <table className="w-full min-w-[950px] border-collapse text-left text-sm">
                         <thead>
                             <tr className="border-b border-white/10 bg-white/[0.025] text-xs uppercase tracking-wider text-slate-400">
                                 <th className="px-5 py-4 font-medium">#</th>
                                 <th className="px-4 py-4 font-medium">Academic Year</th>
                                 <th className="px-4 py-4 font-medium">Code</th>
-                                <th className="px-4 py-4 font-medium">Department</th>
-                                <th className="px-4 py-4 font-medium">School / University</th>
+                                <th className="px-4 py-4 font-medium">University</th>
                                 <th className="px-4 py-4 font-medium">Duration</th>
                                 <th className="px-4 py-4 font-medium">Status</th>
-                                <th className="px-4 py-4 font-medium">Current</th>
+                                <th className="px-4 py-4 font-medium">Current Session</th>
                                 <th className="px-5 py-4 text-right font-medium">Actions</th>
                             </tr>
                         </thead>
@@ -1745,7 +1840,7 @@ export default function AcademicYears() {
                             {loading ? (
                                 Array.from({ length: PAGE_SIZE }).map((_, rowIndex) => (
                                     <tr key={`loading-${rowIndex}`}>
-                                        {Array.from({ length: 9 }).map((__, cellIndex) => (
+                                        {Array.from({ length: 8 }).map((__, cellIndex) => (
                                             <td key={cellIndex} className="px-4 py-5">
                                                 <div className="h-4 animate-pulse rounded bg-white/[0.07]" />
                                             </td>
@@ -1754,7 +1849,7 @@ export default function AcademicYears() {
                                 ))
                             ) : pageError && years.length === 0 ? (
                                 <tr>
-                                    <td colSpan={9} className="px-6 py-16 text-center">
+                                    <td colSpan={8} className="px-6 py-16 text-center">
                                         <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl border border-rose-500/20 bg-rose-500/10 text-rose-400">
                                             <AlertTriangle size={26} />
                                         </div>
@@ -1777,16 +1872,7 @@ export default function AcademicYears() {
                             ) : visibleYears.length > 0 ? (
                                 <AnimatePresence mode="popLayout">
                                     {visibleYears.map((year, index) => {
-                                        const initials =
-                                            (year.name || "AY")
-                                                .trim()
-                                                .split(/\s+/)
-                                                .filter(Boolean)
-                                                .slice(0, 2)
-                                                .map((part) => part[0])
-                                                .join("")
-                                                .toUpperCase() || "AY";
-
+                                        const initials = getInitials(year.name);
                                         const canUpdate = hasPermission(year, "UPDATE");
                                         const canDelete = hasPermission(year, "DELETE");
                                         const canSwitch = canUpdate && !year.current;
@@ -1805,94 +1891,100 @@ export default function AcademicYears() {
                                                 transition={{ duration: 0.18 }}
                                                 className="group transition-colors hover:bg-cyan-400/[0.035]"
                                             >
-                                                <td className="px-5 py-5 text-slate-500">
+                                                <td className="px-5 py-4 text-slate-500 text-xs font-mono">
                                                     {(currentPage - 1) * PAGE_SIZE +
                                                         index +
                                                         1}
                                                 </td>
 
-                                                <td className="px-4 py-5">
+                                                {/* Academic Year Info + Creator Pill */}
+                                                <td className="px-4 py-4">
                                                     <div className="flex items-center gap-3">
-                                                        <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-blue-300/20 bg-gradient-to-br from-blue-500/25 to-violet-500/20 text-sm font-bold text-cyan-200">
+                                                        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-blue-300/20 bg-gradient-to-br from-blue-500/25 to-violet-500/20 text-xs font-bold text-cyan-200">
                                                             {initials}
                                                         </div>
-                                                        <div className="min-w-0">
-                                                            <p className="max-w-xs truncate font-semibold text-slate-100">
+                                                        <div className="min-w-0 max-w-[240px]">
+                                                            <p className="truncate font-semibold text-slate-100">
                                                                 {year.name || "Unnamed Academic Year"}
                                                             </p>
-                                                            <p className="mt-0.5 text-xs text-slate-500">
-                                                                ID: {year.id}
-                                                            </p>
+                                                            <div className="flex flex-wrap items-center gap-1.5 text-xs text-slate-400">
+                                                                <span className="font-mono text-[11px] text-slate-500">ID #{year.id}</span>
+                                                                <span className="text-slate-600">·</span>
+                                                                <span
+                                                                    className="inline-flex items-center gap-1 text-[11px] text-slate-400 group-hover:text-slate-300 transition-colors"
+                                                                    title={`Created by: ${formatAuditActor(year.createdBy)}${year.createdAt ? ` on ${formatDate(year.createdAt)}` : ""}${year.updatedBy?.name ? ` | Modified by: ${formatAuditActor(year.updatedBy)}` : ""}`}
+                                                                >
+                                                                    <UserCheck size={11} className="text-emerald-400 shrink-0" />
+                                                                    <span className="truncate max-w-[120px] font-medium text-slate-300">
+                                                                        {year.createdBy?.name || "System"}
+                                                                    </span>
+                                                                </span>
+                                                            </div>
                                                         </div>
                                                     </div>
                                                 </td>
 
-                                                <td className="px-4 py-5">
-                                                    <span className="inline-flex max-w-[190px] truncate rounded-lg border border-white/10 bg-white/[0.035] px-3 py-1.5 font-mono text-xs text-slate-300">
+                                                {/* Code */}
+                                                <td className="px-4 py-4">
+                                                    <span className="inline-flex max-w-[170px] truncate rounded-lg border border-white/10 bg-white/[0.035] px-2.5 py-1 font-mono text-xs text-cyan-200">
                                                         {getYearCode(year) || "—"}
                                                     </span>
                                                 </td>
 
-                                                <td className="px-4 py-5">
+                                                {/* University */}
+                                                <td className="px-4 py-4">
                                                     <div className="max-w-[190px]">
                                                         <p className="truncate font-medium text-slate-200">
-                                                            {year.department?.name || "—"}
+                                                            {year.university?.name || "—"}
                                                         </p>
-                                                        {year.department?.code && (
-                                                            <p className="mt-1 truncate font-mono text-xs text-slate-500">
-                                                                {year.department.code}
+                                                        {year.university?.code && (
+                                                            <p className="mt-0.5 truncate font-mono text-xs text-slate-400">
+                                                                {year.university.code}
                                                             </p>
                                                         )}
                                                     </div>
                                                 </td>
 
-                                                <td className="px-4 py-5">
-                                                    <div className="max-w-[210px]">
-                                                        <p className="truncate font-medium text-slate-200">
-                                                            {year.school?.name || "—"}
-                                                        </p>
-                                                        <p className="mt-1 truncate text-xs text-slate-500">
-                                                            {year.university?.name || "—"}
-                                                        </p>
-                                                    </div>
-                                                </td>
-
-                                                <td className="px-4 py-5">
+                                                {/* Duration */}
+                                                <td className="px-4 py-4">
                                                     <div className="whitespace-nowrap text-xs text-slate-300">
-                                                        <p>{formatDate(year.startDate)}</p>
-                                                        <p className="mt-1 text-slate-500">
+                                                        <p className="font-medium">{formatDate(year.startDate)}</p>
+                                                        <p className="mt-0.5 text-slate-500">
                                                             to {formatDate(year.endDate)}
                                                         </p>
                                                     </div>
                                                 </td>
 
-                                                <td className="px-4 py-5">
+                                                {/* Status */}
+                                                <td className="px-4 py-4">
                                                     <StatusBadge status={year.activeStatus} />
                                                 </td>
 
-                                                <td className="px-4 py-5">
+                                                {/* Current Year Badge */}
+                                                <td className="px-4 py-4">
                                                     {year.current ? (
-                                                        <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-400/30 bg-emerald-500/10 px-3 py-1.5 text-xs font-semibold text-emerald-300">
+                                                        <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-400/30 bg-emerald-500/10 px-3 py-1 text-xs font-semibold text-emerald-300">
                                                             <Check size={13} />
                                                             Current
                                                         </span>
                                                     ) : (
-                                                        <span className="inline-flex items-center gap-1.5 rounded-full border border-white/10 bg-white/[0.03] px-2.5 py-1 text-xs text-slate-400">
-                                                            Not Current
+                                                        <span className="inline-flex items-center gap-1.5 rounded-full border border-white/10 bg-white/[0.03] px-2.5 py-0.5 text-xs text-slate-400">
+                                                            Inactive
                                                         </span>
                                                     )}
                                                 </td>
 
-                                                <td className="px-5 py-5">
-                                                    <div className="flex items-center justify-end gap-2">
+                                                {/* Actions: Strict h-8 w-8 preventing pill distortion */}
+                                                <td className="px-5 py-4">
+                                                    <div className="flex items-center justify-end gap-1.5">
                                                         <button
                                                             type="button"
                                                             onClick={() => openDialog("VIEW", year)}
                                                             aria-label={`View ${year.name}`}
-                                                            title="View details"
-                                                            className="rounded-lg border border-white/10 bg-white/[0.04] p-2 text-sky-300 transition hover:border-sky-400/30 hover:bg-sky-400/10"
+                                                            title="View details & audit"
+                                                            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-white/10 bg-white/[0.04] text-sky-300 transition hover:border-sky-400/30 hover:bg-sky-400/10 active:scale-95"
                                                         >
-                                                            <Eye size={17} />
+                                                            <Eye size={15} />
                                                         </button>
 
                                                         {canUpdate && (
@@ -1901,9 +1993,9 @@ export default function AcademicYears() {
                                                                 onClick={() => openDialog("EDIT", year)}
                                                                 aria-label={`Edit ${year.name}`}
                                                                 title="Edit academic year"
-                                                                className="rounded-lg border border-white/10 bg-white/[0.04] p-2 text-cyan-300 transition hover:border-cyan-400/30 hover:bg-cyan-400/10"
+                                                                className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-white/10 bg-white/[0.04] text-cyan-300 transition hover:border-cyan-400/30 hover:bg-cyan-400/10 active:scale-95"
                                                             >
-                                                                <Pencil size={17} />
+                                                                <Pencil size={15} />
                                                             </button>
                                                         )}
 
@@ -1912,19 +2004,19 @@ export default function AcademicYears() {
                                                                 type="button"
                                                                 disabled={busy}
                                                                 onClick={() => void handleSwitch(year)}
-                                                                aria-label={`Switch to current academic year: ${year.name}`}
+                                                                aria-label={`Switch to current: ${year.name}`}
                                                                 title="Set as current academic year"
-                                                                className="inline-flex items-center gap-1.5 rounded-lg border border-emerald-500/30 bg-emerald-500/15 px-2.5 py-1.5 text-xs font-semibold text-emerald-300 shadow-sm transition hover:border-emerald-400 hover:bg-emerald-500/25 active:scale-95 disabled:cursor-not-allowed disabled:opacity-40"
+                                                                className="inline-flex h-8 shrink-0 items-center gap-1.5 rounded-lg border border-emerald-500/30 bg-emerald-500/15 px-2.5 text-xs font-semibold text-emerald-300 shadow-sm transition hover:border-emerald-400 hover:bg-emerald-500/25 active:scale-95 disabled:cursor-not-allowed disabled:opacity-40"
                                                             >
                                                                 <RefreshCw
-                                                                    size={13}
+                                                                    size={12}
                                                                     className={
                                                                         busy
                                                                             ? "animate-spin shrink-0 text-emerald-400"
                                                                             : "shrink-0 text-emerald-400"
                                                                     }
                                                                 />
-                                                                <span>Switch to Current</span>
+                                                                <span className="hidden xl:inline">Switch</span>
                                                             </button>
                                                         )}
 
@@ -1934,9 +2026,9 @@ export default function AcademicYears() {
                                                                 onClick={() => openDialog("DELETE", year)}
                                                                 aria-label={`Delete ${year.name}`}
                                                                 title="Delete academic year"
-                                                                className="rounded-lg border border-white/10 bg-white/[0.04] p-2 text-rose-400 transition hover:border-rose-400/30 hover:bg-rose-400/10"
+                                                                className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-white/10 bg-white/[0.04] text-rose-400 transition hover:border-rose-400/30 hover:bg-rose-400/10 active:scale-95"
                                                             >
-                                                                <Trash2 size={17} />
+                                                                <Trash2 size={15} />
                                                             </button>
                                                         )}
 
@@ -1953,9 +2045,9 @@ export default function AcademicYears() {
                                 </AnimatePresence>
                             ) : (
                                 <tr>
-                                    <td colSpan={9} className="px-6 py-16 text-center">
+                                    <td colSpan={8} className="px-6 py-16 text-center">
                                         <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.04] text-slate-400">
-                                            <BookOpen size={25} />
+                                            <CalendarDays size={25} />
                                         </div>
                                         <p className="mt-4 font-semibold text-slate-200">
                                             {hasActiveFilters
@@ -1964,7 +2056,7 @@ export default function AcademicYears() {
                                         </p>
                                         <p className="mx-auto mt-1 max-w-sm text-sm text-slate-500">
                                             {hasActiveFilters
-                                                ? "Try changing your search or filters."
+                                                ? "Try changing your university selection or search filters."
                                                 : "Academic years will appear here after they are created."}
                                         </p>
                                         {hasActiveFilters && (
@@ -1982,7 +2074,7 @@ export default function AcademicYears() {
                                             years.length === 0 && (
                                                 <button
                                                     type="button"
-                                                    onClick={() => void openCreateDialog()}
+                                                    onClick={openCreateDialog}
                                                     className="mt-5 inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-violet-600 via-blue-600 to-cyan-500 px-4 py-2.5 text-xs font-semibold text-white shadow-lg shadow-blue-500/20 transition hover:brightness-110"
                                                 >
                                                     <Plus size={15} />
@@ -1994,6 +2086,170 @@ export default function AcademicYears() {
                             )}
                         </tbody>
                     </table>
+                </div>
+
+                {/* ------------------------------------------------------------------ */}
+                {/* View 2: Mobile Cards (visible on mobile, hidden on md and up)      */}
+                {/* ------------------------------------------------------------------ */}
+                <div className="block md:hidden divide-y divide-white/5">
+                    {loading ? (
+                        Array.from({ length: 4 }).map((_, i) => (
+                            <div key={`m-loading-${i}`} className="p-4 space-y-3">
+                                <div className="h-5 w-3/4 animate-pulse rounded bg-white/[0.07]" />
+                                <div className="h-4 w-1/2 animate-pulse rounded bg-white/[0.07]" />
+                                <div className="h-8 w-full animate-pulse rounded bg-white/[0.07]" />
+                            </div>
+                        ))
+                    ) : pageError && years.length === 0 ? (
+                        <div className="p-8 text-center">
+                            <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-xl bg-rose-500/10 text-rose-400 mb-3">
+                                <AlertTriangle size={22} />
+                            </div>
+                            <p className="font-semibold text-slate-200 text-sm">Failed to load</p>
+                            <p className="mt-1 text-xs text-slate-400">{pageError}</p>
+                            <button
+                                type="button"
+                                onClick={() => void loadData()}
+                                className="mt-4 inline-flex items-center gap-1.5 rounded-lg border border-cyan-400/30 bg-cyan-500/10 px-3 py-1.5 text-xs font-semibold text-cyan-300"
+                            >
+                                <RefreshCw size={13} /> Try Again
+                            </button>
+                        </div>
+                    ) : visibleYears.length > 0 ? (
+                        visibleYears.map((year) => {
+                            const initials = getInitials(year.name);
+                            const canUpdate = hasPermission(year, "UPDATE");
+                            const canDelete = hasPermission(year, "DELETE");
+                            const canSwitch = canUpdate && !year.current;
+
+                            return (
+                                <div
+                                    key={year.id}
+                                    className="p-4 space-y-3.5 transition-colors hover:bg-white/[0.02]"
+                                >
+                                    {/* Top Header: Avatar + Name + Code + Badges */}
+                                    <div className="flex items-start justify-between gap-3">
+                                        <div className="flex items-center gap-2.5 min-w-0">
+                                            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-blue-300/20 bg-gradient-to-br from-blue-500/25 to-violet-500/20 text-xs font-bold text-cyan-200">
+                                                {initials}
+                                            </div>
+                                            <div className="min-w-0">
+                                                <h3 className="font-semibold text-slate-100 text-sm truncate">
+                                                    {year.name || "Unnamed"}
+                                                </h3>
+                                                <span className="font-mono text-xs text-cyan-300">
+                                                    {year.code || "—"}
+                                                </span>
+                                            </div>
+                                        </div>
+
+                                        <div className="flex flex-col items-end gap-1 shrink-0">
+                                            {year.current && (
+                                                <span className="inline-flex items-center gap-1 rounded-full border border-emerald-400/30 bg-emerald-500/10 px-2 py-0.5 text-[10px] font-semibold text-emerald-300">
+                                                    <Check size={11} /> Current
+                                                </span>
+                                            )}
+                                            <StatusBadge status={year.activeStatus} />
+                                        </div>
+                                    </div>
+
+                                    {/* University & Duration Row */}
+                                    <div className="grid grid-cols-2 gap-2 text-xs">
+                                        <div className="rounded-lg border border-white/5 bg-slate-950/30 p-2">
+                                            <span className="text-[10px] uppercase tracking-wider text-slate-500 block">
+                                                University
+                                            </span>
+                                            <span className="font-medium text-slate-200 truncate block mt-0.5">
+                                                {year.university?.name || "—"}
+                                            </span>
+                                        </div>
+
+                                        <div className="rounded-lg border border-white/5 bg-slate-950/30 p-2">
+                                            <span className="text-[10px] uppercase tracking-wider text-slate-500 block">
+                                                Duration
+                                            </span>
+                                            <span className="text-slate-300 truncate block mt-0.5 text-[11px]">
+                                                {formatDate(year.startDate)} – {formatDate(year.endDate)}
+                                            </span>
+                                        </div>
+                                    </div>
+
+                                    {/* Audit Showcase Footnote */}
+                                    <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-white/5 bg-slate-950/30 px-3 py-2 text-[11px] text-slate-400">
+                                        <div className="flex items-center gap-1.5 min-w-0">
+                                            <UserCheck size={12} className="text-emerald-400 shrink-0" />
+                                            <span className="text-slate-500">Created:</span>
+                                            <span className="font-medium text-slate-200 truncate max-w-[110px]">
+                                                {year.createdBy?.name || "System"}
+                                            </span>
+                                            {year.createdAt && (
+                                                <span className="text-slate-500">· {formatDate(year.createdAt)}</span>
+                                            )}
+                                        </div>
+
+                                        {year.updatedBy?.name && (
+                                            <div className="flex items-center gap-1 text-slate-500">
+                                                <RotateCcw size={11} className="text-cyan-400 shrink-0" />
+                                                <span className="truncate max-w-[100px]">{year.updatedBy.name}</span>
+                                            </div>
+                                        )}
+                                    </div>
+
+                                    {/* Action Buttons Toolbar */}
+                                    <div className="flex items-center justify-between pt-1 border-t border-white/5">
+                                        <div className="flex items-center gap-1.5">
+                                            <button
+                                                type="button"
+                                                onClick={() => openDialog("VIEW", year)}
+                                                aria-label={`View ${year.name}`}
+                                                className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-white/10 bg-white/[0.04] text-sky-300"
+                                            >
+                                                <Eye size={15} />
+                                            </button>
+
+                                            {canUpdate && (
+                                                <button
+                                                    type="button"
+                                                    onClick={() => openDialog("EDIT", year)}
+                                                    aria-label={`Edit ${year.name}`}
+                                                    className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-white/10 bg-white/[0.04] text-cyan-300"
+                                                >
+                                                    <Pencil size={15} />
+                                                </button>
+                                            )}
+
+                                            {canDelete && (
+                                                <button
+                                                    type="button"
+                                                    onClick={() => openDialog("DELETE", year)}
+                                                    aria-label={`Delete ${year.name}`}
+                                                    className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-white/10 bg-white/[0.04] text-rose-400"
+                                                >
+                                                    <Trash2 size={15} />
+                                                </button>
+                                            )}
+                                        </div>
+
+                                        {canSwitch && (
+                                            <button
+                                                type="button"
+                                                disabled={busy}
+                                                onClick={() => void handleSwitch(year)}
+                                                className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-emerald-500/30 bg-emerald-500/15 px-3 text-xs font-semibold text-emerald-300"
+                                            >
+                                                <RefreshCw size={12} className={busy ? "animate-spin" : ""} />
+                                                Switch to Current
+                                            </button>
+                                        )}
+                                    </div>
+                                </div>
+                            );
+                        })
+                    ) : (
+                        <div className="p-8 text-center text-sm text-slate-400">
+                            No academic years found for the selected university.
+                        </div>
+                    )}
                 </div>
 
                 {/* Pagination */}
@@ -2018,9 +2274,9 @@ export default function AcademicYears() {
                             onClick={() => setPage(1)}
                             aria-label="First page"
                             title="First page"
-                            className="rounded-lg border border-white/10 bg-white/[0.035] p-2 text-slate-300 transition hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-30"
+                            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-white/10 bg-white/[0.035] p-2 text-slate-300 transition hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-30"
                         >
-                            <ChevronsLeft size={17} />
+                            <ChevronsLeft size={16} />
                         </button>
 
                         <button
@@ -2029,9 +2285,9 @@ export default function AcademicYears() {
                             onClick={() => setPage((value) => Math.max(1, value - 1))}
                             aria-label="Previous page"
                             title="Previous page"
-                            className="rounded-lg border border-white/10 bg-white/[0.035] p-2 text-slate-300 transition hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-30"
+                            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-white/10 bg-white/[0.035] p-2 text-slate-300 transition hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-30"
                         >
-                            <ChevronLeft size={17} />
+                            <ChevronLeft size={16} />
                         </button>
 
                         {Array.from({ length: totalPages }, (_, index) => index + 1)
@@ -2054,7 +2310,7 @@ export default function AcademicYears() {
                                         aria-current={
                                             currentPage === number ? "page" : undefined
                                         }
-                                        className={`min-w-9 rounded-lg border px-3 py-2 text-sm transition ${currentPage === number
+                                        className={`flex h-8 min-w-8 items-center justify-center rounded-lg border px-2.5 text-xs font-medium transition ${currentPage === number
                                             ? "border-cyan-300/40 bg-gradient-to-r from-violet-600 to-blue-500 font-semibold text-white shadow-md shadow-blue-500/20"
                                             : "border-white/10 bg-white/[0.035] text-slate-300 hover:bg-white/10"
                                             }`}
@@ -2072,9 +2328,9 @@ export default function AcademicYears() {
                             }
                             aria-label="Next page"
                             title="Next page"
-                            className="rounded-lg border border-white/10 bg-white/[0.035] p-2 text-slate-300 transition hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-30"
+                            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-white/10 bg-white/[0.035] p-2 text-slate-300 transition hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-30"
                         >
-                            <ChevronRight size={17} />
+                            <ChevronRight size={16} />
                         </button>
 
                         <button
@@ -2083,9 +2339,9 @@ export default function AcademicYears() {
                             onClick={() => setPage(totalPages)}
                             aria-label="Last page"
                             title="Last page"
-                            className="rounded-lg border border-white/10 bg-white/[0.035] p-2 text-slate-300 transition hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-30"
+                            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-white/10 bg-white/[0.035] p-2 text-slate-300 transition hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-30"
                         >
-                            <ChevronsRight size={17} />
+                            <ChevronsRight size={16} />
                         </button>
                     </div>
                 </div>
@@ -2098,8 +2354,9 @@ export default function AcademicYears() {
                         key={`${dialog.mode}-${dialog.year?.id ?? "new"}`}
                         mode={dialog.mode}
                         year={dialog.year}
-                        departments={departmentsForCreate}
-                        departmentsLoading={departmentsLoading}
+                        defaultUniversityId={dialog.defaultUniversityId}
+                        universities={universities}
+                        universitiesLoading={universitiesLoading}
                         busy={busy}
                         onClose={() => {
                             if (!busy) setDialog(null);

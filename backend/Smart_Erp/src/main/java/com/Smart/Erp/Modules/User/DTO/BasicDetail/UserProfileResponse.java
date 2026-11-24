@@ -1,17 +1,14 @@
 package com.Smart.Erp.Modules.User.DTO.BasicDetail;
 
-import lombok.AllArgsConstructor;
-import lombok.Builder;
-import lombok.Data;
-import lombok.NoArgsConstructor;
+import com.Smart.Erp.Core.Common.BaseDTO;
+import lombok.*;
+import lombok.experimental.SuperBuilder;
 
 import java.time.LocalDate;
 
-@Data
-@Builder
-@NoArgsConstructor
-@AllArgsConstructor
-public class UserProfileResponse {
+@Getter
+@SuperBuilder
+public class UserProfileResponse extends BaseDTO {
     private Long userId;
     private Boolean enabled;
     private String username;
