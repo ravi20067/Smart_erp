@@ -79,6 +79,10 @@ class LivenessService:
         if live_score is not None and live_score > 0:
             session.anti_spoof_scores.append(live_score)
 
+        extracted_emb = eval_result.observations.get("extracted_embedding")
+        if extracted_emb is not None and (session.best_embedding is None or eval_result.accepted):
+            session.best_embedding = extracted_emb
+
         if eval_result.accepted:
             session.detected_challenge_actions.append(expected_action)
 

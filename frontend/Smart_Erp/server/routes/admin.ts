@@ -153,48 +153,6 @@ export const copyStructure: RequestHandler = (_req: Request, res: Response) => {
   res.json({ success: true });
 };
 
-// Admin Device handlers
-let mockDevices: any[] = [
-  { id: 1, deviceEPid: "DEV-1001", location: "Main Gate", password: "••••••••", status: "Active" },
-  { id: 2, deviceEPid: "DEV-1002", location: "Library Entrance", password: "••••••••", status: "Active" },
-  { id: 3, deviceEPid: "DEV-1003", location: "Science Block", password: "••••••••", status: "Inactive" }
-];
-
-export const loadDevicesHandler: RequestHandler = (_req: Request, res: Response) => {
-  res.json(mockDevices);
-};
-
-export const addDeviceHandler: RequestHandler = (req: Request, res: Response) => {
-  const { location, password } = req.body;
-  const newDevice = {
-    id: Date.now(),
-    deviceEPid: `DEV-${Math.floor(1000 + Math.random() * 9000)}`,
-    location: location || "Unassigned",
-    password: password || "123456",
-    status: "Active"
-  };
-  mockDevices.push(newDevice);
-  res.json(newDevice);
-};
-
-export const updateDeviceHandler: RequestHandler = (req: Request, res: Response) => {
-  const id = Number(req.params.id) || req.params.id;
-  const { location, password } = req.body;
-  const device = mockDevices.find(d => d.id == id);
-  if (device) {
-    if (location !== undefined) device.location = location;
-    if (password !== undefined) device.password = password;
-    return res.json(device);
-  }
-  res.status(404).json({ message: "Device not found" });
-};
-
-export const deleteDeviceHandler: RequestHandler = (req: Request, res: Response) => {
-  const id = Number(req.params.id) || req.params.id;
-  mockDevices = mockDevices.filter(d => d.id != id);
-  res.json({ success: true, message: "Device deleted" });
-};
-
 export const deleteStudentHandler: RequestHandler = (req: Request, res: Response) => {
   const id = Number(req.params.id);
   const index = mockStudents.findIndex((s) => s.id === id);

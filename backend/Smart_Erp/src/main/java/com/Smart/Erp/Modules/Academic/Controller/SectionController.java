@@ -4,6 +4,7 @@ import com.Smart.Erp.Core.Common.CommonDTO;
 import com.Smart.Erp.Modules.Academic.DTO.Sections.SectionRequest;
 import com.Smart.Erp.Modules.Academic.DTO.Sections.SectionResponse;
 import com.Smart.Erp.Modules.Academic.Services.SectionService;
+import com.Smart.Erp.Modules.Student.DTO.SectionGroupFilter;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -95,6 +96,28 @@ public class SectionController {
     @GetMapping("/academic-year/filter")
     public ResponseEntity<List<CommonDTO>> getAcademicYearFilter(@RequestParam Long courseId){
         return ResponseEntity.ok(sectionService.getAcademicYearFilter(courseId));
+    }
+
+    // Returns specializations of a course in an academic year that have a valid mapped fee structure.
+    @PreAuthorize("@authVerifier.can(" +
+            "T(com.Smart.Erp.Modules.User.Enum.PermissionAction).CREATE_CHILD, " +
+            "T(com.Smart.Erp.Modules.User.Enum.ResourceType).COURSE, " +
+            "#courseId)")
+    @GetMapping("/specialization/filter")
+    public ResponseEntity<List<CommonDTO>> getSpecializationFilter(
+            @RequestParam Long courseId,
+            @RequestParam Long academicYearId
+    ) {
+        return ResponseEntity.ok(sectionService.getSpecializationFilter(courseId, academicYearId));
+    }
+
+    // Returns only section groups eligible for the given specialization & academic year with a valid mapped fee structure.
+    @GetMapping("/groups/eligible")
+    public ResponseEntity<List<SectionGroupFilter>> getEligibleSectionGroups(
+            @RequestParam(required = false) Long specializationId,
+            @RequestParam(required = false) Long academicYearId
+    ) {
+        return ResponseEntity.ok(sectionService.getEligibleSectionGroups(specializationId, academicYearId));
     }
 
 }

@@ -9,4 +9,6 @@ public interface SubjectRepo extends JpaRepository<Subject, Long> {
     List<Subject> findBySubjectTeachers_Id(Long teacherId);
 
     List<Subject> findByCodeContainingIgnoreCase(String code);
+
+    List<Subject> findByCourse_Id(Long courseId);
 }

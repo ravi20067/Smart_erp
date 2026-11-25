@@ -127,6 +127,32 @@ public class GlobalExceptionHandler {
         );
     }
 
+    // 400 - IllegalArgumentException
+    @ExceptionHandler(IllegalArgumentException.class)
+    public ResponseEntity<ErrorResponse> handleIllegalArgument(
+            IllegalArgumentException ex,
+            HttpServletRequest request) {
+
+        return buildError(
+                HttpStatus.BAD_REQUEST,
+                ex.getMessage(),
+                request.getRequestURI()
+        );
+    }
+
+    // 409 - IllegalStateException
+    @ExceptionHandler(IllegalStateException.class)
+    public ResponseEntity<ErrorResponse> handleIllegalState(
+            IllegalStateException ex,
+            HttpServletRequest request) {
+
+        return buildError(
+                HttpStatus.CONFLICT,
+                ex.getMessage(),
+                request.getRequestURI()
+        );
+    }
+
     // 500 - Everything unexpected
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ErrorResponse> handleGeneralException(
@@ -144,29 +170,29 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(FileNotFoundException.class)
     public ResponseEntity<ErrorResponse> handleFileNotFound(
-            ConstraintViolationException ex,
+            FileNotFoundException ex,
             HttpServletRequest request) {
 
         return buildError(
-                HttpStatus.BAD_REQUEST,
+                HttpStatus.NOT_FOUND,
                 ex.getMessage(),
                 request.getRequestURI()
         );
     }
     @ExceptionHandler(FileStorageException.class)
     public ResponseEntity<ErrorResponse> handleFileStorage(
-            ConstraintViolationException ex,
+            FileStorageException ex,
             HttpServletRequest request) {
 
         return buildError(
-                HttpStatus.BAD_REQUEST,
+                HttpStatus.INTERNAL_SERVER_ERROR,
                 ex.getMessage(),
                 request.getRequestURI()
         );
     }
     @ExceptionHandler(InvalidFileException.class)
     public ResponseEntity<ErrorResponse> handleInvalidFile(
-            ConstraintViolationException ex,
+            InvalidFileException ex,
             HttpServletRequest request) {
 
         return buildError(

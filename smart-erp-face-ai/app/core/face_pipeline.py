@@ -26,7 +26,8 @@ class FacePipeline:
         self.liveness_engine = LivenessEngine(
             detector=self.detector,
             landmarker=self.landmarker,
-            anti_spoof=self.anti_spoof
+            anti_spoof=self.anti_spoof,
+            recognizer=self.recognizer
         )
         print("FacePipeline initialized successfully.")
 

@@ -41,8 +41,13 @@ import SuperAdminDashboard from "./pages/super-admin/Dashboard";
 import SuperAdminLayout from "./pages/super-admin/Layout";
 import RoleDashboardLayout from "./components/RoleDashboardLayout";
 import TeacherLayout from "./pages/teacher/TeacherLayout";
-import AttendenceAuthenticator from "./pages/teacher/AttendenceAuthenticator";
-import DeviceDashboard from "./pages/Devices/dashboard";
+import TeacherAttendanceManager from "./pages/teacher/TeacherAttendanceManager";
+import StudentSecureAttendance from "./pages/student/StudentSecureAttendance";
+import StudentTimetable from "./pages/student/StudentTimetable";
+import StudentAcademicCalendar from "./pages/student/StudentAcademicCalendar";
+import StudentFees from "./pages/student/StudentFees";
+import SecurityGuardCheckIn from "./pages/security-guard/SecurityGuardCheckIn";
+import CampusCheckInPass from "./pages/shared/CampusCheckInPass";
 import { AuthProvider } from "@/services/authContext";
 import ProtectedRoute from "@/services/protectedRoute";
 import Blog from "./pages/Blog";
@@ -188,14 +193,36 @@ const App = () => (
             >
               {/* Dashboard: /admin */}
               <Route index element={<SuperAdminDashboard />} />
-              <Route path="fees" element={<FeeStructure />} />
 
-              {/* Organization */}
-              {/* <Route path="universities" element={<University />} />
+              {/* Organization & Academics */}
+              <Route path="universities" element={<University />} />
               <Route path="schools" element={<School />} />
-              <Route path="departments" element={<Department />} /> */}
+              <Route path="departments" element={<Departments />} />
+              <Route path="academic-years" element={<AcademicYears />} />
+              <Route path="courses" element={<Courses />} />
+              <Route path="specializations" element={<Specializations />} />
+              <Route path="sections" element={<Sections />} />
+              <Route path="subjects" element={<Subjects />} />
 
-              {/* Add your other existing admin routes here */}
+              {/* Students, Faculty & Finance */}
+              <Route path="students" element={<Student />} />
+              <Route path="teachers" element={<Teacher />} />
+              <Route path="security-guards" element={<SecurityGuard />} />
+              <Route path="role-permissions" element={<RolePermission />} />
+              <Route path="fees" element={<FeeStructure />} />
+              <Route path="fee-structures" element={<FeeStructure />} />
+              <Route path="scholarships" element={<Scholarship />} />
+
+              {/* Timetable Management */}
+              <Route path="rooms" element={<Rooms />} />
+              <Route path="base" element={<BaseTimeTable />} />
+              <Route path="base-timetable" element={<BaseTimeTable />} />
+              <Route path="academic-calendar" element={<AcademicCalendar />} />
+              <Route path="timetable" element={<TimetableBuilder />} />
+              <Route path="timetable/builder" element={<TimetableBuilder />} />
+              <Route path="timetable/substitutions" element={<TimetableOverrides />} />
+              <Route path="timetable/daily" element={<TimetableOverrides />} />
+              <Route path="lecture-allocation" element={<TeacherEnrollment />} />
             </Route>
 
             {/* Student */}
@@ -208,6 +235,12 @@ const App = () => (
               }
             >
               <Route index element={<StudentDashboard />} />
+              <Route path="attendance" element={<StudentSecureAttendance />} />
+              <Route path="secure-attendance" element={<StudentSecureAttendance />} />
+              <Route path="campus-pass" element={<CampusCheckInPass role="STUDENT" />} />
+              <Route path="timetable" element={<StudentTimetable />} />
+              <Route path="calendar" element={<StudentAcademicCalendar />} />
+              <Route path="fees" element={<StudentFees />} />
             </Route>
 
             {/* Teacher */}
@@ -220,7 +253,9 @@ const App = () => (
               }
             >
               <Route index element={<TeacherDashboard />} />
-              <Route path="attendance-authenticator" element={<AttendenceAuthenticator />} />
+              <Route path="attendance" element={<TeacherAttendanceManager />} />
+              <Route path="attendance-authenticator" element={<TeacherAttendanceManager />} />
+              <Route path="campus-pass" element={<CampusCheckInPass role="TEACHER" />} />
             </Route>
 
             {/* Security Guard */}
@@ -233,6 +268,7 @@ const App = () => (
               }
             >
               <Route index element={<SecurityGuardDashboard />} />
+              <Route path="check-in" element={<SecurityGuardCheckIn />} />
             </Route>
 
             {/* Dean / School Dean */}
@@ -365,17 +401,6 @@ const App = () => (
               <Route index element={<CounselorDashboard />} />
             </Route>
 
-            {/* Devices / Hardware Terminal */}
-            <Route
-              path="/devices"
-              element={
-                <ProtectedRoute allowedRoles={["DEVICES"]}>
-                  <RoleDashboardLayout role="SUPER_ADMIN" />
-                </ProtectedRoute>
-              }
-            >
-              <Route index element={<DeviceDashboard />} />
-            </Route>
 
             <Route path="*" element={<NotFound />} />
 

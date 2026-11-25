@@ -40,6 +40,32 @@ public class SectionCalendarController {
         );
     }
 
+    @GetMapping("/by-section/{sectionId}")
+    @PreAuthorize(
+            "hasAnyRole('HEAD_OF_DEPARTMENT','ADMIN','DEAN','SCHOOL_DEAN','SUPER_ADMIN') and " +
+            "@timetablePermission.canReadSectionTimetable(#sectionId)"
+    )
+    public ResponseEntity<CalendarResponse> getBySection(
+            @PathVariable Long sectionId
+    ) {
+        return management.findCalendarBySection(sectionId)
+                .map(cal -> ResponseEntity.ok(mapper.calendar(cal)))
+                .orElseGet(() -> ResponseEntity.noContent().build());
+    }
+
+    @PostMapping("/{calendarId}/publish")
+    @PreAuthorize(
+            "hasAnyRole('HEAD_OF_DEPARTMENT','ADMIN','DEAN','SCHOOL_DEAN','SUPER_ADMIN') and " +
+            "@timetablePermission.canUpdateCalendar(#calendarId)"
+    )
+    public ResponseEntity<CalendarResponse> publish(
+            @PathVariable Long calendarId
+    ) {
+        return ResponseEntity.ok(
+                mapper.calendar(management.publishCalendar(calendarId))
+        );
+    }
+
     @GetMapping("/{calendarId}")
     @PreAuthorize(
             "hasAnyRole('HEAD_OF_DEPARTMENT','ADMIN','DEAN','SCHOOL_DEAN','SUPER_ADMIN') and " +

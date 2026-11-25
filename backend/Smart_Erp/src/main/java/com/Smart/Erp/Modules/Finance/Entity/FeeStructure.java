@@ -28,6 +28,12 @@ import java.util.stream.Collectors;
 @Entity
 @Table(
         name = "fee_structures",
+        uniqueConstraints = {
+                @UniqueConstraint(
+                        name = "uk_fee_structure_course_academic_year",
+                        columnNames = {"course_id", "academic_year_id"}
+                )
+        },
         indexes = {
                 @Index(
                         name = "idx_fee_structure_academic_year",
@@ -108,9 +114,25 @@ public class FeeStructure extends BaseAuditableEntity {
             AcademicYear academicYear,
             List<Specialization> specializations
     ) {
+        if (request == null) {
+            throw new IllegalArgumentException("Fee structure request cannot be null");
+        }
+        String trimmedName = request.getName() != null ? request.getName().trim() : "";
+        if (trimmedName.isEmpty()) {
+            throw new OperationNotAllowedException("Fee structure name cannot be empty");
+        }
+        if (request.getFrequency() == null) {
+            throw new OperationNotAllowedException("Fee frequency is required");
+        }
+        if (request.getTotalNoOfInstallments() == null || request.getTotalNoOfInstallments() < 1) {
+            throw new OperationNotAllowedException("Total number of installments must be at least 1");
+        }
+        if (request.getComponents() == null || request.getComponents().isEmpty()) {
+            throw new OperationNotAllowedException("Fee structure must contain at least one fee component");
+        }
 
         FeeStructure feeStructure = FeeStructure.builder()
-                .name(request.getName())
+                .name(trimmedName)
                 .frequency(request.getFrequency())
                 .course(course)
                 .academicYear(academicYear)
@@ -119,26 +141,40 @@ public class FeeStructure extends BaseAuditableEntity {
                 )
                 .build();
 
-        // Add fee components
-        if (request.getComponents() != null) {
-
-            for (var componentRequest : request.getComponents()) {
-
-                FeeComponent component = FeeComponent.builder()
-                        .categoryType(
-                                componentRequest.getFeeCategoryType()
-                        )
-                        .componentName(
-                                componentRequest.getComponentName()
-                        )
-                        .amount(componentRequest.getAmount())
-                        .isMandatory(componentRequest.getIsMandatory())
-                        .isRefundable(componentRequest.getIsRefundable())
-                        .feeStructure(feeStructure)
-                        .build();
-
-                feeStructure.addComponent(component);
+        Set<FeeCategoryType> seenCategories = new java.util.HashSet<>();
+        for (var componentRequest : request.getComponents()) {
+            FeeCategoryType category = componentRequest.getFeeCategoryType();
+            if (category == null) {
+                throw new IllegalArgumentException("Fee component category cannot be null");
             }
+            if (!seenCategories.add(category)) {
+                throw new OperationNotAllowedException(
+                        "Duplicate fee component category: " + category
+                );
+            }
+            String componentName = componentRequest.getComponentName() != null
+                    ? componentRequest.getComponentName().trim()
+                    : "";
+            if (componentName.isEmpty()) {
+                throw new OperationNotAllowedException("Fee component name cannot be empty");
+            }
+            if (componentRequest.getAmount() == null
+                    || componentRequest.getAmount().compareTo(BigDecimal.ZERO) < 0) {
+                throw new OperationNotAllowedException(
+                        "Fee component amount must be non-negative for category " + category
+                );
+            }
+
+            FeeComponent component = FeeComponent.builder()
+                    .categoryType(category)
+                    .componentName(componentName)
+                    .amount(componentRequest.getAmount())
+                    .isMandatory(Boolean.TRUE.equals(componentRequest.getIsMandatory()))
+                    .isRefundable(Boolean.TRUE.equals(componentRequest.getIsRefundable()))
+                    .feeStructure(feeStructure)
+                    .build();
+
+            feeStructure.addComponent(component);
         }
 
         // Add specializations
@@ -252,8 +288,21 @@ public class FeeStructure extends BaseAuditableEntity {
             List<Specialization> requestedSpecializations,
             List<FeeComponent> componentsToRemove
     ) {
+        if (request == null) {
+            throw new IllegalArgumentException("Fee structure update request cannot be null");
+        }
+        String trimmedName = request.getName() != null ? request.getName().trim() : "";
+        if (trimmedName.isEmpty()) {
+            throw new OperationNotAllowedException("Fee structure name cannot be empty");
+        }
+        if (request.getFrequency() == null) {
+            throw new OperationNotAllowedException("Fee frequency is required");
+        }
+        if (request.getTotalNoOfInstallments() == null || request.getTotalNoOfInstallments() < 1) {
+            throw new OperationNotAllowedException("Total number of installments must be at least 1");
+        }
 
-        this.setName(request.getName());
+        this.setName(trimmedName);
         this.setFrequency(request.getFrequency());
 
         this.setTotalNoOfInstallments(
@@ -310,19 +359,39 @@ public class FeeStructure extends BaseAuditableEntity {
                     );
                 }
 
+                String componentName = componentRequest.getComponentName() != null
+                        ? componentRequest.getComponentName().trim()
+                        : "";
+                if (componentName.isEmpty()) {
+                    throw new OperationNotAllowedException(
+                            "Fee component name cannot be empty"
+                    );
+                }
+
+                if (componentRequest.getAmount() == null
+                        || componentRequest.getAmount().compareTo(BigDecimal.ZERO) < 0) {
+                    throw new OperationNotAllowedException(
+                            "Fee component amount must be non-negative for category " + category
+                    );
+                }
+
                 FeeComponent component = FeeComponent.builder()
                         .categoryType(category)
-                        .componentName(
-                                componentRequest.getComponentName()
-                        )
+                        .componentName(componentName)
                         .amount(componentRequest.getAmount())
-                        .isMandatory(componentRequest.getIsMandatory())
-                        .isRefundable(componentRequest.getIsRefundable())
+                        .isMandatory(Boolean.TRUE.equals(componentRequest.getIsMandatory()))
+                        .isRefundable(Boolean.TRUE.equals(componentRequest.getIsRefundable()))
                         .feeStructure(this)
                         .build();
 
                 addComponent(component);
             }
+        }
+
+        if (this.components.isEmpty()) {
+            throw new OperationNotAllowedException(
+                    "Fee structure must retain at least one fee component"
+            );
         }
 
         // Synchronize specialization assignments
@@ -364,7 +433,7 @@ public class FeeStructure extends BaseAuditableEntity {
     public BigDecimal getTotalAmount() {
 
         return components.stream()
-                .filter(FeeComponent::getIsMandatory)
+                .filter(component -> Boolean.TRUE.equals(component.getIsMandatory()))
                 .map(FeeComponent::getAmount)
                 .filter(Objects::nonNull)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
@@ -401,8 +470,8 @@ public class FeeStructure extends BaseAuditableEntity {
             List<PermissionAction> permissionActions
     ) {
 
-        Department department = course.getDepartment();
-        School school = department.getSchool();
+        Department department = this.course != null ? this.course.getDepartment() : null;
+        School school = department != null ? department.getSchool() : null;
 
         return FeeStructureResponse.builder()
                 .id(this.getId())
@@ -419,14 +488,19 @@ public class FeeStructure extends BaseAuditableEntity {
                 .specialization(
                         this.getSpecializationAssignments().stream()
                                 .map(FeeStructureSpecialization::getSpecialization)
+                                .filter(Objects::nonNull)
                                 .map(Specialization::toCommonDTO)
                                 .toList()
                 )
-                .courses(this.getCourse().toCommonDTO())
-                .department(department.toCommonDTO())
-                .school(school.toCommonDTO())
-                .university(school.getUniversity().toCommonDTO())
-                .academicYear(this.academicYear.toCommonDTO())
+                .courses(this.course != null ? this.course.toCommonDTO() : null)
+                .department(department != null ? department.toCommonDTO() : null)
+                .school(school != null ? school.toCommonDTO() : null)
+                .university(
+                        school != null && school.getUniversity() != null
+                                ? school.getUniversity().toCommonDTO()
+                                : null
+                )
+                .academicYear(this.academicYear != null ? this.academicYear.toCommonDTO() : null)
                 .permissionActions(permissionActions)
                 .createdAt(this.getCreatedAt())
                 .updatedAt(this.getUpdatedAt())

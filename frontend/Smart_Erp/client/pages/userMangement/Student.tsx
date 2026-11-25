@@ -85,6 +85,8 @@ import {
     type UserProfileRequest,
 } from "@/services/userMangement/studentService";
 import { PassportPhotoUpload } from "@/components/PassportPhotoUpload";
+import FaceEnrollModal from "@/components/admin/FaceEnrollModal";
+import { adminFaceService, type FaceStatusSummary } from "@/services/adminFaceService";
 
 /* -------------------------------------------------------------------------- */
 /* Constants & Types                                                          */
@@ -228,6 +230,11 @@ function getSectionGroupLabel(item: SectionGroupFilter) {
         formatCommon(item.sectionGroup),
         formatCommon(item.specialization),
         formatCommon(item.courses),
+        formatCommon(item.academicYear),
+        item.feeStructure?.name ? `Fee: ${item.feeStructure.name}` : "",
+        item.availableSeats != null && item.capacity != null
+            ? `${item.availableSeats}/${item.capacity} seats left`
+            : "",
     ].filter(Boolean);
     return parts.join(" · ");
 }
@@ -470,6 +477,10 @@ export default function Student() {
     const [scholarships, setScholarships] = useState<CommonDTO[]>([]);
     const [scholarshipLoading, setScholarshipLoading] = useState(false);
     const [selectedSectionGroupId, setSelectedSectionGroupId] = useState<number | "">("");
+    const [allSectionGroups, setAllSectionGroups] = useState<SectionGroupFilter[]>([]);
+    const [modalYearFilter, setModalYearFilter] = useState<number | "">("");
+    const [modalSpecFilter, setModalSpecFilter] = useState<number | "">("");
+    const [modalGroupLoading, setModalGroupLoading] = useState(false);
     const [sections, setSections] = useState<CommonDTO[]>([]);
     const [sectionLoading, setSectionLoading] = useState(false);
     const [selectedSectionId, setSelectedSectionId] = useState<number | "">("");
@@ -489,6 +500,14 @@ export default function Student() {
         y: number;
     } | null>(null);
     const actionMenuRef = useRef<HTMLDivElement>(null);
+
+    // Face biometric modal state
+    const [faceModalStudent, setFaceModalStudent] = useState<{
+        id: number;
+        name: string;
+        rollNumber?: string;
+    } | null>(null);
+    const [faceStatusMap, setFaceStatusMap] = useState<Record<number, FaceStatusSummary>>({});
 
     // Close action menu on click outside or escape
     useEffect(() => {
@@ -516,8 +535,12 @@ export default function Student() {
         else setLoading(true);
         setLoadError("");
         try {
-            const data = await getStudentEnrollments();
+            const [data, faceMap] = await Promise.all([
+                getStudentEnrollments(),
+                adminFaceService.getFaceStatusMap().catch(() => ({} as Record<number, FaceStatusSummary>)),
+            ]);
             setStudents(data);
+            setFaceStatusMap(faceMap);
         } catch (error) {
             const message = extractStudentErrorMessage(error, "Unable to load students.");
             setLoadError(message);
@@ -531,11 +554,66 @@ export default function Student() {
     useEffect(() => {
         void loadStudents();
         getStudentSectionGroups()
-            .then(setSectionGroups)
+            .then((list) => {
+                setAllSectionGroups(list);
+                setSectionGroups(list);
+            })
             .catch((error) => {
                 console.error("Unable to load student section groups", error);
             });
     }, [loadStudents]);
+
+    // Sequential backend lookup when dialog academic year / specialization filter changes
+    useEffect(() => {
+        if (dialog?.mode !== "CREATE" && dialog?.mode !== "COURSE") return;
+        let cancelled = false;
+        setModalGroupLoading(true);
+        getStudentSectionGroups({
+            academicYearId: typeof modalYearFilter === "number" ? modalYearFilter : undefined,
+            specializationId: typeof modalSpecFilter === "number" ? modalSpecFilter : undefined,
+        })
+            .then((list) => {
+                if (!cancelled) {
+                    setSectionGroups(list);
+                    if (
+                        selectedSectionGroupId &&
+                        !list.some((item) => item.sectionGroup.id === selectedSectionGroupId)
+                    ) {
+                        setSelectedSectionGroupId("");
+                    }
+                }
+            })
+            .catch((error) => {
+                if (!cancelled) {
+                    toast.error(extractStudentErrorMessage(error, "Unable to filter eligible section groups."));
+                }
+            })
+            .finally(() => {
+                if (!cancelled) setModalGroupLoading(false);
+            });
+        return () => {
+            cancelled = true;
+        };
+    }, [dialog?.mode, modalYearFilter, modalSpecFilter]);
+
+    const modalAcademicYearOptions = useMemo(() => {
+        return uniqueOptions(
+            allSectionGroups
+                .map((g) => g.academicYear)
+                .filter((y): y is CommonDTO => Boolean(y))
+        );
+    }, [allSectionGroups]);
+
+    const modalSpecializationOptions = useMemo(() => {
+        const scoped = typeof modalYearFilter === "number"
+            ? allSectionGroups.filter((g) => g.academicYear?.id === modalYearFilter)
+            : allSectionGroups;
+        return uniqueOptions(
+            scoped
+                .map((g) => g.specialization)
+                .filter((s): s is CommonDTO => Boolean(s))
+        );
+    }, [allSectionGroups, modalYearFilter]);
 
     useEffect(() => {
         return () => {
@@ -1003,6 +1081,9 @@ export default function Student() {
         setDialog({ mode, student });
         setSelectedFile(null);
         setSelectedSectionGroupId("");
+        setModalYearFilter("");
+        setModalSpecFilter("");
+        setSectionGroups(allSectionGroups);
         setSelectedSectionId("");
         setSections([]);
         setDueDate("");
@@ -1042,11 +1123,112 @@ export default function Student() {
         setDialog(null);
         setSelectedFile(null);
         setSelectedSectionId("");
+        setModalYearFilter("");
+        setModalSpecFilter("");
+        setSectionGroups(allSectionGroups);
         setSections([]);
         setPhotoLoading(false);
         if (photoUrl) URL.revokeObjectURL(photoUrl);
         setPhotoUrl("");
     };
+
+    const renderSectionGroupSelector = (
+        options: { currentGroupId?: number | null; loadScholarships?: boolean } = {}
+    ) => (
+        <div className="space-y-4">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                <Field
+                    label="Filter by Academic Year"
+                    hint="Shows years with eligible fee-mapped section groups."
+                >
+                    <div className="relative">
+                        <select
+                            value={modalYearFilter}
+                            onChange={(e) => {
+                                const yr = e.target.value ? Number(e.target.value) : "";
+                                setModalYearFilter(yr);
+                                setModalSpecFilter("");
+                            }}
+                            className={`${inputClass} appearance-none pr-9`}
+                        >
+                            <option value="">All Academic Years</option>
+                            {modalAcademicYearOptions.map((yr) => (
+                                <option key={yr.value} value={yr.value}>
+                                    {yr.label}
+                                </option>
+                            ))}
+                        </select>
+                        <SelectChevron />
+                    </div>
+                </Field>
+
+                <Field
+                    label="Filter by Specialization"
+                    hint="Scopes groups to a specialization with a mapped fee structure."
+                >
+                    <div className="relative">
+                        <select
+                            value={modalSpecFilter}
+                            onChange={(e) =>
+                                setModalSpecFilter(e.target.value ? Number(e.target.value) : "")
+                            }
+                            className={`${inputClass} appearance-none pr-9`}
+                        >
+                            <option value="">All Eligible Specializations</option>
+                            {modalSpecializationOptions.map((sp) => (
+                                <option key={sp.value} value={sp.value}>
+                                    {sp.label}
+                                </option>
+                            ))}
+                        </select>
+                        <SelectChevron />
+                    </div>
+                </Field>
+            </div>
+
+            <Field
+                label="Target Section Group"
+                required
+                hint="Only section groups eligible for the specialization and academic year with a mapped fee structure and open seats are listed."
+            >
+                <div className="relative">
+                    <select
+                        required={!options.currentGroupId}
+                        value={selectedSectionGroupId}
+                        onChange={(e) => {
+                            const id = e.target.value ? Number(e.target.value) : "";
+                            setSelectedSectionGroupId(id);
+                            if (options.loadScholarships) {
+                                setCreateScholarshipIds([]);
+                                if (typeof id === "number") void loadScholarshipOptions(id);
+                                else setScholarships([]);
+                            }
+                        }}
+                        disabled={modalGroupLoading}
+                        className={`${inputClass} appearance-none pr-9`}
+                    >
+                        <option value="">
+                            {modalGroupLoading
+                                ? "Filtering eligible section groups..."
+                                : sectionGroups.length === 0
+                                ? "No eligible section groups with valid fee structure & open seats"
+                                : "Select Eligible Section Group"}
+                        </option>
+                        {sectionGroups.map((item) => (
+                            <option key={item.sectionGroup.id} value={item.sectionGroup.id}>
+                                {getSectionGroupLabel(item)}
+                                {options.currentGroupId &&
+                                item.sectionGroup.id === options.currentGroupId
+                                    ? " (Current)"
+                                    : ""}
+                            </option>
+                        ))}
+                    </select>
+                    <SelectChevron />
+                </div>
+            </Field>
+        </div>
+    );
 
     const loadSectionOptions = async (enrollmentId: number, currentSectionId?: number | null) => {
         setSectionLoading(true);
@@ -1922,17 +2104,28 @@ export default function Student() {
                                                 </div>
                                             </td>
 
-                                            {/* Status */}
+                                            {/* Status & Face Biometrics */}
                                             <td className="px-4 py-4">
-                                                <span
-                                                    className={`inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1 text-xs font-semibold ${statusTone(
-                                                        student.status
-                                                    )}`}
-                                                >
-                                                    <span className="h-1.5 w-1.5 rounded-full bg-current" />
-                                                    {STATUS_LABELS[student.status.toUpperCase()] ??
-                                                        student.status}
-                                                </span>
+                                                <div className="flex flex-col gap-1.5 items-start">
+                                                    <span
+                                                        className={`inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1 text-xs font-semibold ${statusTone(
+                                                            student.status
+                                                        )}`}
+                                                    >
+                                                        <span className="h-1.5 w-1.5 rounded-full bg-current" />
+                                                        {STATUS_LABELS[student.status.toUpperCase()] ??
+                                                            student.status}
+                                                    </span>
+                                                    {faceStatusMap[student.student.id]?.enrolled ? (
+                                                        <span className="inline-flex items-center gap-1 rounded-md border border-emerald-500/30 bg-emerald-500/10 px-2 py-0.5 text-[10px] font-semibold text-emerald-300">
+                                                            <ShieldCheck size={11} /> Face Biometrics Registered
+                                                        </span>
+                                                    ) : (
+                                                        <span className="inline-flex items-center gap-1 rounded-md border border-amber-500/30 bg-amber-500/10 px-2 py-0.5 text-[10px] font-medium text-amber-300">
+                                                            <Camera size={11} /> Face Pending
+                                                        </span>
+                                                    )}
+                                                </div>
                                             </td>
 
                                             {/* Governance / Creator Pill with Tooltip */}
@@ -1977,6 +2170,23 @@ export default function Student() {
                                                         title={canEdit ? "Edit Profile" : "No update permission"}
                                                     >
                                                         <Pencil size={15} />
+                                                    </button>
+
+                                                    {/* Quick Face Biometrics Button */}
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => {
+                                                            setFaceModalStudent({
+                                                                id: student.student.id,
+                                                                name: fullName(student),
+                                                                rollNumber: student.rollNumber,
+                                                            });
+                                                        }}
+                                                        aria-label="Manage face biometrics"
+                                                        className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-emerald-500/30 bg-emerald-500/10 text-emerald-300 transition hover:border-emerald-400 hover:bg-emerald-500/20"
+                                                        title="Manage Student Face Biometrics"
+                                                    >
+                                                        <Camera size={15} />
                                                     </button>
 
                                                     {/* Actions Dropdown Toggle Button */}
@@ -2304,6 +2514,22 @@ export default function Student() {
                                 detail="Modify contact & passport photo"
                                 disabled={!hasAction(actionMenu.student, "UPDATE")}
                                 onClick={() => void openDialog("PROFILE", actionMenu.student)}
+                            />
+
+                            <MenuButton
+                                icon={ShieldCheck}
+                                iconColor="text-emerald-400"
+                                label="Face Biometric ID"
+                                detail="Register or reset AI face template"
+                                onClick={() => {
+                                    const s = actionMenu.student;
+                                    setFaceModalStudent({
+                                        id: s.student.id,
+                                        name: fullName(s),
+                                        rollNumber: s.rollNumber,
+                                    });
+                                    setActionMenu(null);
+                                }}
                             />
 
                             {/* Category: Academics & Placement */}
@@ -2966,6 +3192,21 @@ export default function Student() {
                                 >
                                     Close
                                 </button>
+                                <button
+                                    type="button"
+                                    onClick={() => {
+                                        const st = dialog.student!;
+                                        closeDialog();
+                                        setFaceModalStudent({
+                                            id: st.student.id,
+                                            name: fullName(st),
+                                            rollNumber: st.rollNumber || undefined,
+                                        });
+                                    }}
+                                    className="inline-flex items-center justify-center gap-2 rounded-xl border border-cyan-400/30 bg-cyan-500/15 px-4 py-2.5 text-sm font-semibold text-cyan-200 transition hover:bg-cyan-500/25"
+                                >
+                                    <Camera size={15} /> Manage Face Biometrics
+                                </button>
                                 {hasAction(dialog.student, "UPDATE") && (
                                     <button
                                         type="button"
@@ -3023,44 +3264,11 @@ export default function Student() {
                             {/* Academic Enrollment */}
                             <FormSection
                                 title="Academic Placement"
-                                description="Select target section group. University, course and year are derived automatically."
+                                description="Select eligible academic year, specialization, and section group with a valid mapped fee structure."
                                 icon={<GraduationCap size={16} />}
                             >
                                 <div className="sm:col-span-2">
-                                    <Field
-                                        label="Target Section Group"
-                                        required
-                                        hint="The backend links the enrollment to this group."
-                                    >
-                                        <div className="relative">
-                                            <select
-                                                required
-                                                value={selectedSectionGroupId}
-                                                onChange={(e) => {
-                                                    const id = e.target.value
-                                                        ? Number(e.target.value)
-                                                        : "";
-                                                    setSelectedSectionGroupId(id);
-                                                    setCreateScholarshipIds([]);
-                                                    if (typeof id === "number")
-                                                        void loadScholarshipOptions(id);
-                                                    else setScholarships([]);
-                                                }}
-                                                className={`${inputClass} appearance-none pr-9`}
-                                            >
-                                                <option value="">Select Section Group</option>
-                                                {sectionGroups.map((item) => (
-                                                    <option
-                                                        key={item.sectionGroup.id}
-                                                        value={item.sectionGroup.id}
-                                                    >
-                                                        {getSectionGroupLabel(item)}
-                                                    </option>
-                                                ))}
-                                            </select>
-                                            <SelectChevron />
-                                        </div>
-                                    </Field>
+                                    {renderSectionGroupSelector({ loadScholarships: true })}
                                 </div>
 
                                 <Field
@@ -3267,34 +3475,9 @@ export default function Student() {
                                 </p>
                             </div>
 
-                            <Field label="Target Section Group" required>
-                                <div className="relative">
-                                    <select
-                                        value={selectedSectionGroupId}
-                                        onChange={(e) =>
-                                            setSelectedSectionGroupId(
-                                                e.target.value ? Number(e.target.value) : ""
-                                            )
-                                        }
-                                        className={`${inputClass} appearance-none pr-9`}
-                                    >
-                                        <option value="">Select target section group</option>
-                                        {sectionGroups.map((item) => (
-                                            <option
-                                                key={item.sectionGroup.id}
-                                                value={item.sectionGroup.id}
-                                            >
-                                                {getSectionGroupLabel(item)}
-                                                {item.sectionGroup.id ===
-                                                    dialog.student?.sectionGroup?.id
-                                                    ? " (Current)"
-                                                    : ""}
-                                            </option>
-                                        ))}
-                                    </select>
-                                    <SelectChevron />
-                                </div>
-                            </Field>
+                            {renderSectionGroupSelector({
+                                currentGroupId: dialog.student.sectionGroup?.id,
+                            })}
 
                             <div className="flex items-center justify-end gap-2 border-t border-white/10 pt-4">
                                 <button
@@ -3666,6 +3849,18 @@ export default function Student() {
                     </Modal>
                 )}
             </AnimatePresence>
+
+            {/* Super Admin Face Biometric Enrollment Modal */}
+            {faceModalStudent && (
+                <FaceEnrollModal
+                    studentId={faceModalStudent.id}
+                    studentName={faceModalStudent.name}
+                    rollNumber={faceModalStudent.rollNumber}
+                    isOpen={!!faceModalStudent}
+                    onClose={() => setFaceModalStudent(null)}
+                    onEnrolled={() => void loadStudents(true)}
+                />
+            )}
         </motion.main>
     );
 }

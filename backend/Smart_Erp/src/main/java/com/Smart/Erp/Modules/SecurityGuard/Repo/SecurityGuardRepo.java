@@ -10,6 +10,7 @@ import java.util.Optional;
 @Repository
 public interface SecurityGuardRepo extends JpaRepository<SecurityGuard, Long> {
     Optional<SecurityGuard> findByUserId(Long userId);
+    Optional<SecurityGuard> findByUser(com.Smart.Erp.Modules.User.Entity.User user);
     Optional<SecurityGuard> findByBadgeNumber(String badgeNumber);
     boolean existsByBadgeNumber(String badgeNumber);
     List<SecurityGuard> findByUser_University_Id(Long universityId);

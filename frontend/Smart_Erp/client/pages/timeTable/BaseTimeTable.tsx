@@ -574,10 +574,11 @@ export default function BaseTimeTablePage() {
             let classIdx = 1;
             const resequenced = updated.map((p, idx) => {
                 const isClass = p.periodType === "CLASS";
+                const pNum: number | "" = isClass ? classIdx++ : "";
                 return {
                     ...p,
                     sequenceNumber: idx + 1,
-                    periodNumber: isClass ? classIdx++ : "",
+                    periodNumber: pNum,
                     label: isClass && p.label.startsWith("Period ") ? `Period ${classIdx - 1}` : p.label,
                 };
             });

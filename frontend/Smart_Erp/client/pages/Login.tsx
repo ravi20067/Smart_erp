@@ -3,6 +3,7 @@ import { useEffect, useState, type FormEvent } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { motion, useReducedMotion } from "framer-motion";
 import {
+  AlertCircle,
   ArrowRight,
   ArrowUpRight,
   Eye,
@@ -18,7 +19,7 @@ import {
 
 import LandingHeader from "@/components/LandingHeader";
 import Footer from "@/components/Footer";
-import { loginAuth } from "@/services/authService";
+import { loginAuth, extractAuthErrorMessage } from "@/services/authService";
 import { useAuth } from "@/services/authContext";
 
 export default function Login() {
@@ -43,36 +44,29 @@ export default function Login() {
 
     if (loading) return;
 
+    const trimmedUsername = username.trim();
+    if (!trimmedUsername) {
+      setErrorMsg("Please enter your username.");
+      return;
+    }
+
+    if (!password) {
+      setErrorMsg("Please enter your password.");
+      return;
+    }
+
     setLoading(true);
     setErrorMsg("");
 
     try {
       // Preserve the existing authentication API and JWT flow.
-      const data = await loginAuth(username, password);
+      const data = await loginAuth(trimmedUsername, password);
 
       login(data.token);
       navigate(getDashboardRoute(), { replace: true });
     } catch (error: unknown) {
-      const status =
-        typeof error === "object" &&
-          error !== null &&
-          "response" in error
-          ? (
-            error as {
-              response?: {
-                status?: number;
-              };
-            }
-          ).response?.status
-          : undefined;
-
-      if (status === 401 || status === 403) {
-        setErrorMsg("Invalid username or password. Please try again.");
-      } else {
-        setErrorMsg(
-          "Unable to sign in right now. Please check your connection and try again.",
-        );
-      }
+      const message = extractAuthErrorMessage(error);
+      setErrorMsg(message);
     } finally {
       setLoading(false);
     }
@@ -262,9 +256,13 @@ export default function Login() {
                         animate={{ opacity: 1, y: 0 }}
                         role="alert"
                         aria-live="polite"
-                        className="mb-6 rounded-xl border border-red-400/20 bg-red-400/[0.07] p-4 text-sm leading-6 text-red-200"
+                        className="mb-6 flex items-start gap-3 rounded-xl border border-rose-500/30 bg-rose-500/10 p-4 text-sm leading-6 text-rose-200 backdrop-blur-md"
                       >
-                        {errorMsg}
+                        <AlertCircle className="mt-0.5 h-5 w-5 shrink-0 text-rose-400" />
+                        <div className="flex-1">
+                          <p className="font-semibold text-rose-300">Sign-in error</p>
+                          <p className="mt-0.5 text-xs text-rose-200/90">{errorMsg}</p>
+                        </div>
                       </motion.div>
                     )}
 

@@ -141,15 +141,19 @@ public class StudentEnrollment extends BaseAuditableEntity {
                 .sectionGroup(sectionGroup.toCommonDTO())
                 .status(this.getStatus())
                 .scholarships(
-                        this.getCurrentFeeAccount().getScholarships().stream()
-                                .map(CommonReference::toCommonDTO)
-                                .toList()
+                        this.getCurrentFeeAccount() != null && this.getCurrentFeeAccount().getScholarships() != null
+                                ? this.getCurrentFeeAccount().getScholarships().stream()
+                                        .map(CommonReference::toCommonDTO)
+                                        .toList()
+                                : List.of()
                 )
                 .university(
                         school.getUniversity().toCommonDTO()
                 )
                 .frequency(
-                        this.getCurrentFeeAccount().getFeeStructure().getFrequency()
+                        this.getCurrentFeeAccount() != null && this.getCurrentFeeAccount().getFeeStructure() != null
+                                ? this.getCurrentFeeAccount().getFeeStructure().getFrequency()
+                                : null
                 )
                 .fees(
                         this.getFeeAccounts().stream()

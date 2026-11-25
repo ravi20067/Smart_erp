@@ -1,10 +1,12 @@
 package com.Smart.Erp.Modules.TimeTable.Controller;
 
+import com.Smart.Erp.Modules.TimeTable.DTO.AutoGenerateTimetableRequest;
 import com.Smart.Erp.Modules.TimeTable.DTO.OverrideRequest;
 import com.Smart.Erp.Modules.TimeTable.DTO.OverrideResponse;
 import com.Smart.Erp.Modules.TimeTable.DTO.TimetableVersionRequest;
 import com.Smart.Erp.Modules.TimeTable.DTO.TimetableVersionResponse;
 import com.Smart.Erp.Modules.TimeTable.DTO.TimetableView;
+import com.Smart.Erp.Modules.TimeTable.Services.AutomaticTimetableGeneratorService;
 import com.Smart.Erp.Modules.TimeTable.Services.TimetableManagementService;
 import com.Smart.Erp.Modules.TimeTable.Services.TimetableQueryService;
 import com.Smart.Erp.Modules.TimeTable.Services.TimetableResponseMapper;
@@ -26,6 +28,17 @@ public class TimetableController {
     private final TimetableManagementService management;
     private final TimetableQueryService queries;
     private final TimetableResponseMapper mapper;
+    private final AutomaticTimetableGeneratorService autoGenerator;
+
+    @PostMapping("/auto-generate")
+    @PreAuthorize("hasAnyRole('HEAD_OF_DEPARTMENT','ADMIN','DEAN','SCHOOL_DEAN','SUPER_ADMIN')")
+    public ResponseEntity<TimetableVersionResponse> autoGenerateTimetable(
+            @Valid @RequestBody AutoGenerateTimetableRequest r
+    ) {
+        return ResponseEntity.ok(
+                mapper.version(autoGenerator.generateAutomaticTimetable(r))
+        );
+    }
 
     @PostMapping("/versions")
     @PreAuthorize("hasAnyRole('HEAD_OF_DEPARTMENT','ADMIN','DEAN','SCHOOL_DEAN','SUPER_ADMIN') and @timetablePermission.canCreateVersion(#r)")

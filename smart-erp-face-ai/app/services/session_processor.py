@@ -24,6 +24,7 @@ class SessionData:
     detected_challenge_actions: List[str] = field(default_factory=list)
     anti_spoof_scores: List[float] = field(default_factory=list)
     continuity_scores: List[float] = field(default_factory=list)
+    best_embedding: Optional[List[float]] = None
     is_completed: bool = False
 
     @property
@@ -64,6 +65,7 @@ class SessionData:
                 "average_live_confidence": round(avg_live, 4)
             },
             "detected_challenge_actions": list(dict.fromkeys(self.detected_challenge_actions)),
+            "has_captured_embedding": self.best_embedding is not None,
             "processing_status": "COMPLETED" if self.is_completed else ("EXPIRED" if self.is_expired else "ACTIVE")
         }
 

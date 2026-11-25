@@ -7,7 +7,7 @@ import com.Smart.Erp.Modules.User.Enum.PermissionAction;
 import lombok.*;
 import lombok.experimental.SuperBuilder;
 
-import java.util.List;
+import java.time.LocalDateTime;
 
 @Getter
 @SuperBuilder
@@ -15,4 +15,6 @@ public class StudentResponse extends BaseDTO {
     private Long id;
     private String registrationNumber;
     private UserProfileResponse basicDetailRequest;
+    private Boolean hasEnrolledFace;
+    private LocalDateTime faceEnrolledAt;
 }

@@ -90,8 +90,14 @@ export interface StudentEnrollmentResponse {
 
 export interface SectionGroupFilter {
     sectionGroup: CommonDTO;
+    section?: CommonDTO | null;
     specialization: CommonDTO | null;
     courses: CommonDTO | null;
+    academicYear?: CommonDTO | null;
+    feeStructure?: CommonDTO | null;
+    capacity?: number | null;
+    studentCount?: number | null;
+    availableSeats?: number | null;
 }
 
 export interface StudentCreateRequest {
@@ -312,15 +318,33 @@ export async function getStudentEnrollments(): Promise<StudentEnrollmentResponse
     }
 }
 
-export async function getStudentSectionGroups(): Promise<SectionGroupFilter[]> {
+export async function getStudentSectionGroups(filters?: {
+    specializationId?: number;
+    academicYearId?: number;
+}): Promise<SectionGroupFilter[]> {
     try {
-        const response = await api.get<unknown>(`${getStudentBaseUrl()}/filter/section-groups`);
+        const params: Record<string, number> = {};
+        if (filters?.specializationId && Number.isSafeInteger(filters.specializationId) && filters.specializationId > 0) {
+            params.specializationId = filters.specializationId;
+        }
+        if (filters?.academicYearId && Number.isSafeInteger(filters.academicYearId) && filters.academicYearId > 0) {
+            params.academicYearId = filters.academicYearId;
+        }
+        const response = await api.get<unknown>(`${getStudentBaseUrl()}/filter/section-groups`, {
+            params: Object.keys(params).length > 0 ? params : undefined,
+        });
         return asArray(response.data).map((raw) => {
             const item = asRecord(raw);
             return {
                 sectionGroup: normalizeCommon(item.sectionGroup) ?? { id: 0, name: "Unknown section group" },
+                section: normalizeCommon(item.section),
                 specialization: normalizeCommon(item.specialization),
                 courses: normalizeCommon(item.courses),
+                academicYear: normalizeCommon(item.academicYear),
+                feeStructure: normalizeCommon(item.feeStructure),
+                capacity: item.capacity != null ? Number(item.capacity) : null,
+                studentCount: item.studentCount != null ? Number(item.studentCount) : null,
+                availableSeats: item.availableSeats != null ? Number(item.availableSeats) : null,
             };
         }).filter((item) => item.sectionGroup.id > 0);
     } catch (error) {

@@ -249,6 +249,42 @@ export async function getCalendar(calendarId: number): Promise<CalendarResponse>
 }
 
 /**
+ * GET /{role}/timetable/calendars/by-section/{sectionId}
+ * Fetches the single SectionAcademicCalendar bound to the given section, or null if none exists yet.
+ */
+export async function getCalendarBySection(sectionId: number): Promise<CalendarResponse | null> {
+    if (!sectionId || sectionId <= 0) return null;
+    try {
+        const response = await api.get<unknown>(
+            `${getServiceBaseUrl()}/timetable/calendars/by-section/${sectionId}`
+        );
+        if (response.status === 204 || !response.data) {
+            return null;
+        }
+        return normalizeCalendar(response.data);
+    } catch (error) {
+        throw new Error(extractErrorMessage(error, "Unable to load section academic calendar."));
+    }
+}
+
+/**
+ * POST /{role}/timetable/calendars/{calendarId}/publish
+ */
+export async function publishCalendar(calendarId: number): Promise<CalendarResponse> {
+    if (!calendarId || calendarId <= 0) {
+        throw new Error("Invalid calendar ID.");
+    }
+    try {
+        const response = await api.post<unknown>(
+            `${getServiceBaseUrl()}/timetable/calendars/${calendarId}/publish`
+        );
+        return normalizeCalendar(response.data);
+    } catch (error) {
+        throw new Error(extractErrorMessage(error, "Unable to publish section calendar."));
+    }
+}
+
+/**
  * GET /{role}/timetable/calendars/{calendarId}/days?from=...&to=...
  */
 export async function getCalendarDays(

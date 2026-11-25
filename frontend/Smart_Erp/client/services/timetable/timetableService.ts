@@ -57,6 +57,9 @@ export interface EntryRequest {
     basePeriodId: number;
     subjectId: number;
     teacherEnrollmentId: number;
+    teacherId?: number | null;
+    teacherName?: string | null;
+    subjectName?: string | null;
     roomId?: number | null;
     entryType: TimetableEntryType;
     remarks?: string | null;
@@ -592,6 +595,39 @@ export async function getSubjectFilter(): Promise<CommonDTO[]> {
             .filter((s) => s.id > 0);
     } catch {
         return [];
+    }
+}
+
+export interface AutoGenerateTimetableRequest {
+    sectionId: number;
+    sectionGroupId?: number | null;
+    scope?: TimetableScope;
+    baseTimeTableId: number;
+    academicYearId?: number | null;
+    name?: string;
+    description?: string | null;
+    effectiveFrom: string; // YYYY-MM-DD
+    effectiveUntil?: string | null;
+    preferredRoomIds?: number[];
+    publishImmediately?: boolean;
+}
+
+/**
+ * POST /{role}/timetable/auto-generate
+ */
+export async function autoGenerateTimetable(
+    request: AutoGenerateTimetableRequest
+): Promise<TimetableVersionResponse> {
+    try {
+        const response = await api.post<unknown>(
+            `${getServiceBaseUrl()}/auto-generate`,
+            request
+        );
+        return normalizeTimetableVersion(response.data);
+    } catch (error) {
+        throw new Error(
+            extractErrorMessage(error, "Unable to auto-generate timetable.")
+        );
     }
 }
 

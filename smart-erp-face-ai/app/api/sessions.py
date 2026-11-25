@@ -70,7 +70,8 @@ def complete_session(session_id: str, request: Request):
         session_id=session_id,
         status="COMPLETED",
         frames_processed=session.frames_processed,
-        evidence=evidence or {}
+        evidence=evidence or {},
+        captured_embedding=session.best_embedding
     )
 
 

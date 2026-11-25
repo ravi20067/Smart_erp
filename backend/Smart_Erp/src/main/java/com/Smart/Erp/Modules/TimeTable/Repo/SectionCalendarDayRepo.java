@@ -7,4 +7,5 @@ import java.util.Optional;
 public interface SectionCalendarDayRepo extends JpaRepository<SectionCalendarDay, Long> {
     Optional<SectionCalendarDay> findByCalendarIdAndCalendarDate(Long calendarId, LocalDate date);
     List<SectionCalendarDay> findByCalendarIdAndCalendarDateBetweenOrderByCalendarDate(Long calendarId, LocalDate from, LocalDate to);
+    List<SectionCalendarDay> findByCalendarIdOrderByCalendarDateAsc(Long calendarId);
 }

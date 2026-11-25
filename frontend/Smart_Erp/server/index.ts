@@ -2,6 +2,7 @@ import "dotenv/config";
 import express from "express";
 import cors from "cors";
 import { handleDemo } from "./routes/demo";
+import { handleLocalHandshake, handleCompanionStatus } from "./handshake-companion";
 import {
   loadClasses,
   loadSections,
@@ -16,10 +17,6 @@ import {
   createSection,
   assignTeacher,
   copyStructure,
-  loadDevicesHandler,
-  addDeviceHandler,
-  updateDeviceHandler,
-  deleteDeviceHandler,
   deleteStudentHandler,
   deleteTeacherHandler,
 } from "./routes/admin";
@@ -31,6 +28,12 @@ export function createServer() {
   app.use(cors());
   app.use(express.json());
   app.use(express.urlencoded({ extended: true }));
+
+  // Local Network Attendance Handshake Companion endpoints
+  app.post("/handshake", handleLocalHandshake);
+  app.post("/api/handshake", handleLocalHandshake);
+  app.get("/handshake/status", handleCompanionStatus);
+  app.get("/api/handshake/status", handleCompanionStatus);
 
   // API routes
   app.get("/api/ping", (_req, res) => {
@@ -60,12 +63,6 @@ export function createServer() {
   app.post("/api/admin/academic-years/classes/:classId/sections", createSection);
   app.put("/api/admin/academic-years/sections/:sectionId/teacher", assignTeacher);
   app.post("/api/admin/academic-years/:academicYearId/copy-structure", copyStructure);
-
-  // Admin Device routes
-  app.get("/api/admin/device/get_devices", loadDevicesHandler);
-  app.post("/api/admin/device/add", addDeviceHandler);
-  app.put("/api/admin/device/:id", updateDeviceHandler);
-  app.delete("/api/admin/device/:id", deleteDeviceHandler);
 
   return app;
 }

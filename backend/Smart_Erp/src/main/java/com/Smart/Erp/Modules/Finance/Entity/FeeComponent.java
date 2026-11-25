@@ -60,7 +60,7 @@ import java.math.BigDecimal;
 
     public FeeComponentResponse mapToResponse() {
         return FeeComponentResponse.builder()
-                .id(id)
+                .id(id != null ? id : 0L)
                 .feeCategoryType(categoryType)
                 .componentName(componentName)
                 .amount(this.getAmount())

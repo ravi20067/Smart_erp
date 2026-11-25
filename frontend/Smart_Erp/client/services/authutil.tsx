@@ -13,13 +13,13 @@ interface DecodedToken {
 export const ROLE_BASE_URL: Record<string, string> = {
     STUDENT: "/student",
     TEACHER: "/teacher",
+    SECURITY_GUARD: "/security-guard",
     LIBRARY: "/library",
     ADMISSION: "/admission",
     EXAMINATION: "/examination-dept",
     FINANCE: "/finance",
     SUPER_ADMIN: "/super-admin",
     ADMIN: "/admin",
-    DEVICES: "/devices",
 };
 
 export const normalizeRole = (role?: string | null): string | null => {

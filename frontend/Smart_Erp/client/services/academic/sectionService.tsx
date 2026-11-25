@@ -27,6 +27,20 @@ export interface SectionGroupResponse {
     code?: string | null;
     specialization?: CommonDTO | null;
     studentCount?: number | null;
+    feeStructure?: CommonDTO | null;
+    hasFeeStructure?: boolean;
+}
+
+export interface EligibleSectionGroupItem {
+    sectionGroup: CommonDTO;
+    section?: CommonDTO | null;
+    specialization?: CommonDTO | null;
+    courses?: CommonDTO | null;
+    academicYear?: CommonDTO | null;
+    feeStructure?: CommonDTO | null;
+    capacity?: number | null;
+    studentCount?: number | null;
+    availableSeats?: number | null;
 }
 
 export interface SectionResponse {
@@ -181,6 +195,7 @@ function normalizeSectionGroup(value: unknown): SectionGroupResponse {
     }
 
     const studentCountNum = Number(item.studentCount);
+    const feeStructure = normalizeCommonDTO(item.feeStructure);
 
     return {
         id: Number(item.id) || 0,
@@ -188,6 +203,8 @@ function normalizeSectionGroup(value: unknown): SectionGroupResponse {
         code: typeof item.code === "string" ? item.code : null,
         specialization: spec,
         studentCount: Number.isFinite(studentCountNum) ? studentCountNum : 0,
+        feeStructure,
+        hasFeeStructure: Boolean(item.hasFeeStructure ?? feeStructure),
     };
 }
 
@@ -433,6 +450,85 @@ export async function getSectionAcademicYearFilter(
             extractErrorMessage(
                 error,
                 "Unable to load academic years for this course."
+            )
+        );
+    }
+}
+
+/**
+ * GET {baseUrl}/sections/specialization/filter?courseId={courseId}&academicYearId={academicYearId}
+ *
+ * Returns specializations in this course and academic year that have a valid mapped FeeStructure.
+ */
+export async function getSectionSpecializationFilter(
+    courseId: number,
+    academicYearId: number
+): Promise<CommonDTO[]> {
+    if (!Number.isFinite(courseId) || courseId <= 0 || !Number.isFinite(academicYearId) || academicYearId <= 0) {
+        return [];
+    }
+
+    try {
+        const response = await api.get<unknown>(
+            `${getSectionsUrl()}/specialization/filter`,
+            { params: { courseId, academicYearId } }
+        );
+        return normalizeCommonDTOs(response.data);
+    } catch (error) {
+        throw new Error(
+            extractErrorMessage(
+                error,
+                "Unable to load specializations with mapped fee structures."
+            )
+        );
+    }
+}
+
+/**
+ * GET {baseUrl}/sections/groups/eligible?specializationId=...&academicYearId=...
+ *
+ * Returns section groups eligible for the specialization & academic year having a valid mapped FeeStructure.
+ */
+export async function getEligibleSectionGroups(filters?: {
+    specializationId?: number;
+    academicYearId?: number;
+}): Promise<EligibleSectionGroupItem[]> {
+    try {
+        const params: Record<string, number> = {};
+        if (filters?.specializationId && Number.isFinite(filters.specializationId) && filters.specializationId > 0) {
+            params.specializationId = filters.specializationId;
+        }
+        if (filters?.academicYearId && Number.isFinite(filters.academicYearId) && filters.academicYearId > 0) {
+            params.academicYearId = filters.academicYearId;
+        }
+
+        const response = await api.get<unknown>(
+            `${getSectionsUrl()}/groups/eligible`,
+            { params: Object.keys(params).length > 0 ? params : undefined }
+        );
+
+        return ensureArray<Record<string, unknown>>(response.data)
+            .map((item) => {
+                const sectionGroup = normalizeCommonDTO(item.sectionGroup);
+                if (!sectionGroup) return null;
+                return {
+                    sectionGroup,
+                    section: normalizeCommonDTO(item.section),
+                    specialization: normalizeCommonDTO(item.specialization),
+                    courses: normalizeCommonDTO(item.courses),
+                    academicYear: normalizeCommonDTO(item.academicYear),
+                    feeStructure: normalizeCommonDTO(item.feeStructure),
+                    capacity: item.capacity != null ? Number(item.capacity) : null,
+                    studentCount: item.studentCount != null ? Number(item.studentCount) : null,
+                    availableSeats: item.availableSeats != null ? Number(item.availableSeats) : null,
+                } as EligibleSectionGroupItem;
+            })
+            .filter((item): item is EligibleSectionGroupItem => item !== null);
+    } catch (error) {
+        throw new Error(
+            extractErrorMessage(
+                error,
+                "Unable to load eligible section groups."
             )
         );
     }

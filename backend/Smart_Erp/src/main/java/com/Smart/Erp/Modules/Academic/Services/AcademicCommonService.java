@@ -6,6 +6,7 @@ import com.Smart.Erp.Core.Exception.ResourceNotFoundException;
 import com.Smart.Erp.Modules.Academic.Entity.*;
 import com.Smart.Erp.Modules.Academic.Enum.ActiveStatus;
 import com.Smart.Erp.Modules.Academic.Repo.*;
+import com.Smart.Erp.Modules.Finance.Entity.FeeStructure;
 import com.Smart.Erp.Modules.Student.DTO.SectionGroupFilter;
 import com.Smart.Erp.Modules.Student.Entity.StudentEnrollment;
 import com.Smart.Erp.Modules.Student.Repo.StudentEnrollmentRepo;
@@ -270,6 +271,36 @@ public class AcademicCommonService {
     }
 
     public List<SectionGroupFilter> filterSectionGroupForStudentPage() {
+        return filterSectionGroupForStudentPage(null, null);
+    }
+
+    /**
+     * Returns student-enrollable section groups matching optional specialization & academic year
+     * where active statuses, remaining seat capacity, and a valid mapped fee structure all hold.
+     */
+    public List<SectionGroupFilter> filterSectionGroupForStudentPage(
+            Long specializationId,
+            Long academicYearId
+    ) {
+        return filterEligibleSectionGroups(specializationId, academicYearId, true);
+    }
+
+    /**
+     * Returns section groups visible in the Section module for the given specialization and academic year
+     * that have a valid mapped fee structure.
+     */
+    public List<SectionGroupFilter> filterSectionGroupForSectionPage(
+            Long specializationId,
+            Long academicYearId
+    ) {
+        return filterEligibleSectionGroups(specializationId, academicYearId, false);
+    }
+
+    private List<SectionGroupFilter> filterEligibleSectionGroups(
+            Long specializationId,
+            Long academicYearId,
+            boolean requireEnrollmentOpenAndSeats
+    ) {
         Map<Long, List<PermissionAction>> map = authorizationService.getAll(ResourceType.SECTION_GROUP);
         List<SectionGroup> sectionGroups = sectionGroupRepo.findAllById(filterHelper(map));
 
@@ -279,19 +310,75 @@ public class AcademicCommonService {
 
         return sectionGroups.stream()
                 .filter(Objects::nonNull)
-                .filter(
-                        sectionGroup ->
-                        {
-                            Course course = sectionGroup.getSection().getCourse();
-                            return course.getNewEnrollmentAllowed() && course.getActiveStatus() == ActiveStatus.ENABLE
-                                    && sectionGroup.getSection().getActiveStatus() == ActiveStatus.ENABLE;
-                        }
+                .filter(sectionGroup ->
+                        isEligibleSectionGroup(
+                                sectionGroup,
+                                specializationId,
+                                academicYearId,
+                                requireEnrollmentOpenAndSeats
+                        )
                 )
                 .map(SectionGroup::toSectionGroupFilter)
                 .toList();
     }
 
+    private boolean isEligibleSectionGroup(
+            SectionGroup sectionGroup,
+            Long specializationId,
+            Long academicYearId,
+            boolean requireEnrollmentOpenAndSeats
+    ) {
+        Section section = sectionGroup.getSection();
+        Specialization specialization = sectionGroup.getSpecialization();
+        if (section == null || specialization == null) {
+            return false;
+        }
+        Course course = section.getCourse();
+        AcademicYear academicYear = section.getAcademicYear();
+        if (course == null || academicYear == null || specialization.getCourse() == null) {
+            return false;
+        }
+        if (course.getActiveStatus() != ActiveStatus.ENABLE
+                || section.getActiveStatus() != ActiveStatus.ENABLE
+                || academicYear.getActiveStatus() != ActiveStatus.ENABLE
+                || specialization.getActiveStatus() != ActiveStatus.ENABLE) {
+            return false;
+        }
+        if (!Objects.equals(specialization.getCourse().getId(), course.getId())) {
+            return false;
+        }
+        if (specializationId != null && !Objects.equals(specialization.getId(), specializationId)) {
+            return false;
+        }
+        if (academicYearId != null && !Objects.equals(academicYear.getId(), academicYearId)) {
+            return false;
+        }
+
+        FeeStructure mappedFeeStructure = specialization.getFeeStructure(academicYear);
+        if (mappedFeeStructure == null
+                || mappedFeeStructure.getCourse() == null
+                || !Objects.equals(mappedFeeStructure.getCourse().getId(), course.getId())
+                || mappedFeeStructure.getAcademicYear() == null
+                || !Objects.equals(mappedFeeStructure.getAcademicYear().getId(), academicYear.getId())) {
+            return false;
+        }
+
+        if (requireEnrollmentOpenAndSeats) {
+            if (!Boolean.TRUE.equals(course.getNewEnrollmentAllowed())) {
+                return false;
+            }
+            Integer capacity = section.getCapacity();
+            if (capacity == null || section.getStudentCount() >= capacity) {
+                return false;
+            }
+        }
+        return true;
+    }
+
     public List<CommonDTO> filterSectionForStudentPage(Specialization specialization) {
+        if (specialization == null || specialization.getActiveStatus() != ActiveStatus.ENABLE) {
+            return Collections.emptyList();
+        }
         Map<Long, List<PermissionAction>> map = authorizationService.getAll(ResourceType.SECTION);
         List<Section> sections = sectionRepo.findAllById(filterHelper(map));
 
@@ -302,11 +389,21 @@ public class AcademicCommonService {
         return sections.stream()
                 .filter(Objects::nonNull)
                 .filter(section -> section.getActiveStatus() == ActiveStatus.ENABLE)
+                .filter(section -> section.getAcademicYear() != null
+                        && section.getAcademicYear().getActiveStatus() == ActiveStatus.ENABLE)
+                .filter(section -> section.getCourse() != null
+                        && section.getCourse().getActiveStatus() == ActiveStatus.ENABLE)
+                .filter(section -> section.getCapacity() != null
+                        && section.getStudentCount() < section.getCapacity())
+                .filter(section -> specialization.getFeeStructure(section.getAcademicYear()) != null)
                 .filter(section ->
                         section.getSectionGroups().stream()
-                                .anyMatch(
-                                        sectionGroup ->
-                                                sectionGroup.getSpecialization().equals(specialization)
+                                .anyMatch(sectionGroup ->
+                                        sectionGroup.getSpecialization() != null
+                                                && Objects.equals(
+                                                        sectionGroup.getSpecialization().getId(),
+                                                        specialization.getId()
+                                                )
                                 )
                 )
                 .map(Section::toCommonDTO)

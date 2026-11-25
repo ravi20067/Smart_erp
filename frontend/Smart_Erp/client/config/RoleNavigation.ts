@@ -176,9 +176,12 @@ export const ROLE_NAVIGATION_CONFIGS: Record<string, RoleConfig> = {
                 title: "ACADEMICS",
                 items: [
                     { label: "Academic Years", path: "/admin/academic-years", icon: CalendarRange },
-                    { label: "Course Schedules", path: "/admin/courses", icon: BookMarked },
+                    { label: "Courses", path: "/admin/courses", icon: BookMarked },
+                    { label: "Specializations", path: "/admin/specializations", icon: GitBranch },
+                    { label: "Subjects", path: "/admin/subjects", icon: BookOpen },
                     { label: "Class Sections", path: "/admin/sections", icon: Presentation },
-                    { label: "Master Timetable", path: "/admin/timetable", icon: CalendarDays },
+                    { label: "Academic Calendar", path: "/admin/academic-calendar", icon: CalendarDays },
+                    { label: "Master Timetable", path: "/admin/timetable", icon: LayoutDashboard },
                 ],
             },
             {
@@ -192,7 +195,8 @@ export const ROLE_NAVIGATION_CONFIGS: Record<string, RoleConfig> = {
             {
                 title: "FINANCIAL",
                 items: [
-                    { label: "Fee Structures", path: "/admin/fees", icon: Banknote },
+                    { label: "Fee Structures", path: "/admin/fee-structures", icon: Banknote },
+                    { label: "Scholarships", path: "/admin/scholarships", icon: BadgePercent },
                 ],
             },
         ],
@@ -212,25 +216,7 @@ export const ROLE_NAVIGATION_CONFIGS: Record<string, RoleConfig> = {
                 title: "OPERATIONS",
                 items: [
                     { label: "Security Dashboard", path: "/security-guard", icon: LayoutDashboard },
-                    { label: "Gate Post Monitor", path: "/security-guard/gate-post", icon: DoorOpen },
-                    { label: "Visitor Check-In", path: "/security-guard/visitors", icon: UserPlus },
-                    { label: "Vehicle Log", path: "/security-guard/vehicles", icon: Truck },
-                    { label: "Digital ID Scanner", path: "/security-guard/scanner", icon: ScanLine },
-                ],
-            },
-            {
-                title: "SAFETY & PROTOCOLS",
-                items: [
-                    { label: "Incident Quick-Report", path: "/security-guard/incidents", icon: ShieldAlert },
-                    { label: "Emergency Protocols", path: "/security-guard/emergency", icon: PhoneCall },
-                    { label: "Shift Handover Notes", path: "/security-guard/handover", icon: ClipboardCheck },
-                ],
-            },
-            {
-                title: "DUTY SCHEDULE",
-                items: [
-                    { label: "Duty Roster & Shifts", path: "/security-guard/roster", icon: Clock },
-                    { label: "Officer Profile", path: "/security-guard/profile", icon: CircleUserRound },
+                    { label: "Gate & Check-In Console", path: "/security-guard/check-in", icon: ShieldCheck, badge: "Live" },
                 ],
             },
         ],
@@ -247,33 +233,11 @@ export const ROLE_NAVIGATION_CONFIGS: Record<string, RoleConfig> = {
         badgeTone: "emerald",
         menu: [
             {
-                title: "OVERVIEW",
-                items: [
-                    { label: "Faculty Dashboard", path: "/teacher", icon: LayoutDashboard },
-                    { label: "Today's Schedule", path: "/teacher/schedule", icon: CalendarDays },
-                ],
-            },
-            {
                 title: "CLASSROOM & TEACHING",
                 items: [
-                    { label: "Attendance Authenticator", path: "/teacher/attendance-authenticator", icon: ScanLine },
-                    { label: "My Enrolled Sections", path: "/teacher/sections", icon: Presentation },
-                    { label: "Student Roster", path: "/teacher/students", icon: GraduationCap },
-                    { label: "Subject Curriculum", path: "/teacher/curriculum", icon: BookOpen },
-                ],
-            },
-            {
-                title: "ASSESSMENTS",
-                items: [
-                    { label: "Assignments & Marks", path: "/teacher/grading", icon: ClipboardList },
-                    { label: "Internal Assessments", path: "/teacher/internal-marks", icon: FileCheck },
-                ],
-            },
-            {
-                title: "FACULTY PORTAL",
-                items: [
-                    { label: "Leave Requests", path: "/teacher/leaves", icon: CalendarRange },
-                    { label: "Faculty Profile", path: "/teacher/profile", icon: CircleUserRound },
+                    { label: "Faculty Dashboard", path: "/teacher", icon: LayoutDashboard },
+                    { label: "Secure QR Attendance", path: "/teacher/attendance", icon: ScanLine, badge: "Live" },
+                    { label: "Campus Entry / Exit Pass", path: "/teacher/campus-pass", icon: ShieldCheck },
                 ],
             },
         ],
@@ -297,27 +261,17 @@ export const ROLE_NAVIGATION_CONFIGS: Record<string, RoleConfig> = {
                 ],
             },
             {
-                title: "ACADEMICS",
+                title: "ATTENDANCE & CALENDAR",
                 items: [
-                    { label: "Enrolled Courses", path: "/student/courses", icon: BookMarked },
-                    { label: "Attendance History", path: "/student/attendance", icon: CheckCircle2 },
+                    { label: "Campus Check-In Pass", path: "/student/campus-pass", icon: ShieldCheck, badge: "Gate" },
+                    { label: "Secure QR Attendance", path: "/student/attendance", icon: ScanLine, badge: "Live" },
                     { label: "Academic Calendar", path: "/student/calendar", icon: CalendarRange },
-                    { label: "Study Materials", path: "/student/materials", icon: FolderOpen },
                 ],
             },
             {
-                title: "EXAMS & RESULTS",
+                title: "FINANCE",
                 items: [
-                    { label: "Exam Hall Ticket", path: "/student/hall-ticket", icon: FileBadge },
-                    { label: "Gradebook & Results", path: "/student/results", icon: FileBarChart },
-                ],
-            },
-            {
-                title: "CAMPUS SERVICES",
-                items: [
-                    { label: "Fee Invoices & Dues", path: "/student/fees", icon: CreditCard },
-                    { label: "Digital Library", path: "/student/library", icon: Library },
-                    { label: "Support & Grievances", path: "/student/support", icon: LifeBuoy },
+                    { label: "Fee Account & Receipts", path: "/student/fees", icon: CreditCard },
                 ],
             },
         ],

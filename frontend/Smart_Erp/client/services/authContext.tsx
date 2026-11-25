@@ -133,9 +133,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             case "SUPER_ADMIN":
                 return "/super-admin";
 
-            case "DEVICES":
-                return "/devices";
-
             default:
                 return "/login";
         }

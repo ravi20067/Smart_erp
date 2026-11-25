@@ -44,8 +44,10 @@ import {
     extractErrorMessage,
     getAcademicYearFilter,
     getCalendar,
+    getCalendarBySection,
     getCalendarDays,
     getSectionFilter,
+    publishCalendar,
     upsertCalendarDay,
     type CalendarDayRequest,
     type CalendarDayResponse,
@@ -185,13 +187,17 @@ export default function AcademicCalendarPage() {
     const [selectedSectionId, setSelectedSectionId] = useState<number | "">("");
     const [selectedAcademicYearId, setSelectedAcademicYearId] = useState<number | "">("");
 
-    // Active calendar state
-    const [currentCalendarId, setCurrentCalendarId] = useState<number | null>(() => {
-        const stored = sessionStorage.getItem("active_section_calendar_id");
-        return stored ? Number(stored) : null;
-    });
+    // Active calendar state (logically bound 1:1 to selected section)
+    const [currentCalendarId, setCurrentCalendarId] = useState<number | null>(null);
     const [activeCalendar, setActiveCalendar] = useState<CalendarResponse | null>(null);
     const [calendarDays, setCalendarDays] = useState<Record<string, CalendarDayResponse>>({});
+
+    const formatLocalYmd = useCallback((d: Date): string => {
+        const y = d.getFullYear();
+        const m = String(d.getMonth() + 1).padStart(2, "0");
+        const day = String(d.getDate()).padStart(2, "0");
+        return `${y}-${m}-${day}`;
+    }, []);
 
     // Date navigation
     const [viewDate, setViewDate] = useState<Date>(new Date());
@@ -247,6 +253,52 @@ export default function AcademicCalendarPage() {
     }, []);
 
     /* ---------------------------------------------------------------------- */
+    /* Auto-Bind Single Section Calendar on Section Selection                 */
+    /* ---------------------------------------------------------------------- */
+
+    useEffect(() => {
+        if (!selectedSectionId) {
+            setCurrentCalendarId(null);
+            setActiveCalendar(null);
+            setCalendarDays({});
+            return;
+        }
+        let cancelled = false;
+        async function resolveSectionCalendar() {
+            setLoading(true);
+            setErrorMessage("");
+            try {
+                const boundCal = await getCalendarBySection(Number(selectedSectionId));
+                if (cancelled) return;
+                if (boundCal) {
+                    setCurrentCalendarId(boundCal.id);
+                    setActiveCalendar(boundCal);
+                    if (boundCal.academicYearId) {
+                        setSelectedAcademicYearId(boundCal.academicYearId);
+                    }
+                } else {
+                    setCurrentCalendarId(null);
+                    setActiveCalendar(null);
+                    setCalendarDays({});
+                }
+            } catch (err) {
+                if (!cancelled) {
+                    setErrorMessage(extractErrorMessage(err, "Failed to resolve section calendar."));
+                    setCurrentCalendarId(null);
+                    setActiveCalendar(null);
+                    setCalendarDays({});
+                }
+            } finally {
+                if (!cancelled) setLoading(false);
+            }
+        }
+        resolveSectionCalendar();
+        return () => {
+            cancelled = true;
+        };
+    }, [selectedSectionId]);
+
+    /* ---------------------------------------------------------------------- */
     /* Load Active Calendar & Month Days                                      */
     /* ---------------------------------------------------------------------- */
 
@@ -258,16 +310,15 @@ export default function AcademicCalendarPage() {
         try {
             const cal = await getCalendar(currentCalendarId);
             setActiveCalendar(cal);
-            sessionStorage.setItem("active_section_calendar_id", String(cal.id));
 
-            // Determine date range for currently viewed month
+            // Determine date range for currently viewed month using local timezone dates
             const year = viewDate.getFullYear();
             const month = viewDate.getMonth();
             const firstDay = new Date(year, month, 1);
             const lastDay = new Date(year, month + 1, 0);
 
-            const fromStr = firstDay.toISOString().split("T")[0];
-            const toStr = lastDay.toISOString().split("T")[0];
+            const fromStr = formatLocalYmd(firstDay);
+            const toStr = formatLocalYmd(lastDay);
 
             const days = await getCalendarDays(cal.id, fromStr, toStr);
             const daysMap: Record<string, CalendarDayResponse> = {};
@@ -280,7 +331,7 @@ export default function AcademicCalendarPage() {
         } finally {
             setLoading(false);
         }
-    }, [currentCalendarId, viewDate]);
+    }, [currentCalendarId, viewDate, formatLocalYmd]);
 
     useEffect(() => {
         if (currentCalendarId) {
@@ -315,7 +366,7 @@ export default function AcademicCalendarPage() {
             const dayNum = prevMonthLastDate - i;
             const d = new Date(year, month - 1, dayNum);
             cells.push({
-                dateStr: d.toISOString().split("T")[0],
+                dateStr: formatLocalYmd(d),
                 dayNumber: dayNum,
                 isCurrentMonth: false,
                 isToday: false,
@@ -323,10 +374,10 @@ export default function AcademicCalendarPage() {
         }
 
         // Current month days
-        const todayStr = new Date().toISOString().split("T")[0];
+        const todayStr = formatLocalYmd(new Date());
         for (let day = 1; day <= totalDays; day++) {
             const d = new Date(year, month, day);
-            const dateStr = d.toISOString().split("T")[0];
+            const dateStr = formatLocalYmd(d);
             cells.push({
                 dateStr,
                 dayNumber: day,
@@ -343,7 +394,7 @@ export default function AcademicCalendarPage() {
             for (let i = 1; i <= needed; i++) {
                 const d = new Date(year, month + 1, i);
                 cells.push({
-                    dateStr: d.toISOString().split("T")[0],
+                    dateStr: formatLocalYmd(d),
                     dayNumber: i,
                     isCurrentMonth: false,
                     isToday: false,
@@ -352,7 +403,7 @@ export default function AcademicCalendarPage() {
         }
 
         return cells;
-    }, [viewDate]);
+    }, [viewDate, formatLocalYmd]);
 
     /* ---------------------------------------------------------------------- */
     /* Create Calendar Handler                                                */
@@ -508,6 +559,20 @@ export default function AcademicCalendarPage() {
         setViewDate(new Date());
     };
 
+    const handlePublishCalendar = async () => {
+        if (!activeCalendar) return;
+        setBusy(true);
+        try {
+            const published = await publishCalendar(activeCalendar.id);
+            setActiveCalendar(published);
+            toast.success("Academic calendar published! Attendance and timetable overrides are now bound to it.");
+        } catch (err) {
+            toast.error(extractErrorMessage(err, "Failed to publish academic calendar."));
+        } finally {
+            setBusy(false);
+        }
+    };
+
     /* ---------------------------------------------------------------------- */
     /* Month Summary Statistics                                               */
     /* ---------------------------------------------------------------------- */
@@ -546,6 +611,17 @@ export default function AcademicCalendarPage() {
                     </div>
 
                     <div className="flex flex-wrap items-center gap-2.5">
+                        {activeCalendar && activeCalendar.status === "DRAFT" && (
+                            <button
+                                type="button"
+                                onClick={handlePublishCalendar}
+                                disabled={busy}
+                                className="inline-flex items-center gap-2 rounded-xl border border-emerald-400/30 bg-emerald-500/20 px-4 py-2.5 text-xs font-semibold text-emerald-200 transition hover:bg-emerald-500/30 disabled:opacity-50"
+                            >
+                                <CheckCircle2 size={16} />
+                                <span>Publish Calendar</span>
+                            </button>
+                        )}
                         <button
                             type="button"
                             onClick={handleOpenCreateCalendar}
@@ -605,18 +681,28 @@ export default function AcademicCalendarPage() {
 
                     <div className="flex items-center gap-2">
                         {activeCalendar ? (
-                            <div className="flex items-center gap-2 text-xs text-slate-300">
-                                <span className="rounded-md border border-emerald-400/20 bg-emerald-500/10 px-2.5 py-1 font-semibold text-emerald-300">
-                                    Calendar ID #{activeCalendar.id}
+                            <div className="flex flex-wrap items-center gap-2 text-xs text-slate-300">
+                                <span
+                                    className={`rounded-md border px-2.5 py-1 font-semibold ${
+                                        activeCalendar.status === "PUBLISHED"
+                                            ? "border-emerald-400/30 bg-emerald-500/15 text-emerald-300"
+                                            : "border-amber-400/30 bg-amber-500/15 text-amber-300"
+                                    }`}
+                                >
+                                    {activeCalendar.status} • #{activeCalendar.id}
                                 </span>
-                                <span className="text-slate-400 font-medium">
-                                    ({activeCalendar.name})
+                                <span className="text-slate-300 font-medium">
+                                    {activeCalendar.name}
                                 </span>
                             </div>
                         ) : (
                             <div className="flex items-center gap-2 text-xs text-amber-300">
                                 <AlertTriangle size={15} />
-                                <span>No calendar loaded. Enter ID or click "New Academic Calendar".</span>
+                                <span>
+                                    {selectedSectionId
+                                        ? "No calendar bound to this section yet. Click \"New Academic Calendar\"."
+                                        : "Select a section to view or create its single academic calendar."}
+                                </span>
                             </div>
                         )}
                         <button

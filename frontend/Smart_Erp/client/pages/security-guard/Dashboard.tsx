@@ -100,6 +100,14 @@ export default function SecurityGuardDashboard() {
                         </p>
 
                         <div className="mt-5 flex flex-wrap gap-2.5">
+                            <Link
+                                to="/security-guard/check-in"
+                                className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-600 px-4 py-2.5 text-xs font-semibold text-slate-950 shadow-lg shadow-emerald-500/20 hover:brightness-110 transition"
+                            >
+                                <ShieldCheck size={16} />
+                                Student Check-In Station
+                            </Link>
+
                             <button
                                 type="button"
                                 onClick={() => setVisitorModal(true)}

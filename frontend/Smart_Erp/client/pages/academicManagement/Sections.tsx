@@ -50,14 +50,17 @@ import {
     formatDateTime,
     getAllSections,
     getCourseFilter,
+    getEligibleSectionGroups,
     getInitials,
     getSectionAcademicYearFilter,
     getSectionPrefix,
+    getSectionSpecializationFilter,
     getSpecializationFilter,
     removePrefix,
     uniqueCommonDTOs,
     updateSection,
     type ActiveStatus,
+    type EligibleSectionGroupItem,
     type CommonDTO,
     type PermissionAction,
     type SectionRequest,
@@ -278,6 +281,10 @@ function SectionDialog({
     const [prefixLoading, setPrefixLoading] = useState(false);
     const [prefixError, setPrefixError] = useState("");
 
+    // Eligible specializations for (courseId, academicYearId) that have a valid mapped FeeStructure
+    const [feeMappedSpecializations, setFeeMappedSpecializations] = useState<CommonDTO[]>([]);
+    const [loadingSpecializations, setLoadingSpecializations] = useState(false);
+
     // Calculate total students enrolled in this section
     const totalEnrolledStudents = useMemo(() => {
         if (!section || !Array.isArray(section.sectionGroup)) return 0;
@@ -382,6 +389,43 @@ function SectionDialog({
         };
     }, [form.courseId, form.academicYearId, isCreate, isEdit, section]);
 
+    // Load specializations with a mapped FeeStructure for the selected (courseId, academicYearId)
+    useEffect(() => {
+        const cId = Number(form.courseId);
+        const aId = Number(form.academicYearId);
+        if (!Number.isFinite(cId) || cId <= 0 || !Number.isFinite(aId) || aId <= 0) {
+            setFeeMappedSpecializations([]);
+            setLoadingSpecializations(false);
+            return;
+        }
+        let cancelled = false;
+        setLoadingSpecializations(true);
+        getSectionSpecializationFilter(cId, aId)
+            .then((list) => {
+                if (cancelled) return;
+                setFeeMappedSpecializations(list);
+                if (isCreate) {
+                    const allowed = new Set(list.map((s) => s.id));
+                    setForm((prev) => ({
+                        ...prev,
+                        specializationIds: prev.specializationIds.filter((id) => allowed.has(id)),
+                    }));
+                }
+            })
+            .catch(() => {
+                if (!cancelled) {
+                    setFeeMappedSpecializations([]);
+                }
+            })
+            .finally(() => {
+                if (!cancelled) setLoadingSpecializations(false);
+            });
+
+        return () => {
+            cancelled = true;
+        };
+    }, [form.courseId, form.academicYearId, isCreate]);
+
     // In VIEW mode, extract prefix and suffix from code if available
     const viewCodeDecomposition = useMemo(() => {
         if (!isView || !section) return null;
@@ -407,23 +451,20 @@ function SectionDialog({
         };
     }, [isView, section]);
 
-    // Available specializations filtered by selected course code
-    const selectedCourseObj = useMemo(() => {
-        const cId = Number(form.courseId);
-        return courses.find((c) => c.id === cId) ?? section?.course ?? null;
-    }, [courses, form.courseId, section]);
-
+    // Available specializations filtered sequentially by mapped fee structure in selected course + academic year
     const availableSpecializations = useMemo(() => {
-        const cCode = selectedCourseObj?.code?.trim().toLowerCase();
-        if (!cCode) return specializations;
-
-        return specializations.filter((spec) => {
-            const sCode = (spec.code ?? "").trim().toLowerCase();
-            const matchesCourse = sCode.startsWith(cCode);
-            const isAssigned = form.specializationIds.includes(spec.id);
-            return matchesCourse || (!isCreate && isAssigned);
-        });
-    }, [selectedCourseObj, specializations, form.specializationIds, isCreate]);
+        if (feeMappedSpecializations.length > 0) {
+            if (isCreate) return feeMappedSpecializations;
+            const assignedSpecs = (section?.sectionGroup ?? [])
+                .map((g) => g.specialization)
+                .filter((spec): spec is CommonDTO => Boolean(spec));
+            return uniqueCommonDTOs([...feeMappedSpecializations, ...assignedSpecs]);
+        }
+        if (isEdit && section?.sectionGroup) {
+            return uniqueCommonDTOs(section.sectionGroup.map((g) => g.specialization));
+        }
+        return [];
+    }, [feeMappedSpecializations, isCreate, isEdit, section]);
 
     // Resulting full code preview
     const fullCodePreview = useMemo(() => {
@@ -1023,7 +1064,7 @@ function SectionDialog({
                                                     {section.sectionGroup.map((group) => (
                                                         <div
                                                             key={group.id}
-                                                            className="flex items-center justify-between rounded-lg border border-cyan-400/20 bg-cyan-500/10 p-2.5 text-xs"
+                                                            className="flex items-center justify-between rounded-lg border border-cyan-400/20 bg-cyan-500/10 p-2.5 text-xs gap-2"
                                                         >
                                                             <div className="min-w-0 pr-2">
                                                                 <p className="font-semibold text-cyan-200 truncate">
@@ -1031,6 +1072,17 @@ function SectionDialog({
                                                                 </p>
                                                                 <p className="font-mono text-[10px] text-slate-400 truncate">
                                                                     {group.code || `ID #${group.id}`}
+                                                                </p>
+                                                                <p
+                                                                    className={`text-[10px] mt-0.5 truncate ${
+                                                                        group.hasFeeStructure
+                                                                            ? "text-emerald-300"
+                                                                            : "text-amber-300"
+                                                                    }`}
+                                                                >
+                                                                    {group.hasFeeStructure
+                                                                        ? `Fee: ${group.feeStructure?.name || "Mapped"}`
+                                                                        : "No fee structure mapped"}
                                                                 </p>
                                                             </div>
                                                             <div className="flex items-center gap-1 rounded-md bg-cyan-400/20 px-2 py-0.5 text-[11px] font-bold text-cyan-100 shrink-0">
@@ -1047,7 +1099,12 @@ function SectionDialog({
                                     ) : (
                                         /* Multi-select chips in CREATE / EDIT */
                                         <div className="rounded-xl border border-white/10 bg-slate-950/60 p-3 max-h-40 overflow-y-auto custom-scrollbar">
-                                            {availableSpecializations.length > 0 ? (
+                                            {loadingSpecializations ? (
+                                                <div className="flex items-center gap-2 text-xs text-cyan-300 py-1">
+                                                    <LoaderCircle size={13} className="animate-spin" />
+                                                    <span>Loading specializations with mapped fee structures...</span>
+                                                </div>
+                                            ) : availableSpecializations.length > 0 ? (
                                                 <div className="flex flex-wrap gap-1.5">
                                                     {availableSpecializations.map((spec) => {
                                                         const isSelected = form.specializationIds.includes(spec.id);
@@ -1080,9 +1137,9 @@ function SectionDialog({
                                                 </div>
                                             ) : (
                                                 <p className="text-xs text-slate-500 italic">
-                                                    {!form.courseId
-                                                        ? "Select a course first to view matching specializations."
-                                                        : "No specializations found for this course."}
+                                                    {!form.courseId || !form.academicYearId
+                                                        ? "Select a course and academic year first to load specializations with mapped fee structures."
+                                                        : "No specializations have a valid mapped fee structure for this course and academic year."}
                                                 </p>
                                             )}
                                         </div>
@@ -1254,6 +1311,9 @@ export default function Sections() {
     const [selectedDepartmentId, setSelectedDepartmentId] = useState<number | "ALL">("ALL");
     const [selectedAcademicYearId, setSelectedAcademicYearId] = useState<number | "ALL">("ALL");
     const [selectedCourseId, setSelectedCourseId] = useState<number | "ALL">("ALL");
+    const [selectedSpecializationId, setSelectedSpecializationId] = useState<number | "ALL">("ALL");
+    const [eligibleGroupsOnly, setEligibleGroupsOnly] = useState<boolean>(false);
+    const [eligibleGroups, setEligibleGroups] = useState<EligibleSectionGroupItem[]>([]);
     const [sortBy, setSortBy] = useState<SortOption>("NEWEST");
     const [currentPage, setCurrentPage] = useState(1);
 
@@ -1292,6 +1352,34 @@ export default function Sections() {
         void loadSections();
         void loadDropdownFilters();
     }, [loadSections, loadDropdownFilters]);
+
+    // Fetch backend-verified eligible section groups when filtering by specialization, academic year, or fee-mapped eligibility
+    useEffect(() => {
+        if (
+            selectedSpecializationId === "ALL" &&
+            selectedAcademicYearId === "ALL" &&
+            !eligibleGroupsOnly
+        ) {
+            setEligibleGroups([]);
+            return;
+        }
+        let cancelled = false;
+        getEligibleSectionGroups({
+            specializationId:
+                selectedSpecializationId !== "ALL" ? selectedSpecializationId : undefined,
+            academicYearId:
+                selectedAcademicYearId !== "ALL" ? selectedAcademicYearId : undefined,
+        })
+            .then((list) => {
+                if (!cancelled) setEligibleGroups(list);
+            })
+            .catch(() => {
+                if (!cancelled) setEligibleGroups([]);
+            });
+        return () => {
+            cancelled = true;
+        };
+    }, [selectedSpecializationId, selectedAcademicYearId, eligibleGroupsOnly, sections]);
 
     // Clear notices after 5 seconds
     useEffect(() => {
@@ -1339,6 +1427,19 @@ export default function Sections() {
         return uniqueCommonDTOs(filtered.map((s) => s.course));
     }, [sections, selectedDepartmentId]);
 
+    const specializationFilterOptions = useMemo(() => {
+        let filtered = sections;
+        if (selectedCourseId !== "ALL") {
+            filtered = filtered.filter((s) => s.course?.id === selectedCourseId);
+        }
+        if (selectedAcademicYearId !== "ALL") {
+            filtered = filtered.filter((s) => s.academicYear?.id === selectedAcademicYearId);
+        }
+        return uniqueCommonDTOs(
+            filtered.flatMap((s) => (s.sectionGroup ?? []).map((g) => g.specialization))
+        );
+    }, [sections, selectedCourseId, selectedAcademicYearId]);
+
     // Reset pagination when any filter changes
     useEffect(() => {
         setCurrentPage(1);
@@ -1350,8 +1451,21 @@ export default function Sections() {
         selectedDepartmentId,
         selectedAcademicYearId,
         selectedCourseId,
+        selectedSpecializationId,
+        eligibleGroupsOnly,
         sortBy,
     ]);
+
+    const eligibleGroupIdSet = useMemo(() => {
+        if (
+            selectedSpecializationId === "ALL" &&
+            selectedAcademicYearId === "ALL" &&
+            !eligibleGroupsOnly
+        ) {
+            return null;
+        }
+        return new Set(eligibleGroups.map((item) => item.sectionGroup.id));
+    }, [eligibleGroups, selectedSpecializationId, selectedAcademicYearId, eligibleGroupsOnly]);
 
     // Filter & Sort Logic
     const filteredSections = useMemo(() => {
@@ -1399,6 +1513,19 @@ export default function Sections() {
             if (selectedCourseId !== "ALL" && s.course?.id !== selectedCourseId) {
                 return false;
             }
+            if (selectedSpecializationId !== "ALL" || eligibleGroupsOnly) {
+                const groups = s.sectionGroup ?? [];
+                const hasEligibleMatch = groups.some((g) => {
+                    const specMatches =
+                        selectedSpecializationId === "ALL" ||
+                        g.specialization?.id === selectedSpecializationId;
+                    const eligibleByBackend = eligibleGroupIdSet
+                        ? eligibleGroupIdSet.has(g.id)
+                        : Boolean(g.hasFeeStructure);
+                    return specMatches && (eligibleByBackend || Boolean(g.hasFeeStructure));
+                });
+                if (!hasEligibleMatch) return false;
+            }
 
             return true;
         });
@@ -1411,6 +1538,9 @@ export default function Sections() {
         selectedDepartmentId,
         selectedAcademicYearId,
         selectedCourseId,
+        selectedSpecializationId,
+        eligibleGroupsOnly,
+        eligibleGroupIdSet,
     ]);
 
     const sortedSections = useMemo(() => {
@@ -1458,7 +1588,9 @@ export default function Sections() {
         selectedSchoolId !== "ALL" ||
         selectedDepartmentId !== "ALL" ||
         selectedAcademicYearId !== "ALL" ||
-        selectedCourseId !== "ALL";
+        selectedCourseId !== "ALL" ||
+        selectedSpecializationId !== "ALL" ||
+        eligibleGroupsOnly;
 
     function resetFilters() {
         setSearch("");
@@ -1468,6 +1600,8 @@ export default function Sections() {
         setSelectedDepartmentId("ALL");
         setSelectedAcademicYearId("ALL");
         setSelectedCourseId("ALL");
+        setSelectedSpecializationId("ALL");
+        setEligibleGroupsOnly(false);
         setSortBy("NEWEST");
     }
 
@@ -1753,7 +1887,7 @@ export default function Sections() {
                     </div>
 
                     {/* Secondary Row: Cascading Hierarchy Filters (Auto-derived from loaded sections) */}
-                    <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 pt-2 border-t border-white/5">
+                    <div className="grid grid-cols-2 sm:grid-cols-6 gap-2 pt-2 border-t border-white/5">
                         {/* University */}
                         <div className="relative">
                             <select
@@ -1765,6 +1899,7 @@ export default function Sections() {
                                     setSelectedDepartmentId("ALL");
                                     setSelectedAcademicYearId("ALL");
                                     setSelectedCourseId("ALL");
+                                    setSelectedSpecializationId("ALL");
                                 }}
                                 className="w-full appearance-none rounded-lg border border-white/5 bg-slate-950/40 px-2.5 py-1.5 text-[11px] text-slate-300 outline-none transition focus:border-cyan-400/40"
                             >
@@ -1787,6 +1922,7 @@ export default function Sections() {
                                     setSelectedSchoolId(val);
                                     setSelectedDepartmentId("ALL");
                                     setSelectedCourseId("ALL");
+                                    setSelectedSpecializationId("ALL");
                                 }}
                                 className="w-full appearance-none rounded-lg border border-white/5 bg-slate-950/40 px-2.5 py-1.5 text-[11px] text-slate-300 outline-none transition focus:border-cyan-400/40"
                             >
@@ -1808,6 +1944,7 @@ export default function Sections() {
                                     const val = e.target.value === "ALL" ? "ALL" : Number(e.target.value);
                                     setSelectedDepartmentId(val);
                                     setSelectedCourseId("ALL");
+                                    setSelectedSpecializationId("ALL");
                                 }}
                                 className="w-full appearance-none rounded-lg border border-white/5 bg-slate-950/40 px-2.5 py-1.5 text-[11px] text-slate-300 outline-none transition focus:border-cyan-400/40"
                             >
@@ -1842,12 +1979,13 @@ export default function Sections() {
                         </div>
 
                         {/* Course */}
-                        <div className="relative col-span-2 sm:col-span-1">
+                        <div className="relative">
                             <select
                                 value={selectedCourseId}
                                 onChange={(e) => {
                                     const val = e.target.value === "ALL" ? "ALL" : Number(e.target.value);
                                     setSelectedCourseId(val);
+                                    setSelectedSpecializationId("ALL");
                                 }}
                                 className="w-full appearance-none rounded-lg border border-white/5 bg-slate-950/40 px-2.5 py-1.5 text-[11px] text-slate-300 outline-none transition focus:border-cyan-400/40"
                             >
@@ -1860,6 +1998,43 @@ export default function Sections() {
                             </select>
                             <SelectChevron />
                         </div>
+
+                        {/* Specialization (Fee Structure Eligibility) */}
+                        <div className="relative">
+                            <select
+                                value={selectedSpecializationId}
+                                onChange={(e) => {
+                                    const val = e.target.value === "ALL" ? "ALL" : Number(e.target.value);
+                                    setSelectedSpecializationId(val);
+                                }}
+                                className="w-full appearance-none rounded-lg border border-white/5 bg-slate-950/40 px-2.5 py-1.5 text-[11px] text-slate-300 outline-none transition focus:border-cyan-400/40"
+                            >
+                                <option value="ALL" className="bg-slate-900 text-white">All Specializations</option>
+                                {specializationFilterOptions.map((sp) => (
+                                    <option key={sp.id} value={sp.id} className="bg-slate-900 text-white">
+                                        {sp.name}
+                                    </option>
+                                ))}
+                            </select>
+                            <SelectChevron />
+                        </div>
+                    </div>
+
+                    <div className="flex flex-wrap items-center justify-between gap-2 pt-1 text-[11px] text-slate-400">
+                        <label className="inline-flex items-center gap-2 cursor-pointer select-none">
+                            <input
+                                type="checkbox"
+                                checked={eligibleGroupsOnly}
+                                onChange={(e) => setEligibleGroupsOnly(e.target.checked)}
+                                className="rounded border-white/20 bg-slate-950 text-cyan-400 focus:ring-cyan-400/40"
+                            />
+                            <span>Show only sections having groups eligible with a valid mapped fee structure</span>
+                        </label>
+                        {(selectedSpecializationId !== "ALL" || eligibleGroupsOnly) && (
+                            <span className="font-mono text-cyan-300">
+                                {eligibleGroups.length} eligible section group{eligibleGroups.length === 1 ? "" : "s"}
+                            </span>
+                        )}
                     </div>
                 </div>
             </GlassCard>
@@ -1916,7 +2091,19 @@ export default function Sections() {
                                     const totalStudents = Array.isArray(s.sectionGroup)
                                         ? s.sectionGroup.reduce((sum, g) => sum + (g.studentCount ?? 0), 0)
                                         : 0;
-                                    const groupsCount = s.sectionGroup?.length ?? 0;
+                                    const visibleGroups =
+                                        selectedSpecializationId !== "ALL" || eligibleGroupsOnly
+                                            ? (s.sectionGroup ?? []).filter((g) => {
+                                                  const specMatch =
+                                                      selectedSpecializationId === "ALL" ||
+                                                      g.specialization?.id === selectedSpecializationId;
+                                                  const eligibleMatch = eligibleGroupIdSet
+                                                      ? eligibleGroupIdSet.has(g.id)
+                                                      : Boolean(g.hasFeeStructure);
+                                                  return specMatch && (eligibleMatch || Boolean(g.hasFeeStructure));
+                                              })
+                                            : (s.sectionGroup ?? []);
+                                    const groupsCount = visibleGroups.length;
                                     const canEdit = hasPermission(s, "UPDATE");
                                     const canDelete = hasPermission(s, "DELETE");
 
@@ -2132,7 +2319,19 @@ export default function Sections() {
                             const totalStudents = Array.isArray(s.sectionGroup)
                                 ? s.sectionGroup.reduce((sum, g) => sum + (g.studentCount ?? 0), 0)
                                 : 0;
-                            const groupsCount = s.sectionGroup?.length ?? 0;
+                            const visibleGroups =
+                                selectedSpecializationId !== "ALL" || eligibleGroupsOnly
+                                    ? (s.sectionGroup ?? []).filter((g) => {
+                                          const specMatch =
+                                              selectedSpecializationId === "ALL" ||
+                                              g.specialization?.id === selectedSpecializationId;
+                                          const eligibleMatch = eligibleGroupIdSet
+                                              ? eligibleGroupIdSet.has(g.id)
+                                              : Boolean(g.hasFeeStructure);
+                                          return specMatch && (eligibleMatch || Boolean(g.hasFeeStructure));
+                                      })
+                                    : (s.sectionGroup ?? []);
+                            const groupsCount = visibleGroups.length;
                             const canEdit = hasPermission(s, "UPDATE");
                             const canDelete = hasPermission(s, "DELETE");
 

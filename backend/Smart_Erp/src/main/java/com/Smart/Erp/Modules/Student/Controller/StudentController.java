@@ -226,8 +226,11 @@ public class StudentController{
 
     //Only for adding new student and update existing student
     @GetMapping("/filter/section-groups")
-    public ResponseEntity<List<SectionGroupFilter>> filterSectionGroup() {
-        return ResponseEntity.ok(studentService.filterSectionGroup());
+    public ResponseEntity<List<SectionGroupFilter>> filterSectionGroup(
+            @RequestParam(required = false) Long specializationId,
+            @RequestParam(required = false) Long academicYearId
+    ) {
+        return ResponseEntity.ok(studentService.filterSectionGroup(specializationId, academicYearId));
     }
 
     @PreAuthorize(

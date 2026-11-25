@@ -14,7 +14,6 @@ export const setLogoutHandler = (handler: () => void) => {
 
 const EXCLUDED_PREFIXES = [
     "/auth",
-    "/devices",
     "/ping",
     "/demo",
     "http://",

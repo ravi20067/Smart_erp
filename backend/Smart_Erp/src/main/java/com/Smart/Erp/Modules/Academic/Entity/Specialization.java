@@ -112,8 +112,13 @@ public class Specialization extends BaseAuditableEntity
     }
 
     public FeeStructure getFeeStructure(AcademicYear academicYear) {
+        if (academicYear == null || academicYear.getId() == null) {
+            return null;
+        }
         return this.getFeeStructureAssignments().stream()
-                .filter(fsa -> fsa.getAcademicYear().equals(academicYear))
+                .filter(fsa -> fsa.getAcademicYear() != null
+                        && java.util.Objects.equals(fsa.getAcademicYear().getId(), academicYear.getId())
+                        && fsa.getFeeStructure() != null)
                 .map(FeeStructureSpecialization::getFeeStructure)
                 .findFirst()
                 .orElse(null);

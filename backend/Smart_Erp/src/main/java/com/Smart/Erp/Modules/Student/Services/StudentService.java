@@ -4,6 +4,7 @@ import com.Smart.Erp.Core.Common.CommonDTO;
 import com.Smart.Erp.Core.Common.DTO;
 import com.Smart.Erp.Core.Exception.OperationNotAllowedException;
 import com.Smart.Erp.Modules.Academic.Entity.*;
+import com.Smart.Erp.Modules.Academic.Enum.ActiveStatus;
 import com.Smart.Erp.Modules.File.Entity.FileMetadata;
 import com.Smart.Erp.Modules.Finance.Services.AccountCommonService;
 import com.Smart.Erp.Modules.Student.DTO.SectionGroupFilter;
@@ -58,11 +59,32 @@ public class StudentService {
     public StudentEnrollmentResponse create(StudentRequest studentRequest, MultipartFile file) {
 
         SectionGroup sectionGroup = academicCommonService.getSectionGroup(studentRequest.getSectionGroupId());
-        AcademicYear academicYear = sectionGroup.getSection().getAcademicYear();
+        if (sectionGroup.getSection() == null
+                || sectionGroup.getSpecialization() == null
+                || sectionGroup.getSection().getAcademicYear() == null
+                || sectionGroup.getSection().getCourse() == null) {
+            throw new OperationNotAllowedException("Selected section group is missing section, course, academic year, or specialization");
+        }
 
+        Section section = sectionGroup.getSection();
+        AcademicYear academicYear = section.getAcademicYear();
+        Course course = section.getCourse();
         University university = academicYear.getUniversity();
 
-        if (sectionGroup.getSection().getCapacity() <= sectionGroup.getSection().getSectionGroups().size()) {
+        if (course.getActiveStatus() != ActiveStatus.ENABLE || !Boolean.TRUE.equals(course.getNewEnrollmentAllowed())) {
+            throw new OperationNotAllowedException("New enrollments are disabled for course " + course.getName());
+        }
+        if (section.getActiveStatus() != ActiveStatus.ENABLE || academicYear.getActiveStatus() != ActiveStatus.ENABLE
+                || sectionGroup.getSpecialization().getActiveStatus() != ActiveStatus.ENABLE) {
+            throw new OperationNotAllowedException("Selected section group, academic year, or specialization is not enabled");
+        }
+        if (sectionGroup.getSpecialization().getFeeStructure(academicYear) == null) {
+            throw new OperationNotAllowedException(
+                    "Cannot enroll student because specialization " + sectionGroup.getSpecialization().getName()
+                            + " does not have a mapped fee structure in academic year " + academicYear.getName()
+            );
+        }
+        if (section.getCapacity() == null || section.getCapacity() <= section.getStudentCount()) {
             throw new OperationNotAllowedException("Section is full");
         }
 
@@ -71,7 +93,9 @@ public class StudentService {
                 : Collections.emptySet();
 
         int studentCount = sectionGroup.getSpecialization().getSectionGroups().stream()
-                .filter(group -> Objects.equals(group.getSection().getAcademicYear().getId(), academicYear.getId()))
+                .filter(group -> group.getSection() != null
+                        && group.getSection().getAcademicYear() != null
+                        && Objects.equals(group.getSection().getAcademicYear().getId(), academicYear.getId()))
                 .mapToInt(group -> group.getStudentEnrollments().size())
                 .sum();
 
@@ -128,8 +152,10 @@ public class StudentService {
         Specialization specialization = studentEnrollment.getSectionGroup().getSpecialization();
         SectionGroup oldSectionGroup = studentEnrollment.getSectionGroup();
         SectionGroup newSectionGroup = academicCommonService.getSection(sectionId).getSectionGroups().stream()
-                .filter(
-                        sectionGroup -> sectionGroup.getSpecialization() == specialization
+                .filter(sectionGroup ->
+                        sectionGroup.getSpecialization() != null
+                                && specialization != null
+                                && Objects.equals(sectionGroup.getSpecialization().getId(), specialization.getId())
                 )
                 .findFirst()
                 .orElseThrow(
@@ -137,12 +163,21 @@ public class StudentService {
                                 new OperationNotAllowedException("Student's specialization is not section supported")
                 );
 
-        if (newSectionGroup == oldSectionGroup) {
+        if (Objects.equals(newSectionGroup.getId(), oldSectionGroup.getId())) {
             throw new OperationNotAllowedException("Student is already enrolled in this section");
         }
         Section section = newSectionGroup.getSection();
-        if (section.getCapacity() <= section.getSectionGroups().size()) {
+        if (section.getActiveStatus() != ActiveStatus.ENABLE) {
+            throw new OperationNotAllowedException("Target section is not enabled");
+        }
+        if (section.getCapacity() == null || section.getCapacity() <= section.getStudentCount()) {
             throw new OperationNotAllowedException("Section is full");
+        }
+        if (specialization.getFeeStructure(section.getAcademicYear()) == null) {
+            throw new OperationNotAllowedException(
+                    "Target section does not have a valid mapped fee structure for specialization "
+                            + specialization.getName()
+            );
         }
 
         studentEnrollment.setSectionGroup(newSectionGroup);
@@ -157,18 +192,40 @@ public class StudentService {
         SectionGroup oldSectionGroup = studentEnrollment.getSectionGroup();
         SectionGroup newSectionGroup = academicCommonService.getSectionGroup(sectionGroupId);
 
-        if (newSectionGroup.getSpecialization() == oldSpecialization) {
+        if (newSectionGroup.getSection() == null
+                || newSectionGroup.getSpecialization() == null
+                || newSectionGroup.getSection().getAcademicYear() == null) {
+            throw new OperationNotAllowedException("Target section group is incomplete");
+        }
+        if (oldSpecialization != null
+                && Objects.equals(newSectionGroup.getSpecialization().getId(), oldSpecialization.getId())) {
             throw new OperationNotAllowedException("Student is already enrolled in this specialization");
         }
-        if (newSectionGroup.getSection().getCapacity() <= newSectionGroup.getSection().getSectionGroups().size()) {
+        if (newSectionGroup.getSection().getActiveStatus() != ActiveStatus.ENABLE
+                || newSectionGroup.getSpecialization().getActiveStatus() != ActiveStatus.ENABLE
+                || newSectionGroup.getSection().getAcademicYear().getActiveStatus() != ActiveStatus.ENABLE) {
+            throw new OperationNotAllowedException("Target section group, specialization, or academic year is not enabled");
+        }
+        if (newSectionGroup.getSection().getCapacity() == null
+                || newSectionGroup.getSection().getCapacity() <= newSectionGroup.getSection().getStudentCount()) {
             throw new OperationNotAllowedException("Section is full");
+        }
+
+        FeeStructure feeStructure = newSectionGroup.getSpecialization()
+                .getFeeStructure(newSectionGroup.getSection().getAcademicYear());
+        if (feeStructure == null) {
+            throw new OperationNotAllowedException(
+                    "Target specialization " + newSectionGroup.getSpecialization().getName()
+                            + " does not have a valid mapped fee structure for academic year "
+                            + newSectionGroup.getSection().getAcademicYear().getName()
+            );
         }
 
         studentEnrollment.setSectionGroup(newSectionGroup);
 
-        FeeStructure feeStructure = newSectionGroup.getSpecialization().getFeeStructure(newSectionGroup.getSection().getAcademicYear());
-
-        studentEnrollment.getFirstFeeAccount().adjustFeeStructureChange(feeStructure);
+        if (studentEnrollment.getFirstFeeAccount() != null) {
+            studentEnrollment.getFirstFeeAccount().adjustFeeStructureChange(feeStructure);
+        }
 
         studentEnrollment = studentEnrollmentRepo.save(studentEnrollment);
 
@@ -210,7 +267,10 @@ public class StudentService {
         userService.changeEnable(studentEnrollment.getStudent().getUser(), enable);
     }
     public List<SectionGroupFilter> filterSectionGroup() {
-        return academicCommonService.filterSectionGroupForStudentPage();
+        return filterSectionGroup(null, null);
+    }
+    public List<SectionGroupFilter> filterSectionGroup(Long specializationId, Long academicYearId) {
+        return academicCommonService.filterSectionGroupForStudentPage(specializationId, academicYearId);
     }
     public List<DTO> listScholarships(Long sectionGroupId) {
         SectionGroup sectionGroup = academicCommonService.getSectionGroup(sectionGroupId);

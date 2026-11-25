@@ -10,10 +10,15 @@ import java.util.List;
 @Data
 public class SectionGroupFilter {
     private CommonDTO sectionGroup;
+    private CommonDTO section;
     private CommonDTO specialization;
     private CommonDTO courses;
     private CommonDTO academicYear;
     private CommonDTO department;
     private CommonDTO school;
     private CommonDTO university;
+    private CommonDTO feeStructure;
+    private Integer capacity;
+    private Integer studentCount;
+    private Integer availableSeats;
 }

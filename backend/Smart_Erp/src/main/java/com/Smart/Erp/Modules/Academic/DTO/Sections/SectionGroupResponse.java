@@ -17,4 +17,6 @@ public class SectionGroupResponse extends BaseDTO {
     private String code;
     private CommonDTO specialization;
     private Integer studentCount;
+    private CommonDTO feeStructure;
+    private Boolean hasFeeStructure;
 }

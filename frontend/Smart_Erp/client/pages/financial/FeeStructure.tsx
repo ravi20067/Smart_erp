@@ -114,6 +114,7 @@ interface FieldErrors {
     name?: string;
     frequency?: string;
     totalNoOfInstallments?: string;
+    specializations?: string;
     components?: string;
 }
 
@@ -488,17 +489,34 @@ function FeeStructureDialog({
             errors.totalNoOfInstallments = "Number of installments must be at least 1.";
         }
 
+        if (form.selectedSpecializationIds.length === 0) {
+            errors.specializations =
+                "At least one specialization must be mapped to this fee structure.";
+        }
+
         if (form.components.length === 0) {
             errors.components = "At least one fee component is required.";
         } else {
-            const hasInvalid = form.components.some(
-                (c) =>
+            const seenCategories = new Set<string>();
+            let hasDuplicateCategory = false;
+            const hasInvalid = form.components.some((c) => {
+                if (c.feeCategoryType) {
+                    if (seenCategories.has(c.feeCategoryType)) {
+                        hasDuplicateCategory = true;
+                    }
+                    seenCategories.add(c.feeCategoryType);
+                }
+                return (
                     !c.componentName.trim() ||
                     !c.feeCategoryType ||
                     isNaN(parseFloat(c.amount)) ||
                     parseFloat(c.amount) < 0
-            );
-            if (hasInvalid) {
+                );
+            });
+            if (hasDuplicateCategory) {
+                errors.components =
+                    "Duplicate fee category types are not allowed in a single fee structure.";
+            } else if (hasInvalid) {
                 errors.components =
                     "All components must have a valid name, category, and non-negative amount.";
             }
@@ -1152,7 +1170,7 @@ function FeeStructureDialog({
                                                         : academicYearsLoading
                                                         ? "Loading academic years..."
                                                         : academicYears.length === 0
-                                                        ? "No academic years found"
+                                                        ? "All academic years already mapped for this course"
                                                         : "Select Academic Year"}
                                                 </option>
                                                 {academicYears.map((y) => (
@@ -1163,6 +1181,11 @@ function FeeStructureDialog({
                                             </select>
                                             <SelectChevron />
                                         </div>
+                                        {isCreate && typeof form.courseId === "number" && !academicYearsLoading && academicYears.length === 0 && (
+                                            <p className="text-[11px] text-amber-400">
+                                                Only one fee structure is allowed per course per academic year. Edit the existing structure to update fees or specializations.
+                                            </p>
+                                        )}
                                         {fieldErrors.academicYearId && (
                                             <p className="text-[11px] text-rose-400">{fieldErrors.academicYearId}</p>
                                         )}
@@ -1329,6 +1352,11 @@ function FeeStructureDialog({
                                         {isCreate && (!form.courseId || !form.academicYearId)
                                             ? "Select Course and Academic Year above to load eligible specializations."
                                             : "No eligible unassigned specializations found."}
+                                    </p>
+                                )}
+                                {fieldErrors.specializations && (
+                                    <p className="text-[11px] text-rose-400">
+                                        {fieldErrors.specializations}
                                     </p>
                                 )}
                             </div>

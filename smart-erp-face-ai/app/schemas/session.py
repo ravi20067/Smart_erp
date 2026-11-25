@@ -33,3 +33,4 @@ class SessionCompleteResponse(BaseModel):
     status: str
     frames_processed: int
     evidence: Dict[str, Any]
+    captured_embedding: Optional[List[float]] = None

@@ -8,6 +8,7 @@ import com.Smart.Erp.Core.Exception.OperationNotAllowedException;
 import com.Smart.Erp.Modules.Academic.Entity.AcademicYear;
 import com.Smart.Erp.Modules.Academic.Entity.Course;
 import com.Smart.Erp.Modules.Academic.Entity.Specialization;
+import com.Smart.Erp.Modules.Academic.Enum.ActiveStatus;
 import com.Smart.Erp.Modules.Academic.Services.AcademicCommonService;
 
 import com.Smart.Erp.Modules.Finance.DTO.Fee.FeeStructureRequest;
@@ -16,6 +17,7 @@ import com.Smart.Erp.Modules.Finance.DTO.Fee.FeeStructureUpdateRequest;
 
 import com.Smart.Erp.Modules.Finance.Entity.FeeComponent;
 import com.Smart.Erp.Modules.Finance.Entity.FeeStructure;
+import com.Smart.Erp.Modules.Finance.Entity.FeeStructureSpecialization;
 import com.Smart.Erp.Modules.Finance.Repo.FeeComponentRepo;
 import com.Smart.Erp.Modules.Finance.Repo.FeeStructureRepo;
 import com.Smart.Erp.Modules.Finance.Repo.FeeStructureSpecializationRepository;
@@ -37,6 +39,7 @@ import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 
 @Service
@@ -93,11 +96,14 @@ public class FeeStructureService {
         AcademicYear academicYear =
                 academicCommonService.getAcademicYear(academicYearId);
 
+        // Enforce single fee structure per course & academic year plus active status & university consistency
+        validateCourseAndAcademicYear(course, academicYear, null);
+
         // Resolve requested specializations
         List<Specialization> specializations =
-                resolveSpecializations(request.getSpecializationId());
+                resolveSpecializations(request != null ? request.getSpecializationId() : null);
 
-        // Validate specialization ownership and academic-year uniqueness
+        // Validate specialization ownership, mapping completeness, and academic-year uniqueness
         validateSpecializations(
                 course,
                 academicYear,
@@ -116,7 +122,7 @@ public class FeeStructureService {
 
         feeStructure = repository.save(feeStructure);
 
-        // Adjust student fee records
+        // Adjust student fee records for the target academic year only
         List<StudentEnrollment> studentEnrollments =
                 getStudentEnrollments(feeStructure);
 
@@ -159,9 +165,16 @@ public class FeeStructureService {
         BigDecimal oldTotalAmount =
                 feeStructure.getTotalAmount();
 
+        // Enforce single fee structure per course & academic year
+        validateCourseAndAcademicYear(
+                feeStructure.getCourse(),
+                feeStructure.getAcademicYear(),
+                feeStructure.getId()
+        );
+
         // Resolve requested specializations
         List<Specialization> specializations =
-                resolveSpecializations(request.getSpecializationId());
+                resolveSpecializations(request != null ? request.getSpecializationId() : null);
 
         // Validate against other fee structures,
         // excluding the current fee structure
@@ -172,9 +185,12 @@ public class FeeStructureService {
                 feeStructure.getId()
         );
 
+        // Guard against unmapping specializations that already have enrolled students in this academic year
+        validateNoEnrolledSpecializationRemoval(feeStructure, specializations);
+
         // Resolve components to remove
         List<Long> componentIds =
-                request.getComponentToRemove() == null
+                (request == null || request.getComponentToRemove() == null)
                         ? List.of()
                         : request.getComponentToRemove();
 
@@ -254,13 +270,20 @@ public class FeeStructureService {
         FeeStructure feeStructure =
                 accountCommonService.getFeeStructure(id);
 
-        if (!feeStructure.getSpecializationAssignments().isEmpty()) {
+        List<StudentEnrollment> activeEnrollments =
+                getStudentEnrollments(feeStructure);
+
+        if (!activeEnrollments.isEmpty()) {
 
             throw new OperationNotAllowedException(
-                    "Cannot delete fee structure while specializations are assigned"
+                    "Cannot delete fee structure while students are enrolled in academic year "
+                            + (feeStructure.getAcademicYear() != null
+                                    ? feeStructure.getAcademicYear().getName()
+                                    : "")
             );
         }
 
+        feeStructure.getSpecializationAssignments().clear();
         repository.delete(feeStructure);
 
         authorizationService.deletePermission(
@@ -281,8 +304,10 @@ public class FeeStructureService {
         Course course =
                 academicCommonService.getCourse(courseId);
 
-        // Ensure the academic year exists
-        academicCommonService.getAcademicYear(academicYearId);
+        AcademicYear academicYear =
+                academicCommonService.getAcademicYear(academicYearId);
+
+        validateSameUniversity(course, academicYear);
 
         List<Specialization> specializations =
                 course.getSpecializations();
@@ -297,7 +322,8 @@ public class FeeStructureService {
 
         return specializations.stream()
                 .filter(specialization ->
-                        !assignedIds.contains(specialization.getId())
+                        specialization.getActiveStatus() == ActiveStatus.ENABLE
+                                && !assignedIds.contains(specialization.getId())
                 )
                 .map(Specialization::toCommonDTO)
                 .toList();
@@ -316,11 +342,16 @@ public class FeeStructureService {
                 .getAcademicYears()
                 .stream()
                 .filter(academicYear ->
-                        authorizationService.can(
-                                PermissionAction.CREATE_CHILD,
-                                ResourceType.ACADEMIC_YEAR,
-                                academicYear.getId()
-                        )
+                        academicYear.getActiveStatus() == ActiveStatus.ENABLE
+                                && !repository.existsByCourse_IdAndAcademicYear_Id(
+                                        courseId,
+                                        academicYear.getId()
+                                )
+                                && authorizationService.can(
+                                        PermissionAction.CREATE_CHILD,
+                                        ResourceType.ACADEMIC_YEAR,
+                                        academicYear.getId()
+                                )
                 )
                 .map(CommonReference::toCommonDTO)
                 .toList();
@@ -329,6 +360,105 @@ public class FeeStructureService {
     // --------------------------------------------------
     // COMMON VALIDATION METHODS
     // --------------------------------------------------
+
+    private void validateCourseAndAcademicYear(
+            Course course,
+            AcademicYear academicYear,
+            Long currentFeeStructureId
+    ) {
+        if (course == null || academicYear == null) {
+            throw new OperationNotAllowedException(
+                    "Course and academic year are required for fee structure"
+            );
+        }
+
+        validateSameUniversity(course, academicYear);
+
+        if (currentFeeStructureId == null) {
+            if (course.getActiveStatus() != ActiveStatus.ENABLE) {
+                throw new OperationNotAllowedException(
+                        "Course " + course.getName() + " is not enabled"
+                );
+            }
+            if (academicYear.getActiveStatus() != ActiveStatus.ENABLE) {
+                throw new OperationNotAllowedException(
+                        "Academic year " + academicYear.getName() + " is not enabled"
+                );
+            }
+            if (repository.existsByCourse_IdAndAcademicYear_Id(
+                    course.getId(),
+                    academicYear.getId()
+            )) {
+                throw new OperationNotAllowedException(
+                        "A fee structure already exists for course " + course.getName()
+                                + " in academic year " + academicYear.getName()
+                                + ". Only one fee structure per course and academic year is allowed."
+                );
+            }
+        } else {
+            if (repository.existsByCourse_IdAndAcademicYear_IdAndIdNot(
+                    course.getId(),
+                    academicYear.getId(),
+                    currentFeeStructureId
+            )) {
+                throw new OperationNotAllowedException(
+                        "Another fee structure already exists for course " + course.getName()
+                                + " in academic year " + academicYear.getName()
+                );
+            }
+        }
+    }
+
+    private void validateSameUniversity(Course course, AcademicYear academicYear) {
+        if (course.getDepartment() == null
+                || course.getDepartment().getSchool() == null
+                || course.getDepartment().getSchool().getUniversity() == null
+                || academicYear.getUniversity() == null) {
+            throw new OperationNotAllowedException(
+                    "Course and academic year must belong to valid universities"
+            );
+        }
+        Long courseUniversityId = course.getDepartment().getSchool().getUniversity().getId();
+        Long yearUniversityId = academicYear.getUniversity().getId();
+        if (!Objects.equals(courseUniversityId, yearUniversityId)) {
+            throw new OperationNotAllowedException(
+                    "Course " + course.getName() + " and academic year " + academicYear.getName()
+                            + " belong to different universities"
+            );
+        }
+    }
+
+    private void validateNoEnrolledSpecializationRemoval(
+            FeeStructure feeStructure,
+            List<Specialization> requestedSpecializations
+    ) {
+        if (feeStructure.getAcademicYear() == null) {
+            return;
+        }
+        Long academicYearId = feeStructure.getAcademicYear().getId();
+        Set<Long> desiredIds = requestedSpecializations.stream()
+                .map(Specialization::getId)
+                .collect(java.util.stream.Collectors.toSet());
+
+        for (FeeStructureSpecialization existingAssignment : feeStructure.getSpecializationAssignments()) {
+            Specialization existingSpec = existingAssignment.getSpecialization();
+            if (existingSpec != null && !desiredIds.contains(existingSpec.getId())) {
+                boolean hasEnrolledStudentsInYear = existingSpec.getSectionGroups().stream()
+                        .filter(sg -> sg.getSection() != null
+                                && sg.getSection().getAcademicYear() != null
+                                && Objects.equals(sg.getSection().getAcademicYear().getId(), academicYearId))
+                        .anyMatch(sg -> sg.getStudentEnrollments() != null && !sg.getStudentEnrollments().isEmpty());
+
+                if (hasEnrolledStudentsInYear) {
+                    throw new OperationNotAllowedException(
+                            "Cannot remove specialization " + existingSpec.getName()
+                                    + " because students are currently enrolled in academic year "
+                                    + feeStructure.getAcademicYear().getName()
+                    );
+                }
+            }
+        }
+    }
 
     private List<Specialization> resolveSpecializations(
             List<Long> specializationIds
@@ -368,6 +498,14 @@ public class FeeStructureService {
             List<Specialization> specializations,
             Long currentFeeStructureId
     ) {
+        if (specializations == null || specializations.isEmpty()) {
+            throw new OperationNotAllowedException(
+                    "At least one specialization must be mapped to the fee structure for course "
+                            + course.getName()
+                            + " in academic year "
+                            + academicYear.getName()
+            );
+        }
 
         for (Specialization specialization : specializations) {
 
@@ -381,6 +519,13 @@ public class FeeStructureService {
                         "Specialization " + specialization.getName()
                                 + " does not belong to course "
                                 + course.getName()
+                );
+            }
+
+            if (currentFeeStructureId == null
+                    && specialization.getActiveStatus() != ActiveStatus.ENABLE) {
+                throw new OperationNotAllowedException(
+                        "Specialization " + specialization.getName() + " is not enabled"
                 );
             }
 
@@ -426,12 +571,24 @@ public class FeeStructureService {
     private List<StudentEnrollment> getStudentEnrollments(
             FeeStructure feeStructure
     ) {
+        if (feeStructure == null || feeStructure.getAcademicYear() == null) {
+            return List.of();
+        }
+        Long targetAcademicYearId = feeStructure.getAcademicYear().getId();
 
         return feeStructure.getSpecializationAssignments().stream()
-                .map(assignment -> assignment.getSpecialization())
-                .filter(java.util.Objects::nonNull)
+                .map(FeeStructureSpecialization::getSpecialization)
+                .filter(Objects::nonNull)
                 .flatMap(specialization ->
                         specialization.getSectionGroups().stream()
+                                .filter(sectionGroup ->
+                                        sectionGroup.getSection() != null
+                                                && sectionGroup.getSection().getAcademicYear() != null
+                                                && Objects.equals(
+                                                        sectionGroup.getSection().getAcademicYear().getId(),
+                                                        targetAcademicYearId
+                                                )
+                                )
                                 .flatMap(sectionGroup ->
                                         sectionGroup.getStudentEnrollments().stream()
                                 )

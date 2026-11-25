@@ -31,10 +31,11 @@ class Settings(BaseSettings):
     SESSION_CLEANUP_INTERVAL_SECONDS: int = 30
 
     # Model Paths
-    MODEL_YUNET: str = "models/yunet/face_detection_yunet_2023mar.onnx"
-    MODEL_SFACE: str = "models/sface/face_recognition_sface_2021dec.onnx"
-    MODEL_ANTISPOOF: str = "models/antispoof/2.7_80x80_MiniFASNetV2.onnx"
-    MODEL_LANDMARKS: str = "models/landmarks/face_landmarker.task"
+    BASE_DIR: Path = Path(__file__).resolve().parent.parent.parent
+    MODEL_YUNET: str = str(Path(__file__).resolve().parent.parent.parent / "models/yunet/face_detection_yunet_2023mar.onnx")
+    MODEL_SFACE: str = str(Path(__file__).resolve().parent.parent.parent / "models/sface/face_recognition_sface_2021dec.onnx")
+    MODEL_ANTISPOOF: str = str(Path(__file__).resolve().parent.parent.parent / "models/antispoof/2.7_80x80_MiniFASNetV2.onnx")
+    MODEL_LANDMARKS: str = str(Path(__file__).resolve().parent.parent.parent / "models/landmarks/face_landmarker.task")
 
     # Detector Parameters
     YUNET_CONFIDENCE_THRESHOLD: float = 0.85

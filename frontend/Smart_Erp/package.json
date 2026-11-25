@@ -4,6 +4,7 @@
   "type": "module",
   "scripts": {
     "dev": "node scripts/maybe-migrate.mjs && vite",
+    "handshake:companion": "node scripts/start-handshake-companion.mjs",
     "build": "vite build",
     "build:client": "vite build",
     "build:server": "vite build --config vite.config.server.ts",

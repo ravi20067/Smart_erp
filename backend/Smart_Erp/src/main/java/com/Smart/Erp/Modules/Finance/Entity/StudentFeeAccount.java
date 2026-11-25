@@ -1,6 +1,7 @@
 package com.Smart.Erp.Modules.Finance.Entity;
 
 import com.Smart.Erp.Config.BaseAuditableEntity;
+import com.Smart.Erp.Core.Exception.OperationNotAllowedException;
 import com.Smart.Erp.Modules.Academic.Entity.SectionGroup;
 import com.Smart.Erp.Modules.Finance.DTO.Student.FeeResponse;
 import com.Smart.Erp.Modules.Finance.Enum.ScholarshipType;
@@ -191,9 +192,27 @@ public class StudentFeeAccount extends BaseAuditableEntity {
         }
     }
     public static StudentFeeAccount initializeFeeAccount(SectionGroup sectionGroup, Set<Scholarship> scholarships, LocalDate dueDate) {
+        if (sectionGroup == null
+                || sectionGroup.getSpecialization() == null
+                || sectionGroup.getSection() == null
+                || sectionGroup.getSection().getAcademicYear() == null) {
+            throw new OperationNotAllowedException(
+                    "Section group, specialization, and academic year are required to initialize a fee account"
+            );
+        }
+        FeeStructure mappedFeeStructure = sectionGroup.getSpecialization()
+                .getFeeStructure(sectionGroup.getSection().getAcademicYear());
+        if (mappedFeeStructure == null) {
+            throw new OperationNotAllowedException(
+                    "No fee structure is mapped for specialization "
+                            + sectionGroup.getSpecialization().getName()
+                            + " in academic year "
+                            + sectionGroup.getSection().getAcademicYear().getName()
+            );
+        }
         return StudentFeeAccount.builder()
-                .feeStructure(sectionGroup.getSpecialization().getFeeStructure(sectionGroup.getSection().getAcademicYear()))
-                .scholarships(scholarships)
+                .feeStructure(mappedFeeStructure)
+                .scholarships(scholarships != null ? scholarships : new HashSet<>())
                 .dueDate(dueDate)
                 .build();
     }
@@ -232,7 +251,7 @@ public class StudentFeeAccount extends BaseAuditableEntity {
                 .totalAmount(this.getBaseAmount())
                 .paidAmount(this.getPaidAmount())
                 .balance(this.getDueBalance())
-                .frequency(this.getFeeStructure().getFrequency())
+                .frequency(this.getFeeStructure() != null ? this.getFeeStructure().getFrequency() : null)
                 .status(this.getStatus())
                 .payableAmount(this.getNetPayableAmount())
                 .dueDate(this.getDueDate())

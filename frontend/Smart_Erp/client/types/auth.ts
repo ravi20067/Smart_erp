@@ -1,17 +1,10 @@
 export interface UserProfile {
-
-    id: number;
-
+    id?: number;
+    userId?: number;
     username: string;
-
     firstName: string;
-
     lastName: string;
-
     email: string;
-
     phone: string;
-
     profileImage?: string;
-
 }

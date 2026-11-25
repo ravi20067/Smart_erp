@@ -42,6 +42,7 @@ import {
 } from "lucide-react";
 
 import {
+    autoGenerateTimetable,
     createTimetableVersion,
     extractErrorMessage,
     getGroupTimetableVersions,
@@ -77,6 +78,17 @@ import {
 import {
     getSectionFilter,
 } from "@/services/timetable/sectionCalendarService";
+
+import {
+    getAllSections,
+    type SectionGroupResponse,
+    type SectionResponse,
+} from "@/services/academic/sectionService";
+
+import {
+    getAllSubjects,
+    type SubjectResponse,
+} from "@/services/academic/subjectService";
 
 /* -------------------------------------------------------------------------- */
 /* Constants & Types                                                          */
@@ -220,8 +232,10 @@ function FieldError({ children }: { children?: string }) {
 export default function TimetableBuilderPage() {
     // Selectors
     const [sections, setSections] = useState<CommonDTO[]>([]);
+    const [richSections, setRichSections] = useState<SectionResponse[]>([]);
     const [baseTemplates, setBaseTemplates] = useState<BaseTimeTableResponse[]>([]);
     const [subjects, setSubjects] = useState<CommonDTO[]>([]);
+    const [richSubjects, setRichSubjects] = useState<SubjectResponse[]>([]);
     const [teachers, setTeachers] = useState<CommonDTO[]>([]);
     const [rooms, setRooms] = useState<RoomResponse[]>([]);
 
@@ -242,10 +256,25 @@ export default function TimetableBuilderPage() {
     const [createForm, setCreateForm] = useState<CreateVersionFormState>(DEFAULT_VERSION_FORM);
     const [createErrors, setCreateErrors] = useState<Record<string, string>>({});
 
-    // Slot Edit Dialog (inside create modal or view)
+    // Auto-Generate Modal state
+    const [isAutoGenModalOpen, setIsAutoGenModalOpen] = useState(false);
+    const [autoGenForm, setAutoGenForm] = useState<{
+        baseTimeTableId: number | "";
+        name: string;
+        effectiveFrom: string;
+        publishImmediately: boolean;
+    }>({
+        baseTimeTableId: "",
+        name: "",
+        effectiveFrom: "",
+        publishImmediately: false,
+    });
+
+    // Slot Edit Dialog (inside create modal)
     const [activeSlotTarget, setActiveSlotTarget] = useState<{
         dayOfWeek: WeekDay;
         basePeriodId: number;
+        sequenceNumber: number;
         periodLabel: string;
     } | null>(null);
 
@@ -254,14 +283,23 @@ export default function TimetableBuilderPage() {
         teacherEnrollmentId: number | "";
         roomId: number | "";
         entryType: TimetableEntryType;
+        assignTwoPeriods: boolean;
         remarks: string;
     }>({
         subjectId: "",
         teacherEnrollmentId: "",
         roomId: "",
         entryType: "THEORY",
+        assignTwoPeriods: false,
         remarks: "",
     });
+
+    const formatLocalYmd = (d: Date): string => {
+        const y = d.getFullYear();
+        const m = String(d.getMonth() + 1).padStart(2, "0");
+        const day = String(d.getDate()).padStart(2, "0");
+        return `${y}-${m}-${day}`;
+    };
 
     /* ---------------------------------------------------------------------- */
     /* Load Reference Data                                                    */
@@ -270,17 +308,21 @@ export default function TimetableBuilderPage() {
     useEffect(() => {
         async function fetchInitial() {
             try {
-                const [secs, bts, subs, tch, rms] = await Promise.all([
+                const [secs, bts, subs, tch, rms, detailedSecs, detailedSubs] = await Promise.all([
                     getSectionFilter(),
                     getAllBaseTemplates(),
                     getSubjectFilter(),
                     getTeacherFilter(),
                     getAllRooms(),
+                    getAllSections().catch(() => [] as SectionResponse[]),
+                    getAllSubjects().catch(() => [] as SubjectResponse[]),
                 ]);
 
                 setSections(secs);
+                setRichSections(detailedSecs);
                 setBaseTemplates(bts);
                 setSubjects(subs);
+                setRichSubjects(detailedSubs);
                 setTeachers(tch);
                 setRooms(rms);
 
@@ -293,6 +335,30 @@ export default function TimetableBuilderPage() {
         }
         fetchInitial();
     }, []);
+
+    const selectedSectionObj = useMemo(() => {
+        return richSections.find((s) => s.id === Number(selectedSectionId)) || null;
+    }, [richSections, selectedSectionId]);
+
+    const availableGroups = useMemo<SectionGroupResponse[]>(() => {
+        return selectedSectionObj?.sectionGroup || [];
+    }, [selectedSectionObj]);
+
+    const selectedGroupObj = useMemo(() => {
+        return availableGroups.find((g) => g.id === Number(selectedGroupId)) || null;
+    }, [availableGroups, selectedGroupId]);
+
+    // Auto-keep selectedGroupId valid for the selected section when in SECTION_GROUP scope
+    useEffect(() => {
+        if (scope !== "SECTION_GROUP") return;
+        if (availableGroups.length === 0) {
+            setSelectedGroupId("");
+            return;
+        }
+        if (!selectedGroupId || !availableGroups.some((g) => g.id === Number(selectedGroupId))) {
+            setSelectedGroupId(availableGroups[0].id);
+        }
+    }, [scope, availableGroups, selectedGroupId]);
 
     /* ---------------------------------------------------------------------- */
     /* Load Versions for Selected Target                                      */
@@ -357,7 +423,12 @@ export default function TimetableBuilderPage() {
     }, [activeVersion]);
 
     // Fast lookup dictionaries for Subject, Teacher, Room names
-    const subjectMap = useMemo(() => new Map(subjects.map((s) => [s.id, s.name])), [subjects]);
+    const subjectMap = useMemo(() => {
+        const map = new Map<number, string>();
+        for (const s of subjects) map.set(s.id, s.name);
+        for (const s of richSubjects) map.set(s.id, s.code ? `${s.name} (${s.code})` : s.name);
+        return map;
+    }, [subjects, richSubjects]);
     const teacherMap = useMemo(() => new Map(teachers.map((t) => [t.id, t.name])), [teachers]);
     const roomMap = useMemo(() => new Map(rooms.map((r) => [r.id, `${r.roomNumber} (${r.buildingName || "Main"})`])), [rooms]);
 
@@ -376,6 +447,84 @@ export default function TimetableBuilderPage() {
             toast.error(extractErrorMessage(err, "Failed to publish timetable version."));
         } finally {
             setBusy(false);
+        }
+    };
+
+    /* ---------------------------------------------------------------------- */
+    /* Automatic Timetable Generation                                         */
+    /* ---------------------------------------------------------------------- */
+
+    const [isAutoGenerating, setIsAutoGenerating] = useState(false);
+
+    const handleOpenAutoGenModal = () => {
+        if (!selectedSectionId) {
+            toast.error("Please select a section first.");
+            return;
+        }
+        if (scope === "SECTION_GROUP" && !selectedGroupId) {
+            toast.error("Please select a specialization section group.");
+            return;
+        }
+        const defaultBase = baseTemplates.find((b) => b.active) || baseTemplates[0];
+        if (!defaultBase) {
+            toast.error("No base timetable period template found. Please create one in Base Timetable.");
+            return;
+        }
+        const targetLabel =
+            scope === "SECTION"
+                ? selectedSectionObj?.name || "Section"
+                : selectedGroupObj?.name || "Group";
+        setAutoGenForm({
+            baseTimeTableId: defaultBase.id,
+            name: `${targetLabel} Auto Schedule (${new Date().getFullYear()})`,
+            effectiveFrom: formatLocalYmd(new Date()),
+            publishImmediately: false,
+        });
+        setIsAutoGenModalOpen(true);
+    };
+
+    const handleAutoGenerateSubmit = async (e: FormEvent) => {
+        e.preventDefault();
+        if (!selectedSectionId) {
+            toast.error("Please select a section first.");
+            return;
+        }
+        if (scope === "SECTION_GROUP" && !selectedGroupId) {
+            toast.error("Please select a specialization section group.");
+            return;
+        }
+        if (!autoGenForm.baseTimeTableId) {
+            toast.error("Please select a base timetable template.");
+            return;
+        }
+        if (!autoGenForm.name.trim()) {
+            toast.error("Please enter a version name.");
+            return;
+        }
+
+        try {
+            setIsAutoGenerating(true);
+            const generated = await autoGenerateTimetable({
+                sectionId: Number(selectedSectionId),
+                sectionGroupId: scope === "SECTION_GROUP" && selectedGroupId ? Number(selectedGroupId) : null,
+                scope,
+                baseTimeTableId: Number(autoGenForm.baseTimeTableId),
+                academicYearId: selectedSectionObj?.academicYear?.id || null,
+                name: autoGenForm.name.trim(),
+                effectiveFrom: autoGenForm.effectiveFrom || formatLocalYmd(new Date()),
+                preferredRoomIds: rooms.map((r) => r.id),
+                publishImmediately: autoGenForm.publishImmediately,
+            });
+            toast.success("Conflict-free timetable auto-generated successfully!");
+            setIsAutoGenModalOpen(false);
+            await loadVersions();
+            if (generated?.id) {
+                setSelectedVersionId(generated.id);
+            }
+        } catch (error) {
+            toast.error(error instanceof Error ? error.message : "Failed to auto-generate timetable.");
+        } finally {
+            setIsAutoGenerating(false);
         }
     };
 
@@ -415,10 +564,74 @@ export default function TimetableBuilderPage() {
         return map;
     }, [createForm.entries]);
 
+    const createSectionObj = useMemo(() => {
+        return richSections.find((s) => s.id === Number(createForm.sectionId)) || null;
+    }, [richSections, createForm.sectionId]);
+
+    const createAvailableGroups = useMemo<SectionGroupResponse[]>(() => {
+        return createSectionObj?.sectionGroup || [];
+    }, [createSectionObj]);
+
+    const createGroupObj = useMemo(() => {
+        return createAvailableGroups.find((g) => g.id === Number(createForm.sectionGroupId)) || null;
+    }, [createAvailableGroups, createForm.sectionGroupId]);
+
+    // Filter subjects strictly by active Create scope (core for SECTION; matching specialization for SECTION_GROUP)
+    const scopedSubjects = useMemo<Array<{ id: number; name: string; isPractical?: boolean }>>(() => {
+        if (richSubjects.length === 0) {
+            return subjects.map((s) => ({ id: s.id, name: s.name }));
+        }
+        const courseId = createSectionObj?.course?.id;
+        return richSubjects
+            .filter((s) => {
+                if (courseId && s.course?.id && s.course.id !== courseId) {
+                    return false;
+                }
+                if (createForm.scope === "SECTION") {
+                    return s.specializations.length === 0;
+                }
+                const targetSpecId = createGroupObj?.specialization?.id;
+                if (!targetSpecId) {
+                    return s.specializations.length > 0;
+                }
+                return s.specializations.some((sp) => sp.id === targetSpecId);
+            })
+            .map((s) => ({
+                id: s.id,
+                name: `${s.name}${s.code ? ` (${s.code})` : ""}${s.isPracticalSubject ? " [Lab]" : ""}`,
+                isPractical: s.isPracticalSubject,
+            }));
+    }, [richSubjects, subjects, createSectionObj, createForm.scope, createGroupObj]);
+
+    const nextContiguousClassPeriod = useMemo(() => {
+        if (!activeSlotTarget || !createBaseTemplate) return null;
+        const sorted = [...createBaseTemplate.periods].sort((a, b) => a.sequenceNumber - b.sequenceNumber);
+        const idx = sorted.findIndex((p) => (p.id || p.sequenceNumber) === activeSlotTarget.basePeriodId);
+        if (idx < 0 || idx + 1 >= sorted.length) return null;
+        const cur = sorted[idx];
+        const nxt = sorted[idx + 1];
+        if (nxt.sequenceNumber !== cur.sequenceNumber + 1 || nxt.periodType !== "CLASS") {
+            return null;
+        }
+        return nxt;
+    }, [activeSlotTarget, createBaseTemplate]);
+
+    // Enforce single teacher per subject in manual version creation
+    const existingTeacherForSelectedSubject = useMemo(() => {
+        if (!slotAssignment.subjectId || !activeSlotTarget) return null;
+        const match = createForm.entries.find(
+            (e) =>
+                e.subjectId === Number(slotAssignment.subjectId) &&
+                !(e.dayOfWeek === activeSlotTarget.dayOfWeek && e.basePeriodId === activeSlotTarget.basePeriodId)
+        );
+        return match ? (match.teacherEnrollmentId || match.teacherId || null) : null;
+    }, [slotAssignment.subjectId, activeSlotTarget, createForm.entries]);
+
     const handleOpenSlotAssign = (day: WeekDay, period: PeriodResponse) => {
         setActiveSlotTarget({
             dayOfWeek: day,
             basePeriodId: period.id || period.sequenceNumber,
+            sequenceNumber: period.sequenceNumber,
             periodLabel: period.label || `Period ${period.sequenceNumber}`,
         });
 
@@ -431,14 +644,18 @@ export default function TimetableBuilderPage() {
                 teacherEnrollmentId: existing.teacherId || existing.teacherEnrollmentId,
                 roomId: existing.roomId || "",
                 entryType: existing.entryType,
+                assignTwoPeriods: false,
                 remarks: existing.remarks || "",
             });
         } else {
+            const firstSubj = scopedSubjects[0];
+            const isLab = Boolean(firstSubj?.isPractical);
             setSlotAssignment({
-                subjectId: subjects[0]?.id || "",
+                subjectId: firstSubj?.id || "",
                 teacherEnrollmentId: teachers[0]?.id || "",
                 roomId: rooms[0]?.id || "",
-                entryType: "THEORY",
+                entryType: isLab ? "PRACTICAL" : "THEORY",
+                assignTwoPeriods: false,
                 remarks: "",
             });
         }
@@ -455,27 +672,45 @@ export default function TimetableBuilderPage() {
             return;
         }
 
-        const newEntry: EntryRequest = {
+        const chosenSubjId = Number(slotAssignment.subjectId);
+        const chosenTeacherId = Number(slotAssignment.teacherEnrollmentId);
+
+        if (existingTeacherForSelectedSubject && existingTeacherForSelectedSubject !== chosenTeacherId) {
+            const lockedName = teacherMap.get(existingTeacherForSelectedSubject) || `#${existingTeacherForSelectedSubject}`;
+            toast.error(`Single-teacher policy: This subject is already taught by ${lockedName} in another slot of this version.`);
+            return;
+        }
+
+        const targetPeriods: number[] = [activeSlotTarget.basePeriodId];
+        if (slotAssignment.assignTwoPeriods) {
+            if (!nextContiguousClassPeriod) {
+                toast.error("Cannot assign 2 consecutive periods here because the next slot is a break/lunch or end of day.");
+                return;
+            }
+            targetPeriods.push(nextContiguousClassPeriod.id || nextContiguousClassPeriod.sequenceNumber);
+        }
+
+        const newEntries: EntryRequest[] = targetPeriods.map((periodId) => ({
             dayOfWeek: activeSlotTarget.dayOfWeek,
-            basePeriodId: activeSlotTarget.basePeriodId,
-            subjectId: Number(slotAssignment.subjectId),
-            teacherEnrollmentId: Number(slotAssignment.teacherEnrollmentId),
+            basePeriodId: periodId,
+            subjectId: chosenSubjId,
+            teacherEnrollmentId: chosenTeacherId,
             roomId: slotAssignment.roomId ? Number(slotAssignment.roomId) : null,
             entryType: slotAssignment.entryType,
             remarks: slotAssignment.remarks.trim() || undefined,
-        };
+        }));
 
         setCreateForm((prev) => {
             const filtered = prev.entries.filter(
                 (e) =>
                     !(
                         e.dayOfWeek === activeSlotTarget.dayOfWeek &&
-                        e.basePeriodId === activeSlotTarget.basePeriodId
+                        targetPeriods.includes(e.basePeriodId)
                     )
             );
             return {
                 ...prev,
-                entries: [...filtered, newEntry],
+                entries: [...filtered, ...newEntries],
             };
         });
 
@@ -583,6 +818,16 @@ export default function TimetableBuilderPage() {
 
                         <button
                             type="button"
+                            onClick={handleOpenAutoGenModal}
+                            disabled={busy || isAutoGenerating}
+                            className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-emerald-500 via-teal-500 to-cyan-600 px-4 py-2.5 text-xs font-semibold text-white shadow-lg shadow-emerald-500/20 transition hover:brightness-110 active:scale-95 disabled:opacity-50"
+                        >
+                            <Sparkles size={16} className={isAutoGenerating ? "animate-spin" : ""} />
+                            <span>{isAutoGenerating ? "Generating..." : "Auto-Generate Timetable"}</span>
+                        </button>
+
+                        <button
+                            type="button"
                             onClick={handleOpenCreateModal}
                             className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-sky-500 via-blue-500 to-indigo-600 px-4 py-2.5 text-xs font-semibold text-white shadow-lg shadow-sky-500/20 transition hover:brightness-110 active:scale-95"
                         >
@@ -649,16 +894,27 @@ export default function TimetableBuilderPage() {
                             <SelectChevron />
                         </div>
 
-                        {/* Section Group ID if group scope */}
+                        {/* Section Group & Specialization Selector when SECTION_GROUP scope */}
                         {scope === "SECTION_GROUP" && (
-                            <div className="min-w-[150px]">
-                                <input
-                                    type="number"
-                                    placeholder="Section Group ID"
+                            <div className="relative min-w-[230px]">
+                                <select
+                                    aria-label="Select Specialization Section Group"
                                     value={selectedGroupId}
                                     onChange={(e) => setSelectedGroupId(Number(e.target.value) || "")}
-                                    className="w-full rounded-xl border border-white/10 bg-slate-950/70 px-3 py-2 text-xs text-white placeholder-slate-500 focus:border-sky-400 focus:outline-none"
-                                />
+                                    className="w-full appearance-none rounded-xl border border-purple-400/30 bg-slate-950/70 px-3 py-2 pr-8 text-xs text-white focus:border-purple-400 focus:outline-none"
+                                >
+                                    {availableGroups.length === 0 ? (
+                                        <option value="">No specialization groups in section</option>
+                                    ) : (
+                                        availableGroups.map((g) => (
+                                            <option key={g.id} value={g.id}>
+                                                {g.name}
+                                                {g.specialization ? ` — ${g.specialization.name}` : ""}
+                                            </option>
+                                        ))
+                                    )}
+                                </select>
+                                <SelectChevron />
                             </div>
                         )}
                     </div>
@@ -981,24 +1237,67 @@ export default function TimetableBuilderPage() {
                                             <label className="block text-xs font-medium text-slate-300">
                                                 Target Scope & Section
                                             </label>
-                                            <div className="mt-1.5 flex gap-2">
-                                                <select
-                                                    value={createForm.sectionId}
-                                                    onChange={(e) =>
-                                                        setCreateForm((prev) => ({
-                                                            ...prev,
-                                                            sectionId: Number(e.target.value) || "",
-                                                        }))
-                                                    }
-                                                    className="w-full appearance-none rounded-xl border border-white/10 bg-slate-950/70 px-3 py-2 text-xs text-white focus:border-sky-400 focus:outline-none"
-                                                >
-                                                    <option value="">Select Section...</option>
-                                                    {sections.map((s) => (
-                                                        <option key={s.id} value={s.id}>
-                                                            {s.name}
-                                                        </option>
-                                                    ))}
-                                                </select>
+                                            <div className="mt-1.5 flex flex-col gap-2">
+                                                <div className="flex gap-2">
+                                                    <select
+                                                        value={createForm.scope}
+                                                        onChange={(e) =>
+                                                            setCreateForm((prev) => ({
+                                                                ...prev,
+                                                                scope: e.target.value as TimetableScope,
+                                                                sectionGroupId: "",
+                                                                entries: [],
+                                                            }))
+                                                        }
+                                                        className="w-40 appearance-none rounded-xl border border-white/10 bg-slate-950/70 px-3 py-2 text-xs text-white focus:border-sky-400 focus:outline-none"
+                                                    >
+                                                        <option value="SECTION">Section (Core)</option>
+                                                        <option value="SECTION_GROUP">Group (Spec.)</option>
+                                                    </select>
+                                                    <select
+                                                        value={createForm.sectionId}
+                                                        onChange={(e) =>
+                                                            setCreateForm((prev) => ({
+                                                                ...prev,
+                                                                sectionId: Number(e.target.value) || "",
+                                                                sectionGroupId: "",
+                                                                entries: [],
+                                                            }))
+                                                        }
+                                                        className="w-full appearance-none rounded-xl border border-white/10 bg-slate-950/70 px-3 py-2 text-xs text-white focus:border-sky-400 focus:outline-none"
+                                                    >
+                                                        <option value="">Select Section...</option>
+                                                        {sections.map((s) => (
+                                                            <option key={s.id} value={s.id}>
+                                                                {s.name}
+                                                            </option>
+                                                        ))}
+                                                    </select>
+                                                </div>
+                                                {createForm.scope === "SECTION_GROUP" && (
+                                                    <div>
+                                                        <select
+                                                            value={createForm.sectionGroupId}
+                                                            onChange={(e) =>
+                                                                setCreateForm((prev) => ({
+                                                                    ...prev,
+                                                                    sectionGroupId: Number(e.target.value) || "",
+                                                                    entries: [],
+                                                                }))
+                                                            }
+                                                            className="w-full appearance-none rounded-xl border border-purple-400/30 bg-slate-950/70 px-3 py-2 text-xs text-white focus:border-purple-400 focus:outline-none"
+                                                        >
+                                                            <option value="">Select Section Group (Specialization)...</option>
+                                                            {createAvailableGroups.map((g) => (
+                                                                <option key={g.id} value={g.id}>
+                                                                    {g.name}
+                                                                    {g.specialization ? ` — ${g.specialization.name}` : ""}
+                                                                </option>
+                                                            ))}
+                                                        </select>
+                                                        <FieldError>{createErrors.sectionGroupId}</FieldError>
+                                                    </div>
+                                                )}
                                             </div>
                                         </div>
                                     </div>
@@ -1207,24 +1506,55 @@ export default function TimetableBuilderPage() {
 
                             <div className="space-y-3 text-xs">
                                 <div>
-                                    <label className="block text-slate-300 font-medium">Subject *</label>
+                                    <label className="block text-slate-300 font-medium">
+                                        Subject *{" "}
+                                        <span className="text-[10px] font-normal text-sky-300">
+                                            ({createForm.scope === "SECTION"
+                                                ? "Core subjects"
+                                                : createGroupObj?.specialization
+                                                  ? `${createGroupObj.specialization.name} specialization`
+                                                  : "Specialization subjects"})
+                                        </span>
+                                    </label>
                                     <select
                                         value={slotAssignment.subjectId}
-                                        onChange={(e) =>
+                                        onChange={(e) => {
+                                            const subId = Number(e.target.value) || "";
+                                            const richSubj = richSubjects.find((rs) => rs.id === subId);
+                                            const lockedTeacher = createForm.entries.find(
+                                                (entry) =>
+                                                    entry.subjectId === subId &&
+                                                    !(
+                                                        entry.dayOfWeek === activeSlotTarget?.dayOfWeek &&
+                                                        entry.basePeriodId === activeSlotTarget?.basePeriodId
+                                                    )
+                                            );
+                                            const isLab = Boolean(richSubj?.isPracticalSubject);
                                             setSlotAssignment((prev) => ({
                                                 ...prev,
-                                                subjectId: Number(e.target.value) || "",
-                                            }))
-                                        }
+                                                subjectId: subId,
+                                                entryType: isLab ? "PRACTICAL" : "THEORY",
+                                                assignTwoPeriods: isLab && Boolean(nextContiguousClassPeriod),
+                                                teacherEnrollmentId:
+                                                    lockedTeacher?.teacherEnrollmentId ||
+                                                    lockedTeacher?.teacherId ||
+                                                    prev.teacherEnrollmentId,
+                                            }));
+                                        }}
                                         className="mt-1 w-full rounded-lg border border-white/10 bg-slate-950 px-3 py-2 text-white focus:border-sky-400 focus:outline-none"
                                     >
                                         <option value="">Select Subject...</option>
-                                        {subjects.map((s) => (
+                                        {scopedSubjects.map((s) => (
                                             <option key={s.id} value={s.id}>
                                                 {s.name}
                                             </option>
                                         ))}
                                     </select>
+                                    {scopedSubjects.length === 0 && (
+                                        <p className="mt-1 text-[11px] text-amber-400">
+                                            No matching {createForm.scope === "SECTION" ? "core" : "specialization"} subjects found for this selection.
+                                        </p>
+                                    )}
                                 </div>
 
                                 <div>
@@ -1246,6 +1576,11 @@ export default function TimetableBuilderPage() {
                                             </option>
                                         ))}
                                     </select>
+                                    {existingTeacherForSelectedSubject && (
+                                        <p className="mt-1 text-[11px] text-cyan-300">
+                                            Single-teacher rule: {teacherMap.get(existingTeacherForSelectedSubject) || `#${existingTeacherForSelectedSubject}`} teaches this subject in this version.
+                                        </p>
+                                    )}
                                     {teachers.length === 0 && (
                                         <p className="mt-1 text-[11px] text-amber-400">
                                             No faculty members found. Ensure teachers exist in the system.
@@ -1269,7 +1604,7 @@ export default function TimetableBuilderPage() {
                                             <option value="">Select Room...</option>
                                             {rooms.map((r) => (
                                                 <option key={r.id} value={r.id}>
-                                                    {r.roomNumber} ({r.buildingName || "Main"})
+                                                    {r.roomNumber} ({r.roomType || r.buildingName || "Main"})
                                                 </option>
                                             ))}
                                         </select>
@@ -1295,6 +1630,32 @@ export default function TimetableBuilderPage() {
                                         </select>
                                     </div>
                                 </div>
+
+                                {(slotAssignment.entryType === "PRACTICAL" ||
+                                    richSubjects.find((s) => s.id === Number(slotAssignment.subjectId))?.isPracticalSubject) && (
+                                    <div className="rounded-xl border border-amber-400/25 bg-amber-500/10 p-2.5 space-y-1">
+                                        <label className="flex items-center gap-2 text-amber-200 font-medium cursor-pointer">
+                                            <input
+                                                type="checkbox"
+                                                checked={slotAssignment.assignTwoPeriods}
+                                                disabled={!nextContiguousClassPeriod}
+                                                onChange={(e) =>
+                                                    setSlotAssignment((prev) => ({
+                                                        ...prev,
+                                                        assignTwoPeriods: e.target.checked,
+                                                    }))
+                                                }
+                                                className="rounded border-white/20 bg-slate-950"
+                                            />
+                                            <span>Allocate 2 consecutive periods (Practical / Lab block)</span>
+                                        </label>
+                                        <p className="text-[11px] text-amber-300/80 pl-5">
+                                            {nextContiguousClassPeriod
+                                                ? `Will reserve ${activeSlotTarget.periodLabel} + ${nextContiguousClassPeriod.label || `Period ${nextContiguousClassPeriod.sequenceNumber}`} contiguously.`
+                                                : "Next slot is a break/lunch or end of day — pick an earlier period for a 2-period lab block."}
+                                        </p>
+                                    </div>
+                                )}
 
                                 <div>
                                     <label className="block text-slate-300 font-medium">Remarks / Note</label>
@@ -1341,6 +1702,146 @@ export default function TimetableBuilderPage() {
                     document.body
                 )
             )}
+
+            {/* ============================================================== */}
+            {/* AUTO-GENERATE OPTIONS MODAL                                    */}
+            {/* ============================================================== */}
+            {isAutoGenModalOpen &&
+                createPortal(
+                    <div className="fixed inset-0 z-[220] flex items-center justify-center p-3 sm:p-6">
+                        <div
+                            className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm"
+                            onClick={() => !isAutoGenerating && setIsAutoGenModalOpen(false)}
+                        />
+                        <motion.div
+                            initial={{ opacity: 0, scale: 0.96, y: 12 }}
+                            animate={{ opacity: 1, scale: 1, y: 0 }}
+                            className="relative z-10 w-full max-w-lg rounded-2xl border border-white/10 bg-slate-900 p-6 shadow-2xl space-y-5"
+                        >
+                            <div className="flex items-start justify-between border-b border-white/10 pb-3">
+                                <div className="flex items-center gap-3">
+                                    <div className="rounded-xl border border-emerald-400/25 bg-emerald-500/10 p-2 text-emerald-300">
+                                        <Sparkles size={20} />
+                                    </div>
+                                    <div>
+                                        <h3 className="text-lg font-bold text-white">Auto-Generate Timetable</h3>
+                                        <p className="text-xs text-slate-400">
+                                            Scope: {scope === "SECTION" ? "Section (Core Subjects)" : `Group (${selectedGroupObj?.specialization?.name || "Specialization"})`}
+                                        </p>
+                                    </div>
+                                </div>
+                                <button
+                                    type="button"
+                                    onClick={() => !isAutoGenerating && setIsAutoGenModalOpen(false)}
+                                    className="rounded-lg p-1.5 text-slate-400 hover:bg-white/10 hover:text-white"
+                                >
+                                    <X size={16} />
+                                </button>
+                            </div>
+
+                            <form onSubmit={handleAutoGenerateSubmit} className="space-y-4 text-xs">
+                                <div className="rounded-xl border border-emerald-400/20 bg-emerald-500/10 p-3 text-emerald-200 space-y-1">
+                                    <p className="font-semibold">Automatic Constraint Engine Active:</p>
+                                    <ul className="list-disc pl-4 space-y-0.5 text-emerald-200/85">
+                                        <li>
+                                            {scope === "SECTION"
+                                                ? "Allocates core curriculum subjects only (specialization subjects stay isolated in section groups)."
+                                                : `Allocates ${selectedGroupObj?.specialization?.name || "group specialization"} subjects only, avoiding Section core slots.`}
+                                        </li>
+                                        <li>Practicals reserve 2 truly contiguous CLASS periods (never across Break/Lunch).</li>
+                                        <li>Enforces 1 dedicated teacher per subject & checks institutional teacher/room availability.</li>
+                                    </ul>
+                                </div>
+
+                                <div>
+                                    <label className="block font-medium text-slate-300">Version Name *</label>
+                                    <input
+                                        type="text"
+                                        required
+                                        value={autoGenForm.name}
+                                        onChange={(e) => setAutoGenForm((p) => ({ ...p, name: e.target.value }))}
+                                        className="mt-1.5 w-full rounded-xl border border-white/10 bg-slate-950/70 px-3 py-2 text-white focus:border-emerald-400 focus:outline-none"
+                                    />
+                                </div>
+
+                                <div className="grid grid-cols-2 gap-3">
+                                    <div>
+                                        <label className="block font-medium text-slate-300">Base Bell Template *</label>
+                                        <select
+                                            value={autoGenForm.baseTimeTableId}
+                                            onChange={(e) =>
+                                                setAutoGenForm((p) => ({
+                                                    ...p,
+                                                    baseTimeTableId: Number(e.target.value) || "",
+                                                }))
+                                            }
+                                            className="mt-1.5 w-full rounded-xl border border-white/10 bg-slate-950/70 px-3 py-2 text-white focus:border-emerald-400 focus:outline-none"
+                                        >
+                                            {baseTemplates.map((b) => (
+                                                <option key={b.id} value={b.id}>
+                                                    {b.name} ({b.periodsPerDay} periods)
+                                                </option>
+                                            ))}
+                                        </select>
+                                    </div>
+                                    <div>
+                                        <label className="block font-medium text-slate-300">Effective From *</label>
+                                        <input
+                                            type="date"
+                                            required
+                                            value={autoGenForm.effectiveFrom}
+                                            onChange={(e) =>
+                                                setAutoGenForm((p) => ({ ...p, effectiveFrom: e.target.value }))
+                                            }
+                                            className="mt-1.5 w-full rounded-xl border border-white/10 bg-slate-950/70 px-3 py-2 text-white focus:border-emerald-400 focus:outline-none"
+                                        />
+                                    </div>
+                                </div>
+
+                                <label className="flex items-center gap-2 text-slate-300 cursor-pointer pt-1">
+                                    <input
+                                        type="checkbox"
+                                        checked={autoGenForm.publishImmediately}
+                                        onChange={(e) =>
+                                            setAutoGenForm((p) => ({ ...p, publishImmediately: e.target.checked }))
+                                        }
+                                        className="rounded border-white/20 bg-slate-950"
+                                    />
+                                    <span>Publish generated version immediately</span>
+                                </label>
+
+                                <div className="flex justify-end gap-2 border-t border-white/10 pt-3">
+                                    <button
+                                        type="button"
+                                        disabled={isAutoGenerating}
+                                        onClick={() => setIsAutoGenModalOpen(false)}
+                                        className="rounded-xl border border-white/10 px-4 py-2 font-semibold text-slate-300 hover:bg-white/10"
+                                    >
+                                        Cancel
+                                    </button>
+                                    <button
+                                        type="submit"
+                                        disabled={isAutoGenerating}
+                                        className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-600 px-5 py-2 font-semibold text-white hover:brightness-110 disabled:opacity-50"
+                                    >
+                                        {isAutoGenerating ? (
+                                            <>
+                                                <LoaderCircle size={14} className="animate-spin" />
+                                                <span>Generating...</span>
+                                            </>
+                                        ) : (
+                                            <>
+                                                <Sparkles size={14} />
+                                                <span>Generate Schedule</span>
+                                            </>
+                                        )}
+                                    </button>
+                                </div>
+                            </form>
+                        </motion.div>
+                    </div>,
+                    document.body
+                )}
         </div>
     );
 }

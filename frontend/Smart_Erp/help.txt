@@ -1,0 +1,179 @@
+================================================================================
+SMART COLLEGE ERP — SENIOR ARCHITECT ENGINEERING LOG & CHANGE ANALYSIS
+================================================================================
+Updated after full end-to-end backend + frontend audit, biometric sequence
+refinement, specialization-scoped timetable engine hardening, student portal
+real data integration, and legacy teacher-device removal.
+
+--------------------------------------------------------------------------------
+1. DECOMMISSIONED TEACHER-DEVICE ATTENDANCE (ZERO DB BREAKAGE)
+--------------------------------------------------------------------------------
+Why:
+  Legacy hardware device-punch teacher attendance created a parallel workflow
+  and left orphan endpoints (/devices/mark, /teacher/attendance/qr-generate).
+
+Backend removals:
+  - Deleted entire Modules/Devices/ package (Devices, DeviceDto, DeviceRepo)
+    and ScannerController.
+  - Deleted Modules/Teacher/Controller/MyAttendence.java, DTO/MyAttendence/,
+    Entity/TeacherAttendance.java, Enum/ActivityType.java,
+    Enum/AttendanceStatusType.java, Repo/TeacherAttendanceRepository.java,
+    Services/AttendancePublisher.java, Services/TeacherAttendanceService.java,
+    and Core/Redis/AttendanceQR.java.
+  - Preserved Modules/Teacher/Enum/AttendanceStatus.java because StudentAttendance
+    actively uses PRESENT / ABSENT / LEAVE / LATE / REJECTED.
+  - Verified User.java and Teacher.java carry zero ORM references to Devices or
+    TeacherAttendance, so Hibernate spring.jpa.hibernate.ddl-auto=update boots
+    cleanly without dropping legacy historical tables.
+
+Frontend removals & Express cleanup:
+  - Removed client/services/teacher/myattendanceService.tsx,
+    client/types/teacher/MyAttendence.ts, client/hooks/teacher/*,
+    client/pages/teacher/AttendenceAuthenticator.tsx,
+    client/pages/Devices/dashboard.tsx, client/services/deviceScanner.tsx,
+    client/components/device/AttendanceResultModal.tsx, and
+    client/components/teacher/myAttendence/*.
+  - Removed DEVICES role and /devices routes from client/App.tsx,
+    SuperAdminSidebar.tsx, authContext.tsx, authutil.tsx, and axiosConfig.tsx.
+  - Purged mock device routes (/api/admin/device/*) from server/index.ts and
+    server/routes/admin.ts.
+
+--------------------------------------------------------------------------------
+2. ZERO-TRUST BIOMETRIC ENROLLMENT FIRST & SECURE QR HANDSHAKE
+--------------------------------------------------------------------------------
+Architectural invariant:
+  1. Regular student registration MUST NEVER enroll face embeddings.
+  2. Super Admin MUST register and activate the student's AES-256-GCM encrypted
+     128-d SFace StudentFaceTemplate first (via Passport Photo Extraction, Live
+     Webcam Capture, or High-Res Portrait Upload in Student.tsx -> FaceEnrollModal).
+  3. Only after an active template exists can a student start a live liveness
+     challenge and LAN handshake session.
+
+File-by-file fixes applied:
+  - PythonFaceAiClient.java:
+    Parses Python FastAPI {"detail": "..."} JSON bodies cleanly on non-200 HTTP
+    responses instead of swallowing diagnostic messages; smart-erp-face-ai/
+    remains untouched on /internal/v1/face/*.
+  - FaceVerificationService.java:
+    Added strict pre-flight check in startVerification(): blocks session creation
+    immediately with a clear error if StudentFaceTemplateRepository has no active
+    template for the student. Removed silent runtime auto-enrollment fallback in
+    processChallengeFrames() and unused FileService dependency.
+  - AdminAttendanceController.java:
+    Added GET /{role}/attendance/students/face-status-map so Student.tsx fetches
+    real biometric readiness badges in one batch request.
+  - LocalHandshakeRequest.java & LocalHandshakeService.java:
+    Added teacherId, expiresAt, and companionReceiptId; aligned default QR
+    expiry validation window cleanly; changed !verifyTeacherQRPayload(...) from
+    warning log only into a real RuntimeException rejection; added idempotent
+    handling if an active verified handshake already exists for that session.
+  - AttendanceSessionService.java & TeacherAttendanceController.java:
+    Bound AttendanceSessionService.startSession() to SectionAcademicCalendar and
+    SectionCalendarDay so faculty cannot open attendance on an explicit CLOSED /
+    non-instructional day; validated section.course and subject.course match;
+    scoped /teacher/attendance/filters by authenticated teacher's university.
+  - client/services/adminFaceService.ts:
+    Replaced hardcoded /super-admin path prefix with dynamic getBaseUrl() and
+    added getFaceStatusMap().
+  - client/components/admin/FaceEnrollModal.tsx:
+    Added supervised Method 2 Live Desk Webcam Capture alongside Method 1
+    Official Passport Photo Extraction and Method 3 Supervised File Upload.
+  - client/pages/userMangement/Student.tsx:
+    Renders Face Biometrics Registered / Face Pending status badges on every row
+    and triggers FaceEnrollModal using student.student.id (Students PK).
+    Verified Student create dialog uploads PassportPhotoUpload only.
+  - client/pages/student/StudentSecureAttendance.tsx:
+    Solved identity bug where /auth/profile returned userId while WebSockets
+    push to /topic/attendance/student/{studentId} (Students table PK): now loads
+    studentPortalService.getProfileSummary() first, shows biometric readiness
+    banner, and forwards teacherId, expiresAt, companionReceiptId on handshake.
+
+--------------------------------------------------------------------------------
+3. SPECIALIZATION-SCOPED TIMETABLE, CONTIGUOUS LABS & SINGLE CALENDAR
+--------------------------------------------------------------------------------
+Core rules enforced across backend & UI:
+  1. TimetableScope.SECTION -> ONLY core subjects (specializations empty).
+  2. TimetableScope.SECTION_GROUP -> ONLY specialization subjects matching
+     group.getSpecialization(); never pulled into SECTION scope.
+  3. Core SECTION schedule and SECTION_GROUP specialization schedule never
+     assign different lectures into the same (dayOfWeek, basePeriod) student slot.
+  4. Practical/Lab subjects (isPracticalSubject == true or lab keywords) allocate
+     2 truly contiguous CLASS periods (period[i+1].sequenceNumber == seq + 1 AND
+     periodType == CLASS), never spanning across BREAK, LUNCH, or ASSEMBLY.
+  5. Exactly 1 active teacher is reused per subject within a section/group;
+     teacher and room conflicts are validated across all PUBLISHED timetables.
+  6. 1 SectionAcademicCalendar is logically bound per Section.
+
+File-by-file changes applied:
+  - SectionTimetableEntryRepo.java:
+    Added existsByTeacherAndDayAndPeriodAndStatus() and
+    existsByRoomAndDayAndPeriodAndStatus().
+  - AutomaticTimetableGeneratorService.java:
+    Preserves full ordered BaseTimeTablePeriod timeline so lab pairs check
+    adjacent periods in allActivePeriods and reject Break/Lunch spanning;
+    removed fallback pulling specialization subjects into SECTION; added
+    preloadComplementarySectionSlots() to block SECTION vs SECTION_GROUP student
+    slot overlaps; prioritizes RoomType.LABORATORY for practicals; spreads classes
+    across weekdays and binds 1 teacher per subject.
+  - TimetableManagementService.java & SectionCalendarController.java:
+    Fixed getTimetable(sectionId, groupId, date) to merge published SECTION +
+    SECTION_GROUP entries (previously hid core lectures when groupId was set);
+    added teacher collision verification on publishVersion(); enforced
+    specialization match on submitOverride(); added findCalendarBySection() and
+    publishCalendar() exposed via GET /by-section/{sectionId} and
+    POST /{calendarId}/publish.
+  - AutoGenerateTimetableRequest.java:
+    Made academicYearId optional so requests resolve section's academicYear
+    cleanly when omitted.
+  - client/services/timetable/sectionCalendarService.ts & AcademicCalendar.tsx:
+    Removed fragile sessionStorage calendar ID cache; auto-resolves the single
+    bound calendar whenever section changes; fixed local YYYY-MM-DD date
+    formatting (avoiding UTC midnight shift); added Publish Calendar action.
+  - client/pages/timeTable/TimetableBuilder.tsx:
+    Replaced raw numeric group ID input with a SectionGroup dropdown displaying
+    "GroupName — SpecializationName"; filtered manual slot subjects strictly by
+    SECTION (core) vs SECTION_GROUP (matching specialization); added single-teacher
+    check + 2-consecutive-period checkbox guarded against Breaks/Lunch; added an
+    Auto-Generate configuration modal.
+
+--------------------------------------------------------------------------------
+4. LIVE STUDENT PORTAL (NO MOCK DATA, MERGED SCHEDULE, REAL FEES)
+--------------------------------------------------------------------------------
+Why:
+  Previous StudentPortalController.getStudentFees() ignored StudentFeeAccount,
+  returned placeholder numbers, hardcoded 45000, and lacked /student/photo and
+  live KPI dashboard data; RoleNavigation.ts pointed to unimplemented routes.
+
+Changes applied:
+  - Backend StudentPortalController.java (@Transactional(readOnly = true)):
+    * Added GET /student/photo streaming authenticated student's BasicDetail
+      photo via FileService (rejects cross-enrollment ID access).
+    * Rewrote GET /student/fees to aggregate StudentFeeAccount installments,
+      FeeStructure FeeComponents, Scholarships, StudentFeeAdjustments, and
+      FeePayments (zero mock numbers; clear uninitialized state if empty).
+    * Upgraded GET /student/timetable to merge published core SECTION +
+      SECTION_GROUP entries, deduplicated enrolledSubjects, and todayView with
+      approved DailyTimetableOverrides.
+    * Added GET /student/dashboard-overview aggregating live attendance stats,
+      real fee ledger totals, today's classes, and upcoming 60-day calendar days.
+  - Frontend:
+    * Rewrote client/services/studentPortalService.ts, StudentFees.tsx,
+      StudentAcademicCalendar.tsx (fixed "EXAM" -> "EXAMINATION" filter bug),
+      StudentTimetable.tsx, StatsCards.tsx, UpcomingExams.tsx,
+      RecentNotifications.tsx, and Dashboard.tsx to consume live APIs and load
+      /student/photo using authenticated Blob object URLs.
+    * Cleaned RoleNavigation.ts (STUDENT, TEACHER, SECURITY_GUARD) so every link
+      resolves to a live registered route in App.tsx (zero 404 sidebar items).
+
+--------------------------------------------------------------------------------
+5. DEAD CODE AUDIT & SQL ALIGNMENT
+--------------------------------------------------------------------------------
+  - Removed 7 unused frontend components with zero imports:
+    components/student/StudentSidebar.tsx, StudentCopilot.tsx,
+    components/teacher/Sidebar.tsx, components/admission/Sidebar.tsx,
+    components/examination_department/Sidebar.tsx,
+    components/finance/Sidebar.tsx, components/library/Sidebar.tsx.
+  - Updated backend/Smart_Erp/database/V2__secure_qr_attendance_and_guard_checkin.sql
+    to use BIGINT AUTO_INCREMENT IDENTITY keys and exact Hibernate table/column
+    names matching the JPA entities under ddl-auto=update.
+================================================================================

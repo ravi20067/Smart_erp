@@ -8,6 +8,7 @@ from app.core.facial_landmarks import MediaPipeFaceLandmarker, LandmarkResult
 from app.core.blink_detection import TemporalBlinkDetector
 from app.core.head_pose import HeadPoseEstimator, HeadOrientation
 from app.core.anti_spoof import MiniFASNetAntiSpoof
+from app.core.face_recognition import SFaceRecognizer
 from app.config.settings import settings
 
 
@@ -28,11 +29,13 @@ class LivenessEngine:
         self,
         detector: YuNetFaceDetector,
         landmarker: MediaPipeFaceLandmarker,
-        anti_spoof: MiniFASNetAntiSpoof
+        anti_spoof: MiniFASNetAntiSpoof,
+        recognizer: Optional[SFaceRecognizer] = None
     ):
         self.detector = detector
         self.landmarker = landmarker
         self.anti_spoof = anti_spoof
+        self.recognizer = recognizer
 
     @staticmethod
     def compute_iou(box1: List[int], box2: List[int]) -> float:
@@ -87,6 +90,7 @@ class LivenessEngine:
         last_quality_passed = True
         last_quality_details = {}
         valid_frames_count = 0
+        extracted_embedding: Optional[List[float]] = None
 
         action_upper = expected_action.upper().strip()
 
@@ -204,6 +208,14 @@ class LivenessEngine:
                     if pose_info["orientation"] == HeadOrientation.LOOK_DOWN.value:
                         action_fulfilled = True
 
+            # Extract biometric embedding from high-quality front-facing frame
+            if self.recognizer is not None and last_quality_passed and abs(last_yaw) < 22 and abs(last_pitch) < 22:
+                try:
+                    emb = self.recognizer.align_and_extract(frame, primary_face.raw)
+                    extracted_embedding = emb.tolist()
+                except Exception:
+                    pass
+
         if valid_frames_count == 0:
             return ChallengeEvaluationResult(
                 session_id=session_id,
@@ -248,7 +260,8 @@ class LivenessEngine:
             "quality": {
                 "passed": last_quality_passed,
                 "details": last_quality_details
-            }
+            },
+            "extracted_embedding": extracted_embedding
         }
 
         return ChallengeEvaluationResult(

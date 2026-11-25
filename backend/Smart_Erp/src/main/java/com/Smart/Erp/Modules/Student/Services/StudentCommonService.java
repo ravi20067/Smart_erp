@@ -31,8 +31,13 @@ public class StudentCommonService {
     }
 
     public void adjustFeeStructureChange(List<StudentEnrollment> studentEnrollments, FeeStructure feeStructure) {
+        if (studentEnrollments == null || studentEnrollments.isEmpty() || feeStructure == null) {
+            return;
+        }
         for (StudentEnrollment enrollment : studentEnrollments) {
-            enrollment.getFirstFeeAccount().adjustFeeStructureChange(feeStructure);
+            if (enrollment.getFirstFeeAccount() != null) {
+                enrollment.getFirstFeeAccount().adjustFeeStructureChange(feeStructure);
+            }
         }
         studentEnrollmentRepo.saveAll(studentEnrollments);
     }

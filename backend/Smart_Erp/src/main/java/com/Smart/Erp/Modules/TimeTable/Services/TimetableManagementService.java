@@ -153,6 +153,18 @@ public class TimetableManagementService {
         return savedCalendar;
     }
 
+    /** Resolves a section's single bound academic calendar if configured. */
+    public Optional<SectionAcademicCalendar> findCalendarBySection(Long sectionId) {
+        return calendarRepo.findBySectionId(sectionId);
+    }
+
+    /** Publishes a section academic calendar so students and teachers rely on finalized dates. */
+    public SectionAcademicCalendar publishCalendar(Long calendarId) {
+        SectionAcademicCalendar calendar = require(calendarRepo.findById(calendarId), "Calendar", calendarId);
+        calendar.setStatus(CalendarStatus.PUBLISHED);
+        return calendarRepo.save(calendar);
+    }
+
     /** Adds or updates a date row. This allows holidays, closures, half days and date-specific versions. */
     public SectionCalendarDay upsertCalendarDay(Long calendarId, CalendarDayRequest r) {
         SectionAcademicCalendar calendar = require(calendarRepo.findById(calendarId), "Calendar", calendarId);
@@ -221,12 +233,45 @@ public class TimetableManagementService {
                 .name(r.getName()).description(r.getDescription())
                 .status(TimetableVersionStatus.DRAFT).effectiveFrom(r.getEffectiveFrom())
                 .effectiveUntil(r.getEffectiveUntil()).build();
+        Map<Long, Long> subjectToTeacherMap = new HashMap<>();
         if (r.getEntries() != null) for (var e : r.getEntries()) {
             BaseTimeTablePeriod period = require(basePeriod(e.getBasePeriodId()), "Base period", e.getBasePeriodId());
             if (!Objects.equals(period.getBaseTimeTable().getId(), base.getId()))
                 throw new IllegalArgumentException("Entry period must belong to the selected base timetable.");
             Subject subject = subjects.getSubject(e.getSubjectId());
+
+            // 1. Enforce Specialization Scope logic
+            if (subject.getSpecializations() != null && !subject.getSpecializations().isEmpty()) {
+                if (r.getScope() == TimetableScope.SECTION) {
+                    throw new IllegalArgumentException(
+                        "Subject '" + subject.getName() + " (" + subject.getCode() + ")' is a specialization subject. " +
+                        "Its timetable entries must be created under a SECTION_GROUP scope timetable version matching its specialization."
+                    );
+                } else if (r.getScope() == TimetableScope.SECTION_GROUP && group != null && group.getSpecialization() != null) {
+                    final Long targetSpecId = group.getSpecialization().getId();
+                    boolean matchesSpec = subject.getSpecializations().stream()
+                        .anyMatch(s -> s.getId().equals(targetSpecId));
+                    if (!matchesSpec) {
+                        throw new IllegalArgumentException(
+                            "Subject '" + subject.getName() + "' specialization does not match SectionGroup '" +
+                            group.getName() + "' specialization (" + group.getSpecialization().getName() + ")."
+                        );
+                    }
+                }
+            }
+
             TeacherEnrollment enrollment = teachers.resolveTeacherEnrollment(e.getTeacherEnrollmentId(), subject);
+
+            // 2. Enforce single teacher used for a subject in a section
+            Long existingTeacherId = subjectToTeacherMap.get(subject.getId());
+            if (existingTeacherId != null && !existingTeacherId.equals(enrollment.getTeacher().getId())) {
+                throw new IllegalArgumentException(
+                    "Subject '" + subject.getName() + "' is already assigned to a teacher. " +
+                    "A single teacher must be used for a subject within a section timetable."
+                );
+            }
+            subjectToTeacherMap.put(subject.getId(), enrollment.getTeacher().getId());
+
             version.addEntry(SectionTimetableEntry.builder().dayOfWeek(e.getDayOfWeek())
                     .basePeriod(period).subject(subject)
                     .teacherEnrollment(enrollment)
@@ -291,6 +336,27 @@ public class TimetableManagementService {
             if (old.getEffectiveUntil() != null && old.getEffectiveUntil().isBefore(LocalDate.now()))
                 old.setStatus(TimetableVersionStatus.SUPERSEDED);
         }
+
+        // Cross-institution teacher collision guard before publishing
+        for (SectionTimetableEntry entry : v.getEntries()) {
+            if (!Boolean.TRUE.equals(entry.getActive()) || entry.getTeacherEnrollment() == null || entry.getTeacherEnrollment().getTeacher() == null) {
+                continue;
+            }
+            boolean conflict = entryRepo.existsByTeacherAndDayAndPeriodAndStatus(
+                    entry.getTeacherEnrollment().getTeacher(),
+                    entry.getDayOfWeek(),
+                    entry.getBasePeriod().getId(),
+                    TimetableVersionStatus.PUBLISHED
+            );
+            if (conflict) {
+                throw new IllegalArgumentException(
+                        "Cannot publish version: Faculty '" + entry.getTeacherEnrollment().getTeacher().getName() +
+                        "' already has another published class on " + entry.getDayOfWeek() +
+                        " during period " + entry.getBasePeriod().getLabel() + "."
+                );
+            }
+        }
+
         v.setStatus(TimetableVersionStatus.PUBLISHED);
         v.setPublishedAt(Instant.now());
         User publisher = publishedByUserId != null
@@ -394,6 +460,22 @@ public class TimetableManagementService {
             if (r.getBasePeriodId() == null || r.getSubjectId() == null || r.getTeacherEnrollmentId() == null || r.getEntryType() == null)
                 throw new IllegalArgumentException("ADD/REPLACE requires period, subject, teacher enrollment and entry type.");
             Subject subject = subjects.getSubject(r.getSubjectId());
+            if (subject.getSpecializations() != null && !subject.getSpecializations().isEmpty()) {
+                if (group == null) {
+                    throw new IllegalArgumentException(
+                            "Subject '" + subject.getName() + "' is a specialization subject and can only be overridden inside a SECTION_GROUP scope."
+                    );
+                } else if (group.getSpecialization() != null) {
+                    final Long targetSpecId = group.getSpecialization().getId();
+                    boolean matchesSpec = subject.getSpecializations().stream()
+                            .anyMatch(s -> Objects.equals(s.getId(), targetSpecId));
+                    if (!matchesSpec) {
+                        throw new IllegalArgumentException(
+                                "Subject '" + subject.getName() + "' specialization does not match SectionGroup '" + group.getName() + "'."
+                        );
+                    }
+                }
+            }
             TeacherEnrollment enrollment = teachers.resolveTeacherEnrollment(r.getTeacherEnrollmentId(), subject);
             DailyTimetableOverrideDetail detail = DailyTimetableOverrideDetail.builder()
                     .basePeriod(require(basePeriod(r.getBasePeriodId()), "Base period", r.getBasePeriodId()))
@@ -460,11 +542,31 @@ public class TimetableManagementService {
                     .closureReason(day.getHolidayReason() != null ? day.getHolidayReason() : day.getDescription())
                     .slots(List.of()).build();
 
-        SectionTimetableVersion v = day.getAppliedTimetableVersion();
-        if (v == null) v = resolveVersion(sectionId, groupId, date);
-        if (v == null) throw new ResourceNotFoundException("No published timetable version applies on " + date);
-        List<SectionTimetableEntry> entries = entryRepo.findByTimetableVersionIdAndDayOfWeekAndActiveTrueOrderByBasePeriod_SequenceNumber(
-                v.getId(), WeekDay.valueOf(date.getDayOfWeek().name()));
+        WeekDay targetWeekDay = WeekDay.valueOf(date.getDayOfWeek().name());
+        SectionTimetableVersion primaryVersion = day.getAppliedTimetableVersion();
+        List<SectionTimetableEntry> entries = new ArrayList<>();
+
+        if (primaryVersion != null) {
+            entries.addAll(entryRepo.findByTimetableVersionIdAndDayOfWeekAndActiveTrueOrderByBasePeriod_SequenceNumber(
+                    primaryVersion.getId(), targetWeekDay));
+        } else {
+            SectionTimetableVersion sectionVersion = resolveSectionVersion(sectionId, date);
+            SectionTimetableVersion groupVersion = groupId != null ? resolveGroupVersion(groupId, date) : null;
+            primaryVersion = groupVersion != null ? groupVersion : sectionVersion;
+
+            if (sectionVersion == null && groupVersion == null) {
+                throw new ResourceNotFoundException("No published timetable version applies on " + date);
+            }
+            if (sectionVersion != null) {
+                entries.addAll(entryRepo.findByTimetableVersionIdAndDayOfWeekAndActiveTrueOrderByBasePeriod_SequenceNumber(
+                        sectionVersion.getId(), targetWeekDay));
+            }
+            if (groupVersion != null) {
+                entries.addAll(entryRepo.findByTimetableVersionIdAndDayOfWeekAndActiveTrueOrderByBasePeriod_SequenceNumber(
+                        groupVersion.getId(), targetWeekDay));
+            }
+        }
+        SectionTimetableVersion v = primaryVersion;
         List<DailyTimetableOverride> changes = new ArrayList<>(overrideRepo.findBySectionIdAndOverrideDateAndStatus(sectionId, date, OverrideStatus.APPROVED));
         if (groupId != null) changes.addAll(overrideRepo.findBySectionGroupIdAndOverrideDateAndStatus(groupId, date, OverrideStatus.APPROVED));
         Set<Long> cancelledOrReplaced = new HashSet<>();
@@ -506,17 +608,7 @@ public class TimetableManagementService {
                 .versionName(v.getName()).slots(slots).build();
     }
 
-    private SectionTimetableVersion resolveVersion(Long sectionId, Long groupId, LocalDate date) {
-        // A group-specific version takes precedence; otherwise the section version is inherited.
-        if (groupId != null) {
-            List<SectionTimetableVersion> groupVersions = versionRepo.findBySectionGroupIdOrderByVersionNumberDesc(groupId);
-            Optional<SectionTimetableVersion> selected = groupVersions.stream()
-                    .filter(v -> v.getStatus() == TimetableVersionStatus.PUBLISHED)
-                    .filter(v -> !v.getEffectiveFrom().isAfter(date))
-                    .filter(v -> v.getEffectiveUntil() == null || !v.getEffectiveUntil().isBefore(date))
-                    .max(Comparator.comparing(SectionTimetableVersion::getEffectiveFrom));
-            if (selected.isPresent()) return selected.get();
-        }
+    private SectionTimetableVersion resolveSectionVersion(Long sectionId, LocalDate date) {
         return versionRepo.findBySectionIdOrderByVersionNumberDesc(sectionId).stream()
                 .filter(v -> v.getStatus() == TimetableVersionStatus.PUBLISHED)
                 .filter(v -> v.getScope() == TimetableScope.SECTION)
@@ -525,7 +617,15 @@ public class TimetableManagementService {
                 .max(Comparator.comparing(SectionTimetableVersion::getEffectiveFrom)).orElse(null);
     }
 
-    private void ensureSectionTimetablePermissionRoot(Long sectionId) {
+    private SectionTimetableVersion resolveGroupVersion(Long groupId, LocalDate date) {
+        return versionRepo.findBySectionGroupIdOrderByVersionNumberDesc(groupId).stream()
+                .filter(v -> v.getStatus() == TimetableVersionStatus.PUBLISHED)
+                .filter(v -> !v.getEffectiveFrom().isAfter(date))
+                .filter(v -> v.getEffectiveUntil() == null || !v.getEffectiveUntil().isBefore(date))
+                .max(Comparator.comparing(SectionTimetableVersion::getEffectiveFrom)).orElse(null);
+    }
+
+    public void ensureSectionTimetablePermissionRoot(Long sectionId) {
         authorizationService.createChildPermission(
                 sectionId,
                 ResourceType.TIMETABLE,
@@ -534,7 +634,7 @@ public class TimetableManagementService {
         );
     }
 
-    private void ensureGroupTimetablePermissionRoot(Long sectionGroupId) {
+    public void ensureGroupTimetablePermissionRoot(Long sectionGroupId) {
         authorizationService.createChildPermission(
                 sectionGroupId,
                 ResourceType.GROUP_TIMETABLE,

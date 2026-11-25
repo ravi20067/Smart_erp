@@ -39,6 +39,7 @@ export interface UserProfileResponse extends UserProfileRequest {
     userId: number;
     enabled: boolean;
     username: string;
+    photo?: { downloadUri?: string; id?: number; fileName?: string } | null;
     createdAt?: string | null;
     updatedAt?: string | null;
     createdBy?: CommonDTO | null;
@@ -131,6 +132,7 @@ function normalizeProfile(value: unknown): UserProfileResponse {
         motherName: String(item.motherName ?? ""),
         guardianMobileNumber: String(item.guardianMobileNumber ?? ""),
         address: String(item.address ?? ""),
+        photo: item.photo ? (item.photo as any) : null,
         createdAt: typeof item.createdAt === "string" ? item.createdAt : null,
         updatedAt: typeof item.updatedAt === "string" ? item.updatedAt : null,
         createdBy: normalizeCommon(item.createdBy),
