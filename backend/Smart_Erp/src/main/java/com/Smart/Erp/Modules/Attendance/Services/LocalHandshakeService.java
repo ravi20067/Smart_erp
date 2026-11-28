@@ -8,6 +8,7 @@ import com.Smart.Erp.Modules.Attendance.DTO.StudentHandshakeTicketResponse;
 import com.Smart.Erp.Modules.Attendance.DTO.TeacherQRPayload;
 import com.Smart.Erp.Modules.Attendance.Entity.AttendanceSession;
 import com.Smart.Erp.Modules.Attendance.Entity.LocalHandshakeRecord;
+import com.Smart.Erp.Modules.Attendance.Entity.StudentAttendance;
 import com.Smart.Erp.Modules.Attendance.Enum.AttendanceEventType;
 import com.Smart.Erp.Modules.Attendance.Enum.AttendanceSessionStatus;
 import com.Smart.Erp.Modules.Attendance.Enum.VerificationState;
@@ -53,6 +54,7 @@ public class LocalHandshakeService {
     private final CampusCheckInService campusCheckInService;
     private final LocalNetworkPolicy localNetworkPolicy;
     private final CryptographicHandshakeService cryptographicHandshakeService;
+    private final AttendanceDecisionService attendanceDecisionService;
 
     public StudentHandshakeTicketResponse issueHandshakeTicket(
             StudentHandshakeTicketRequest request,
@@ -234,9 +236,17 @@ public class LocalHandshakeService {
                 throw new OperationNotAllowedException("Invalid or expired Teacher Attendance QR signature. Please re-scan the live classroom QR.");
             }
 
-            // 2. Enforce strict LAN-only + allowlisted classroom subnet policy
-            localNetworkPolicy.validateLanAndSubnet(session.getLocalServerIp(), session.getAllowedSubnets(), "Teacher companion");
-            localNetworkPolicy.validateLanAndSubnet(request.getClientIp(), session.getAllowedSubnets(), "Student peer");
+            // 2. Enforce strict LAN/Hotspot-only + allowlisted classroom subnet policy over WebRTC direct host transport
+            if (session.getLocalServerIp() != null && !session.getLocalServerIp().isBlank()
+                    && !"WEBRTC_P2P".equalsIgnoreCase(session.getLocalServerIp())) {
+                localNetworkPolicy.validateLanAndSubnet(session.getLocalServerIp(), session.getAllowedSubnets(), "Teacher host");
+            }
+            localNetworkPolicy.validateWebRtcPeer(
+                    request.getClientIp(),
+                    request.getIceCandidateType(),
+                    session.getAllowedSubnets(),
+                    "Student WebRTC peer"
+            );
 
             // 3. Verify handshake receipt expiry window
             long nowMs = System.currentTimeMillis();
@@ -396,13 +406,25 @@ public class LocalHandshakeService {
                     "Cryptographic local network handshake verified for student"
             );
 
+            StudentAttendance markedAttendance = attendanceDecisionService.evaluateAndMarkAttendanceViaWebRtcHandshake(
+                    session,
+                    student,
+                    record,
+                    "Verified via Biometric Liveness, Signed QR & Teacher WebRTC Final Token (" + receiptId + ")"
+            );
+
             return LocalHandshakeResponse.builder()
                     .receiptId(receiptId)
                     .sessionUuid(session.getSessionUuid())
                     .verified(true)
                     .status("VERIFIED")
-                    .message("Cryptographic local network handshake (Ed25519 + X25519/HKDF) verified successfully.")
+                    .message("Cryptographic WebRTC Teacher Token verified and attendance marked PRESENT.")
                     .receiptSignature(request.getTeacherReceiptSignature())
+                    .attendanceMarked(true)
+                    .attendanceId(markedAttendance != null ? markedAttendance.getId() : null)
+                    .attendanceStatus(markedAttendance != null && markedAttendance.getStatus() != null
+                            ? markedAttendance.getStatus().name()
+                            : "PRESENT")
                     .build();
         } finally {
             redisTemplate.delete(lockKey);

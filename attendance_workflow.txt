@@ -18,23 +18,27 @@ END-TO-END SEQUENCE OVERVIEW
        -> Security Guard verifies identity & ERP portrait for gate CHECK_IN / CHECK_OUT.
        -> Students MUST hold an approved open Campus Check-In to mark classroom attendance.
        -> Teachers have independent Campus Check-In/Out logs separate from StudentAttendance.
-  [0B] Admin Face Enrollment
+  [0B] Admin Face Enrollment & Teacher Face AI Health Check
        -> Student must have an ACTIVE encrypted 128-D SFace template first.
-  [1] Teacher HTTPS Companion & Session Start + Rotating QR
-       -> Calendar-checked session (90m) + Teacher Ed25519/X25519 keys + allowlisted LAN CIDRs
-          bound inside HMAC-SHA256 QR payload (60s window).
-  [2] Student QR Scan + Verification Start
-       -> Pre-flight checks (open campus check-in, active session, section enrollment, face template).
-  [3] Active Face Liveness & 1:1 Identity Matching
-       -> 3 randomized challenges via Python AI + AES-256-GCM decryption + match.
-  [4] Cryptographic HTTPS Local Network (LAN) Handshake
-       -> Spring Boot signed StudentHandshakeTicket + direct HTTPS TLS exchange with
-          Teacher Companion (Ed25519 signatures + X25519 ECDH + HKDF-SHA256 + HMAC-SHA256)
-          + private LAN/CIDR allowlist + anti-proxy header enforcement + anti-replay.
-  [5] Student Classroom Check-In QR Generation
-       -> Single-use Redis check-in token (5m TTL) + SecurityGuardCheckIn row.
-  [6] Security Guard Scan, Visual Review & Final Attendance Decision
-       -> Redis distributed lock -> Approve/Reject -> Save StudentAttendance (PRESENT).
+       -> Teacher console polls GET /teacher/attendance/face-ai/health (Python /health + /models/status).
+  [1] Teacher Browser WebRTC Host & Session Start + Rotating QR
+       -> Teacher browser generates ephemeral @noble Ed25519/X25519 keys + starts
+          WebRTC host (iceServers=[], Wi-Fi & Hotspot ready); Spring Boot binds public
+          keys inside HMAC-SHA256 QR payload (60s window).
+  [2] Student Discovers Active Session & Runs Liveness + Face Template Match FIRST
+       -> GET /student/attendance/active-sessions shows enrolled live sessions.
+       -> Student runs 3 randomized liveness challenges + 1:1 SFace comparison against
+          stored encrypted StudentFaceTemplate (POST /sessions/{id}/frames,
+          GET /sessions/{id}/liveness, POST /sessions/{id}/complete, POST /compare, DELETE /sessions/{id}).
+  [3] Student Scans Teacher's Rotating Signed QR (Unlocked ONLY after Face PASS)
+       -> QR sessionId & Ed25519/X25519 public keys verified against active session.
+  [4] WebRTC P2P Handshake + Final Signed Attendance Token From Teacher Device
+       -> Buffered host/link-local/mDNS ICE + DTLS RTCDataChannel over same Wi-Fi OR
+          Teacher Hotspot -> Teacher signs and emits final attendance token (HSR-...).
+  [5] Spring Boot Final Validation -> Attendance Marked (StudentAttendance PRESENT)
+       -> POST /student/attendance/handshake/verify validates open Campus Check-In,
+          Face PASSED, QR HMAC, WebRTC transport, mutual Ed25519/X25519 proofs & nonces,
+          and immediately marks StudentAttendance = PRESENT via AttendanceDecisionService.
 
 ================================================================================
 PHASE 0: ADMIN FACE BIOMETRIC ENROLLMENT (MANDATORY PREREQUISITE)
@@ -78,191 +82,175 @@ performed by authorized administrators only.
     (Returns status, algorithm, embeddingDimension, enrolledAt — never raw vectors.)
 
 ================================================================================
-PHASE 1: TEACHER SESSION START & ROTATING QR GENERATION
+PHASE 0A: CAMPUS GATE CHECK-IN / CHECK-OUT (STUDENTS & TEACHERS)
+================================================================================
+
+- Frontend UIs:
+    * CampusCheckInPass.tsx (/student/campus-pass and /teacher/campus-pass)
+    * SecurityGuardCheckIn.tsx (/security-guard/checkin)
+- Backend Controllers:
+    * Student:        /student/campus-check-in/status, /student/campus-check-in/qr
+    * Teacher:        /teacher/campus-check-in/status, /teacher/campus-check-in/qr
+    * Security Guard: /security-guard/campus-check-in/scan, /decision, /recent
+- Processing Flow (CampusCheckInService):
+    1. Authenticated Student or Teacher requests short-lived (5 min) gate QR token
+       for CHECK_IN or CHECK_OUT (requires existing approved open CHECK_IN before
+       CHECK_OUT; blocks duplicate open CHECK_IN or duplicate CHECK_OUT via Redis lock).
+    2. Security Guard scans the QR token, reviews the ERP profile photo & role-specific
+       metadata (Student: enrollment/reg no, course, section, academic year;
+       Teacher: employee ID, department, designation), and approves or rejects.
+    3. Campus check-ins are stored in CampusCheckInRecord (separate per role).
+       Students MUST hold an approved open CHECK_IN before classroom attendance is allowed;
+       Teacher gate logs never touch StudentAttendance.
+
+================================================================================
+PHASE 1: TEACHER PYTHON FACE AI HEALTH, SESSION START & WEBRTC HOST + ROTATING QR
 ================================================================================
 
 - Frontend UI:
     * TeacherAttendanceManager.tsx (/teacher/attendance)
 - Backend Controller (TeacherAttendanceController.java):
     * Base URL: /teacher/attendance
+    * GET  /face-ai/health         -> Checks Python /internal/v1/face/health &
+                                      /internal/v1/face/models/status + latencyMs + threshold
+    * POST /face-ai/analyze        -> Proxies Python POST /internal/v1/face/analyze diagnostics
     * GET  /filters
     * POST /sessions/start
     * POST /sessions/{sessionUuid}/qr/refresh
     * GET  /sessions/active
     * GET  /sessions/{sessionUuid}/stats
     * POST /sessions/{sessionUuid}/stop
+    * POST /webrtc/signal          (WebRtcSignalingController -> /topic/webrtc/student/{ticketId})
 - Processing Flow (AttendanceSessionService.startSession):
-    1. Resolves Teacher, AcademicYear, Course, Section, and Subject.
-    2. Validates section.course == course and subject.course == course.
-    3. Academic Calendar Gate: checks SectionAcademicCalendar & SectionCalendarDay
-       for LocalDate.now(); blocks session startup (IllegalStateException) if
-       operatingStatus == CLOSED or !instructionDay.
-    4. Automatically closes any existing ACTIVE session belonging to the teacher
-       and removes its Redis key.
-    5. Persists AttendanceSession (status=ACTIVE, expiresAt = now + 90 minutes,
-       localServerIp, localServerPort).
-    6. Writes Redis session cache:
-       Key: attendance:session:{sessionUuid} -> teacherId (TTL: 90 minutes).
-    7. QRTokenService.generateTeacherQRPayload builds JSON payload valid for 60s:
-       Fields: sessionId, teacherId, localServerIp, localServerPort,
-               timestamp, expiresAt, nonce (UUID), signature (HMAC-SHA256 over fields).
-    8. Audits ATTENDANCE_SESSION_STARTED and broadcasts WebSocket event.
-    9. Teacher UI refreshes rotating QR via POST /sessions/{sessionUuid}/qr/refresh
-       while keeping the same classroom attendance session active.
+    1. Teacher browser polls GET /teacher/attendance/face-ai/health and displays live
+       Python AI readiness (YuNet, SFace, MiniFASNetV2, MediaPipe Landmarks).
+    2. Teacher browser generates fresh ephemeral in-memory @noble Ed25519 & X25519
+       keypairs (private keys kept in tab RAM only) and initializes TeacherWebRtcHost
+       with RTCPeerConnection({ iceServers: [] }) subscribed to /topic/webrtc/teacher/{sessionUuid}.
+    3. Backend validates Teacher, AcademicYear, Course, Section, Subject & Academic Calendar
+       (blocks session startup if operatingStatus == CLOSED or !instructionDay).
+    4. Persists AttendanceSession (status=ACTIVE, localServerIp="WEBRTC_P2P", pinned
+       teacherEd25519PublicKey & teacherX25519PublicKey, allowedSubnets defaulting to
+       RFC 1918 Wi-Fi/Hotspot ranges 10.0.0.0/8,172.16.0.0/12,192.168.0.0/16).
+    5. QRTokenService.generateTeacherQRPayload builds HMAC-SHA256 signed rotating QR
+       (60s window) binding sessionId, teacherId, public keys, allowedSubnets,
+       backendPublicKey, timestamp, expiresAt, and nonce.
+    6. Audits ATTENDANCE_SESSION_STARTED and refreshes QR every 60s via POST .../qr/refresh.
 
 ================================================================================
-PHASE 2: STUDENT QR SCAN & FACE VERIFICATION INITIALIZATION
+PHASE 2: STUDENT ACTIVE SESSION DISCOVERY & BIOMETRIC VERIFICATION START (FIRST)
 ================================================================================
 
 - Frontend UI:
     * StudentSecureAttendance.tsx (/student/attendance)
     * Subscribes to WebSocket topic: /topic/attendance/student/{studentId}
-- Backend Endpoint (StudentAttendanceController.java):
+- Backend Endpoints (StudentAttendanceController.java):
+    * GET  /student/attendance/active-sessions
     * POST /student/attendance/verification/start
 - Gate Checks (FaceVerificationService.startVerification):
     1. AttendanceSession exists, status == ACTIVE, and now <= expiresAt.
     2. Student does not already have a StudentAttendance row in this session.
     3. Student holds a StudentEnrollment mapped to session.getSection().
-    4. Mandatory Biometric Gate: Student must have an ACTIVE StudentFaceTemplate
-       with non-blank encrypted embedding (checked via Student.getFaceTemplate() /
-       StudentFaceTemplateRepository).
+    4. Mandatory Gate: Student holds an approved open Campus Gate CHECK_IN
+       (CampusCheckInService.requireOpenCampusCheckIn).
+    5. Mandatory Biometric Gate: Student has an ACTIVE StudentFaceTemplate with
+       non-blank AES-256-GCM encrypted 128-D SFace embedding.
 - Initialization:
-    1. ChallengeGenerationService builds a 3-step sequence:
-       - Step 1 (always): LOOK_STRAIGHT (baseline + comparison pose)
+    1. Student selects an eligible active session from /active-sessions BEFORE QR scanning.
+    2. ChallengeGenerationService builds a randomized 3-step sequence:
+       - Step 1 (always): LOOK_STRAIGHT
        - Steps 2 & 3 (shuffled from): BLINK_TWICE, TURN_LEFT, TURN_RIGHT, LOOK_UP, LOOK_DOWN
-    2. Saves FaceVerificationSession (sessionId="FVS-...", status=IN_PROGRESS,
-       maxAttempts=6, expiresAt = now + 2 minutes).
-    3. Calls PythonFaceAiClient.createSession -> POST /internal/v1/face/sessions (120s TTL).
-    4. Audits & broadcasts LIVENESS_STARTED; returns verificationSessionId + first prompt.
+    3. Saves FaceVerificationSession (status=IN_PROGRESS, maxAttempts=6, 2m expiry).
+    4. Calls PythonFaceAiClient.createSession -> POST /internal/v1/face/sessions (120s TTL).
+    5. Audits & broadcasts LIVENESS_STARTED; returns verificationSessionId + first prompt.
 
 ================================================================================
-PHASE 3: ACTIVE LIVENESS CHALLENGES & 1:1 SFACE IDENTITY MATCHING
+PHASE 3: ACTIVE LIVENESS CHALLENGES & 1:1 ENROLLED TEMPLATE IDENTITY MATCHING
 ================================================================================
 
 - Frontend Capture Loop:
-    * Captures bursts of 3 JPEG webcam frames and submits sequentially to:
+    * Captures bursts of 3 JPEG frames and submits sequentially to:
       POST /student/attendance/verification/{verificationSessionId}/challenge
       (params: action, sequenceNumber, multipart part: frames)
 - Processing Flow (FaceVerificationService.processChallengeFrames):
-    1. Verifies verification session belongs to authenticated student and has not expired.
-    2. Enforces strict challenge sequence order (must match currentChallengeIndex).
-    3. Increments totalAttempts (if totalAttempts >= 6 maxAttempts, marks FAILED).
-    4. Forwards frames over HTTP/1.1 to Python Face AI:
+    1. Verifies verification session ownership, expiry, and challenge sequence order.
+    2. Sends frames over HTTP/1.1 to Python Face AI:
        POST /internal/v1/face/sessions/{sessionId}/frames
-       (YuNet detection + MediaPipe pose/blink + MiniFASNetV2 anti-spoof).
-    5. Saves FaceVerificationAttempt with acceptance, confidence, and observations.
-    6. When accepted and more challenges remain -> advances currentChallengeIndex
-       and returns nextChallenge + nextChallengeDescription.
-    7. When ALL 3 challenges pass:
-       - Calls POST /internal/v1/face/sessions/{sessionId}/complete to extract
-         live captured_embedding (128 floats).
-       - Decrypts student's stored StudentFaceTemplate embedding via AES-256-GCM.
-       - Calls PythonFaceAiClient.compareEmbeddings -> POST /internal/v1/face/compare
-         (cosine similarity).
-       - Compares similarity >= app.face-ai.match-threshold (default: 0.363):
+       (YuNet detection + MediaPipe landmarks/pose/blink + MiniFASNetV2 anti-spoof).
+    3. Saves FaceVerificationAttempt and returns nextChallenge until all 3 pass.
+    4. When ALL 3 liveness challenges pass:
+       - Calls GET  /internal/v1/face/sessions/{sessionId}/liveness for blink/head evidence.
+       - Calls POST /internal/v1/face/sessions/{sessionId}/complete to extract captured
+         128-D live embedding.
+       - Decrypts Student's stored StudentFaceTemplate embedding via AES-256-GCM.
+       - Calls POST /internal/v1/face/compare for cosine similarity.
+       - Calls DELETE /internal/v1/face/sessions/{sessionId} to purge ephemeral session state.
+       - Checks similarity >= app.face-ai.match-threshold (default: 0.363):
          * MATCH    -> FaceVerificationSession.status = PASSED, audits & broadcasts
-                       IDENTITY_VERIFIED.
-         * MISMATCH -> FaceVerificationSession.status = FAILED, audits & broadcasts
-                       IDENTITY_FAILED, aborts attendance flow.
+                       IDENTITY_VERIFIED, and unlocks Step 2 (Teacher QR Scanner) in UI.
+         * MISMATCH -> FaceVerificationSession.status = FAILED, audits IDENTITY_FAILED.
 
 ================================================================================
-PHASE 4: CRYPTOGRAPHIC HTTPS LOCAL NETWORK HANDSHAKE & ANTI-REPLAY
+PHASE 4: TEACHER QR SCAN, WEBRTC HANDSHAKE (WI-FI / HOTSPOT) & FINAL TEACHER TOKEN
 ================================================================================
 
-- Teacher Companion Process (frontend/Smart_Erp/scripts/start-handshake-companion.mjs):
-    * Binds strictly to Teacher RFC 1918 / ULA private LAN IP over HTTPS (TLS SAN cert).
-    * Holds ephemeral in-memory Ed25519 + X25519 keys wiped on session stop or exit.
-    * Rejects public IPs, non-allowlisted subnets, and proxy headers (X-Forwarded-For,
-      Forwarded, Via, X-Real-IP, CF-Connecting-IP).
-- Frontend Action (StudentSecureAttendance.tsx + handshakeCrypto.ts):
-    1. Generates ephemeral WebCrypto Ed25519 & X25519 keypairs + CSPRNG studentNonce.
-    2. Requests single-use Spring Boot Ed25519-signed ticket:
+- Prerequisite: Only unlocked after FaceVerificationSession.status == PASSED.
+- Student QR Scan (StudentSecureAttendance.tsx):
+    * Scans Teacher's rotating signed QR (or pastes JSON fallback) and verifies QR
+      sessionUuid matches the face-verified session.
+- WebRTC P2P Direct Connection (webrtcHandshake.ts):
+    1. Student generates ephemeral @noble Ed25519 + X25519 keypairs + CSPRNG studentNonce
+       and obtains a Spring Boot Ed25519-signed single-use ticket:
        POST /student/attendance/handshake/ticket
-    3. Exchanges POST https://{teacherServerIp}:{port}/handshake/challenge and
-       /handshake/complete directly over classroom LAN TLS using X25519 + HKDF-SHA256
-       and mutual Ed25519 signatures.
-    4. Submits companion-signed receipt + proof chain to Spring Boot:
-       POST /student/attendance/handshake/verify
-- Backend Checks (LocalHandshakeService.verifyHandshake):
-    1. Enforces no forwarding/proxy headers (LocalNetworkPolicy).
-    2. Confirms active open Campus Check-In + AttendanceSession ACTIVE + Face PASSED.
-    3. Verifies Student identity reference, Teacher ID, pinned Teacher Ed25519/X25519 keys,
-       and full Teacher QR HMAC signature.
-    4. Validates both Teacher LAN IP & Peer Client IP against RFC 1918/ULA & allowedSubnets.
-    5. Consumes single-use backend ticket, verifies Student Ed25519 proof signature,
-       and independently verifies Teacher Companion Ed25519 receipt signature.
-    6. Guards concurrency via Redis distributed lock (lock:handshake:{session}:{student})
-       and consumes all nonces/receipts atomically in Redis + DB.
-    7. Persists LocalHandshakeRecord, caches receipt, audits & broadcasts HANDSHAKE_VERIFIED.
+    2. Both TeacherWebRtcHost and Student create RTCPeerConnection({ iceServers: [] }),
+       wait up to 1200ms via waitForLocalIceGathering() to embed gathered host candidates
+       into Offer/Answer SDPs, and queue out-of-order trickle ICE candidates until
+       setRemoteDescription completes.
+    3. Signal exchange relays via Spring Boot STOMP (POST /student|teacher/attendance/webrtc/signal)
+       enforcing LocalNetworkPolicy: only direct local `typ host` / `typ prflx` candidates
+       (RFC 1918 Wi-Fi & Hotspot IPv4, IPv6 ULA fc00::/7, link-local IPv6 fe80::/10, or
+       mDNS `.local`) are allowed; `srflx`, `relay`, loopback, and public IPs are rejected.
+    4. Over DTLS-encrypted RTCDataChannel("smart-erp-handshake"):
+       - CHALLENGE_REQ: Student sends signed Spring Boot ticket.
+       - CHALLENGE_RES: Teacher verifies Spring Boot ticket signature, derives X25519 +
+         HKDF-SHA256 session HMAC key, sends Ed25519-signed teacherNonce challenge.
+       - COMPLETE_REQ: Student replies with Ed25519 proof + HMAC-SHA256 proof.
+       - RECEIPT_RES: Teacher verifies proofs and sends the FINAL SIGNED ATTENDANCE TOKEN
+         (finalAttendanceToken, companionReceiptId "HSR-...", teacherReceiptSignature, receiptHmac).
 
 ================================================================================
-PHASE 5: STUDENT GATE CHECK-IN QR GENERATION
+PHASE 5: FINAL BACKEND VERIFICATION & DIRECT ATTENDANCE MARKING (PRESENT)
 ================================================================================
 
-- Frontend Action:
-    * Requests Security Guard gate QR code:
-      GET /student/attendance/checkin/qr?sessionUuid={sessionUuid}
-- Backend Processing (CheckInService.generateStudentCheckInQR):
-    1. Confirms AttendanceSession is ACTIVE and attendance is not already marked.
-    2. Gate 1: confirms FaceVerificationSession (status=PASSED).
-    3. Gate 2: confirms LocalHandshakeRecord exists.
-    4. Generates single-use token via QRTokenService.generateCheckInToken:
-       Key: attendance:checkin_token:{token} -> {sessionUuid}:{studentId} (TTL: 300s / 5m).
-    5. Saves SecurityGuardCheckIn (status=PENDING, expiresAt = now + 5 minutes).
-    6. Logs & broadcasts GUARD_CHECKIN_PENDING (notifies guard terminals via
-       /topic/attendance/guard).
-    7. Returns StudentCheckInQRResponse with qrData = "CHECKIN:" + token.
-
-================================================================================
-PHASE 6: SECURITY GUARD CHECK-IN SCAN & AUTHORITATIVE ATTENDANCE MARKING
-================================================================================
-
-- Frontend UI:
-    * SecurityGuardCheckIn.tsx (/security-guard/check-in)
-    * Subscribed to /topic/attendance/guard for pending check-in alerts.
-- Backend Controller (SecurityGuardCheckInController.java, /security-guard/check-in):
-    * POST /scan
-    * POST /decision
-    * GET  /photo/{studentId}  (streams official registered student portrait)
-- Step 6A — Guard Scans Student QR (GuardApprovalService.scanStudentCheckIn):
-    1. Strips "CHECKIN:" prefix and resolves SecurityGuardCheckIn (must be unexpired).
-    2. Loads student profile details, face verification pass flag & similarity score,
-       handshake verification flag, and secure /security-guard/check-in/photo/{studentId} URL.
-    3. Guard visually verifies student physically matches ERP profile portrait.
-- Step 6B — Guard Decision (GuardApprovalService.processGuardDecision):
-    1. Acquires Redis distributed lock:
-       Key: lock:guard_decision:{token} (SETNX TTL: 10s, deleted in finally block)
-       to prevent race conditions across concurrent guard scanners.
-    2. Ensures SecurityGuardCheckIn.status == PENDING.
-    3. Branch A — Rejected (approved == false):
-       - Requires non-blank rejectionReason.
-       - Updates status=REJECTED, saves reason/guard/timestamp, deletes Redis
-         attendance:checkin_token:{token}, audits & broadcasts GUARD_REJECTED.
-       - Attendance is NOT marked.
-    4. Branch B — Approved (approved == true):
-       - Updates status=APPROVED, deletes Redis check-in token, audits & broadcasts
-         GUARD_APPROVED.
-       - Calls AttendanceDecisionService.evaluateAndMarkAttendance.
-- Step 6C — Final Attendance Recording (AttendanceDecisionService):
-    1. Re-validates all gates atomically:
-       - No duplicate StudentAttendance for (session, student)
-       - Session ACTIVE and unexpired
-       - Student enrolled in session's Section
-       - FaceVerificationSession PASSED
-       - LocalHandshakeRecord present
-       - SecurityGuardCheckIn APPROVED
-    2. Saves StudentAttendance (status=PRESENT, similarityScore, faceVerificationSessionId,
-       handshakeReceiptId, guard, guardDecisionTime, clientIp).
-    3. Audits ATTENDANCE_MARKED and broadcasts ATTENDANCE_MARKED over WebSocket.
+- Endpoint: POST /student/attendance/handshake/verify
+- Security & Business Validation (LocalHandshakeService.verifyHandshake):
+    1. Rejects any proxy/forwarding headers (X-Forwarded-For, Forwarded, Via, X-Real-IP, etc.).
+    2. Acquires Redis lock (lock:handshake:{sessionUuid}:{studentId}) to stop race replays.
+    3. Re-verifies open Campus Gate CHECK_IN, AttendanceSession ACTIVE, Student enrollment,
+       and FaceVerificationSession == PASSED.
+    4. Validates StudentRef, Teacher ID, pinned Teacher public keys, and QR HMAC signature.
+    5. Validates WebRTC peer transport (`host` / `prflx`, RFC 1918 / `fe80::` / `WEBRTC_MDNS_LOCAL`)
+       and allowedSubnets.
+    6. Verifies backend single-use handshake ticket, Student Ed25519 proof signature, and
+       Teacher's Ed25519 receipt/final-token signature.
+    7. Consumes all nonces/ticket/receipt atomically across Redis + LocalHandshakeRecord.
+- Authoritative Attendance Marking (AttendanceDecisionService.evaluateAndMarkAttendanceViaWebRtcHandshake):
+    1. Saves StudentAttendance immediately (status=PRESENT, faceVerificationStatus=PASSED,
+       similarityScore, handshakeStatus=VERIFIED, handshakeReceiptId, clientIp, plus Campus Gate
+       guard reference and decision timestamp).
+    2. Logs ATTENDANCE_MARKED audit event and broadcasts ATTENDANCE_MARKED over WebSocket to
+       Teacher live roster and Student portal (Student immediately sees PRESENT confirmation).
 
 ================================================================================
 REAL-TIME WEBSOCKET TOPICS & AUDIT / HISTORY ENDPOINTS
 ================================================================================
 
-WebSocket Destinations (AttendanceWebSocketPublisher):
-  - Teacher live dashboard:   /topic/attendance/session/{sessionUuid}
-  - Student portal notification: /topic/attendance/student/{studentId}
-  - Security guard terminal:  /topic/attendance/guard
+WebSocket Destinations (AttendanceWebSocketPublisher & WebRtcSignalingController):
+  - Teacher live dashboard:    /topic/attendance/session/{sessionUuid}
+  - Student portal alert:      /topic/attendance/student/{studentId}
+  - Security guard terminal:   /topic/attendance/guard
+  - WebRTC Teacher signaling:  /topic/webrtc/teacher/{sessionUuid}
+  - WebRTC Student signaling:  /topic/webrtc/student/{ticketId}
 
 Event Types (AttendanceEventType):
   ATTENDANCE_SESSION_STARTED | ATTENDANCE_SESSION_CLOSED | QR_GENERATED |

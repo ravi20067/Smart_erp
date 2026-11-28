@@ -64,22 +64,28 @@ public class SpringSecurity {
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration configuration = new CorsConfiguration();
-        configuration.setAllowedOrigins(List.of(
+        configuration.setAllowedOriginPatterns(List.of(
                 "http://localhost",
                 "https://localhost",
-                "http://localhost:80",
-                "https://localhost:80",
-                "http://localhost:8080",
-                "https://localhost:8080",
-                "http://172.30.112.1",
-                "https://172.30.112.1",
-                "http://172.30.112.1:8080",
-                "https://172.30.112.1:8080",
+                "http://localhost:*",
+                "https://localhost:*",
+                "http://192.168.*",
+                "https://192.168.*",
+                "http://192.168.*:*",
+                "https://192.168.*:*",
+                "http://172.*",
+                "https://172.*",
+                "http://172.*:*",
+                "https://172.*:*",
+                "http://10.*",
+                "https://10.*",
+                "http://10.*:*",
+                "https://10.*:*",
                 "https://shortcut-sled-multiply.ngrok-free.dev",
                 "https://*.duckdns.org",
                 "https://*.trycloudflare.com",
                 url
-                ));
+        ));
         configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE","OPTIONS"));
         configuration.setAllowedHeaders(List.of("*"));
         configuration.setAllowCredentials(true);

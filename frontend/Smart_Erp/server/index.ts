@@ -2,7 +2,6 @@ import "dotenv/config";
 import express from "express";
 import cors from "cors";
 import { handleDemo } from "./routes/demo";
-import { handleLocalHandshake, handleCompanionStatus } from "./handshake-companion";
 import {
   loadClasses,
   loadSections,
@@ -28,12 +27,6 @@ export function createServer() {
   app.use(cors());
   app.use(express.json());
   app.use(express.urlencoded({ extended: true }));
-
-  // Local Network Attendance Handshake Companion endpoints
-  app.post("/handshake", handleLocalHandshake);
-  app.post("/api/handshake", handleLocalHandshake);
-  app.get("/handshake/status", handleCompanionStatus);
-  app.get("/api/handshake/status", handleCompanionStatus);
 
   // API routes
   app.get("/api/ping", (_req, res) => {

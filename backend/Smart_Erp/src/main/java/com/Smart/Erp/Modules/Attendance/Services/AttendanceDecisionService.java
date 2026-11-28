@@ -1,6 +1,7 @@
 package com.Smart.Erp.Modules.Attendance.Services;
 
 import com.Smart.Erp.Modules.Attendance.Entity.AttendanceSession;
+import com.Smart.Erp.Modules.Attendance.Entity.CampusCheckInRecord;
 import com.Smart.Erp.Modules.Attendance.Entity.FaceVerificationSession;
 import com.Smart.Erp.Modules.Attendance.Entity.LocalHandshakeRecord;
 import com.Smart.Erp.Modules.Attendance.Entity.SecurityGuardCheckIn;
@@ -130,6 +131,95 @@ public class AttendanceDecisionService {
                 rollNumber,
                 "PRESENT",
                 "Official attendance recorded for " + studentName
+        );
+
+        return attendance;
+    }
+
+    /**
+     * Marks official classroom attendance immediately after all verification stages pass:
+     * 1. Active open Security Guard Campus Gate Check-In
+     * 2. Active & eligible classroom session enrollment
+     * 3. Biometric Liveness & Enrolled Template Identity Match (PASSED)
+     * 4. Signed Teacher QR + WebRTC P2P Mutual Handshake + Teacher-issued Final Token (VERIFIED)
+     */
+    public StudentAttendance evaluateAndMarkAttendanceViaWebRtcHandshake(
+            AttendanceSession session,
+            Student student,
+            LocalHandshakeRecord handshake,
+            String remarks
+    ) {
+        if (attendanceRepository.existsByAttendanceSessionAndStudent(session, student)) {
+            log.info("Attendance already recorded for student {} in session {}", student.getId(), session.getSessionUuid());
+            return attendanceRepository.findByAttendanceSessionAndStudent(session, student).orElseThrow();
+        }
+
+        if (session.getStatus() != AttendanceSessionStatus.ACTIVE || LocalDateTime.now().isAfter(session.getExpiresAt())) {
+            throw new RuntimeException("Final attendance rejected: Attendance session is closed or expired");
+        }
+
+        boolean isEnrolled = studentEnrollmentRepo.findAllByStudent(student).stream()
+                .anyMatch(enrollment -> enrollment.getSectionGroup() != null &&
+                        enrollment.getSectionGroup().getSection() != null &&
+                        enrollment.getSectionGroup().getSection().getId().equals(session.getSection().getId()));
+        if (!isEnrolled) {
+            throw new RuntimeException("Final attendance rejected: Student is not enrolled in section " + session.getSection().getName());
+        }
+
+        campusCheckInService.requireOpenCampusCheckIn(student);
+        CampusCheckInRecord openCampus = campusCheckInService.findOpenCampusCheckIn(student).orElse(null);
+
+        FaceVerificationSession fvs = verificationSessionRepository
+                .findFirstByStudentAndAttendanceSessionAndStatus(student, session, VerificationState.PASSED)
+                .orElseThrow(() -> new RuntimeException("Final attendance rejected: Biometric face verification has not passed"));
+
+        if (handshake == null || !"VERIFIED".equalsIgnoreCase(handshake.getStatus())) {
+            throw new RuntimeException("Final attendance rejected: Valid Teacher WebRTC P2P token verification missing");
+        }
+
+        StudentAttendance attendance = StudentAttendance.builder()
+                .attendanceSession(session)
+                .student(student)
+                .attendanceDate(LocalDate.now())
+                .checkInTime(LocalTime.now())
+                .status(AttendanceStatus.PRESENT)
+                .faceVerificationStatus(VerificationState.PASSED)
+                .faceVerificationSessionId(fvs.getSessionId())
+                .similarityScore(fvs.getMatchedSimilarity())
+                .handshakeStatus(HandshakeState.VERIFIED)
+                .handshakeReceiptId(handshake.getReceiptId())
+                .guardCheckInStatus(GuardCheckInState.APPROVED)
+                .guard(openCampus != null ? openCampus.getGuard() : null)
+                .guardDecisionTime(openCampus != null && openCampus.getActionTime() != null ? openCampus.getActionTime() : LocalDateTime.now())
+                .clientIp(handshake.getClientIp())
+                .remarks(remarks != null ? remarks : "Verified via Liveness, QR Scan, WebRTC Teacher Token & Campus Check-In")
+                .build();
+
+        attendance = attendanceRepository.save(attendance);
+
+        String studentName = student.getUser() != null && student.getUser().getBasicDetail() != null
+                ? student.getUser().getBasicDetail().getFirstName() + " " + student.getUser().getBasicDetail().getLastName()
+                : student.getRegistrationNumber();
+
+        String rollNumber = student.getEnrollments() != null && !student.getEnrollments().isEmpty()
+                ? student.getEnrollments().get(0).getRollNumber()
+                : student.getRegistrationNumber();
+
+        auditService.logEvent(
+                session, student, student.getUser(), "STUDENT",
+                "ATTENDANCE_MARKED", "HANDSHAKE_VERIFIED", "ATTENDANCE_MARKED",
+                "Attendance marked via WebRTC Teacher Final Token. Sim: " + fvs.getMatchedSimilarity() + ", Receipt: " + handshake.getReceiptId(),
+                handshake.getClientIp()
+        );
+
+        webSocketPublisher.publishEvent(
+                AttendanceEventType.ATTENDANCE_MARKED,
+                session.getSessionUuid(),
+                student.getId(),
+                studentName,
+                rollNumber,
+                "PRESENT",
+                "Official attendance marked via WebRTC Teacher Token for " + studentName
         );
 
         return attendance;

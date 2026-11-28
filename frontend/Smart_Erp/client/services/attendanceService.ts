@@ -6,8 +6,8 @@ export interface StartAttendancePayload {
   sectionId: number;
   subjectId: number;
   roomNumber?: string;
-  localServerIp: string;
-  localServerPort: number;
+  localServerIp?: string;
+  localServerPort?: number;
   teacherEd25519PublicKey: string;
   teacherX25519PublicKey: string;
   allowedSubnets?: string;
@@ -98,6 +98,43 @@ export interface LocalHandshakeResponse {
   status: string;
   message: string;
   receiptSignature: string;
+  attendanceMarked?: boolean;
+  attendanceId?: number;
+  attendanceStatus?: string;
+}
+
+export interface StudentActiveAttendanceSession {
+  sessionUuid: string;
+  courseName: string;
+  sectionName: string;
+  subjectName: string;
+  teacherName: string;
+  roomNumber: string;
+  allowedSubnets: string;
+  expiresAt?: string;
+  campusCheckInOpen: boolean;
+  faceVerified: boolean;
+  matchedSimilarity?: number;
+  handshakeVerified: boolean;
+  alreadyMarked: boolean;
+}
+
+export interface PythonFaceAiHealthReport {
+  serviceUrl: string;
+  checkedAt: string;
+  latencyMs: number;
+  reachable: boolean;
+  application?: string;
+  version?: string;
+  environment?: string;
+  status: string;
+  modelsStatus?: string;
+  device?: string;
+  readiness: boolean;
+  matchThreshold?: number;
+  models?: Record<string, string>;
+  details?: Record<string, { name: string; status: string; path: string; provider: string }>;
+  error?: string;
 }
 
 export interface StudentCheckInQRResponse {
@@ -217,7 +254,26 @@ export const getTeacherSessionStats = async (sessionUuid: string): Promise<Atten
   return res.data;
 };
 
+export const getTeacherFaceAiHealth = async (): Promise<PythonFaceAiHealthReport> => {
+  const res = await api.get("/teacher/attendance/face-ai/health");
+  return res.data;
+};
+
+export const analyzeFaceDiagnostics = async (imageBlob: Blob): Promise<Record<string, any>> => {
+  const formData = new FormData();
+  formData.append("image", imageBlob, "diagnostic.jpg");
+  const res = await api.post("/teacher/attendance/face-ai/analyze", formData, {
+    headers: { "Content-Type": "multipart/form-data" },
+  });
+  return res.data;
+};
+
 // ==================== STUDENT APIS ====================
+
+export const getStudentActiveAttendanceSessions = async (): Promise<StudentActiveAttendanceSession[]> => {
+  const res = await api.get("/student/attendance/active-sessions");
+  return res.data;
+};
 
 export const startStudentVerification = async (sessionUuid: string): Promise<StudentVerificationStartResponse> => {
   const res = await api.post("/student/attendance/verification/start", { sessionUuid });
@@ -274,6 +330,7 @@ export const verifyLocalHandshake = async (payload: {
   receiptExpiresAt: number;
   qrSignature: string;
   clientIp: string;
+  iceCandidateType?: string;
   companionReceiptId: string;
   teacherEd25519PublicKey: string;
   teacherX25519PublicKey: string;
@@ -285,6 +342,27 @@ export const verifyLocalHandshake = async (payload: {
 }): Promise<LocalHandshakeResponse> => {
   const res = await api.post("/student/attendance/handshake/verify", payload);
   return res.data;
+};
+
+export interface WebRtcSignalPayload {
+  sessionUuid: string;
+  ticketId: string;
+  senderRole?: string;
+  signalType: "OFFER" | "ANSWER" | "ICE" | "ERROR";
+  sdp?: string;
+  candidate?: string;
+  sdpMid?: string;
+  sdpMLineIndex?: number | null;
+  iceType?: string;
+  errorMessage?: string;
+}
+
+export const relayStudentWebRtcSignal = async (payload: WebRtcSignalPayload): Promise<void> => {
+  await api.post("/student/attendance/webrtc/signal", payload);
+};
+
+export const relayTeacherWebRtcSignal = async (payload: WebRtcSignalPayload): Promise<void> => {
+  await api.post("/teacher/attendance/webrtc/signal", payload);
 };
 
 export const getStudentCheckInQr = async (sessionUuid: string): Promise<StudentCheckInQRResponse> => {

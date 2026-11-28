@@ -20,6 +20,8 @@ import {
 } from "./pages/ModulePages";
 import AIAutomation from "./pages/AIAutomation";
 import SmartERPChatbot from "./components/assistant/SmartERPChatbot";
+import { sendAiQuery } from "./services/aiQueryService";
+import { useAuth } from "./services/authContext";
 import Solutions from "./pages/Solutions";
 import Contact from "./pages/Contact";
 import Login from "./pages/Login";
@@ -74,7 +76,38 @@ import SecurityGuard from "./pages/userMangement/SecurityGuard";
 import TeacherEnrollment from "./pages/userMangement/TeacherEnrollment";
 import TeacherAssignRole from "./pages/userMangement/TeacherAssignRole";
 
+import { useRef } from "react";
+
 const queryClient = new QueryClient();
+
+const AuthenticatedChatbot = () => {
+  const { isAuthenticated } = useAuth();
+  const conversationIdRef = useRef<string | undefined>(undefined);
+
+  if (!isAuthenticated) {
+    return null;
+  }
+
+  return (
+    <SmartERPChatbot
+      title="Smart ERP AI"
+      subtitle="Your multilingual assistant"
+      onSend={async (message, language, history) => {
+        if (history.length === 0) {
+          conversationIdRef.current = undefined;
+        }
+        const res = await sendAiQuery(message, language, conversationIdRef.current);
+        if (res.conversationId) {
+          conversationIdRef.current = res.conversationId;
+        }
+        if (!res.success && !res.requiresClarification) {
+          throw new Error(res.message || "Unable to process your request.");
+        }
+        return res.message;
+      }}
+    />
+  );
+};
 
 const App = () => (
   <QueryClientProvider client={queryClient}>
@@ -405,10 +438,7 @@ const App = () => (
             <Route path="*" element={<NotFound />} />
 
           </Routes>
-          <SmartERPChatbot
-            title="Smart ERP AI"
-            subtitle="Your multilingual assistant"
-          />
+          <AuthenticatedChatbot />
         </BrowserRouter>
       </TooltipProvider>
     </AuthProvider>

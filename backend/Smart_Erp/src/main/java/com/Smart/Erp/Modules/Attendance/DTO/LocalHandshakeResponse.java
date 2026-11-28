@@ -16,4 +16,7 @@ public class LocalHandshakeResponse {
     private String status;
     private String message;
     private String receiptSignature;
+    private boolean attendanceMarked;
+    private Long attendanceId;
+    private String attendanceStatus;
 }

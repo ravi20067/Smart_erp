@@ -1,6 +1,7 @@
 import { useEffect, useRef } from "react";
 import SockJS from "sockjs-client";
 import { Client } from "@stomp/stompjs";
+import { resolveWsEndpoint } from "@/services/webrtcHandshake";
 
 export interface AttendanceSocketMessage {
   eventType: string;
@@ -31,7 +32,7 @@ export default function useAttendanceWebSocket({
       return;
     }
 
-    const wsUrl = import.meta.env.VITE_WS_ENDPOINT || "http://localhost:7777/ws";
+    const wsUrl = resolveWsEndpoint();
     const socket = new SockJS(wsUrl);
 
     const client = new Client({

@@ -24,6 +24,7 @@ public class LocalHandshakeRequest {
     private long receiptExpiresAt;
     private String qrSignature;
     private String clientIp;
+    private String iceCandidateType;
     private String companionReceiptId;
     private String teacherEd25519PublicKey;
     private String teacherX25519PublicKey;

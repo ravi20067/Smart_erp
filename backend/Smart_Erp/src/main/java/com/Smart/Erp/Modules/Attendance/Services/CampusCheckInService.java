@@ -68,6 +68,9 @@ public class CampusCheckInService {
                 .openCheckInTime(openCheckIn.map(CampusCheckInRecord::getActionTime).orElse(null))
                 .fullName(identity.fullName)
                 .primaryIdentifier(identity.primaryIdentifier)
+                .departmentOrCourse(expectedRole == CampusPersonRole.STUDENT ? identity.courseName : identity.departmentName)
+                .sectionOrDesignation(expectedRole == CampusPersonRole.STUDENT ? identity.sectionName : identity.designation)
+                .academicYearName(identity.academicYearName)
                 .recentHistory(history)
                 .build();
     }
@@ -409,6 +412,15 @@ public class CampusCheckInService {
                     "Classroom attendance blocked: Student must have an approved, open Campus Check-In and must not have checked out."
             );
         }
+    }
+
+    public Optional<CampusCheckInRecord> findOpenCampusCheckIn(Student student) {
+        if (student == null || student.getUser() == null) {
+            return Optional.empty();
+        }
+        return campusRepo.findFirstByStudentAndDirectionAndStatusAndCheckedOutFalseOrderByActionTimeDesc(
+                student, CampusCheckDirection.CHECK_IN, GuardCheckInState.APPROVED
+        ).or(() -> getOpenApprovedCheckIn(student.getUser()));
     }
 
     private Optional<CampusCheckInRecord> getOpenApprovedCheckIn(User user) {

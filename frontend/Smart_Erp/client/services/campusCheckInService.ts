@@ -27,6 +27,9 @@ export interface CampusStatusResponse {
   openCheckInTime?: string;
   fullName: string;
   primaryIdentifier: string;
+  departmentOrCourse?: string;
+  sectionOrDesignation?: string;
+  academicYearName?: string;
   recentHistory: CampusHistoryItem[];
 }
 

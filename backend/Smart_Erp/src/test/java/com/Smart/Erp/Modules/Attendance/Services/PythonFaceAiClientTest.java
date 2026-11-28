@@ -90,4 +90,67 @@ class PythonFaceAiClientTest {
         assertFalse(ex.getMessage().isBlank());
         assertTrue(ex.getMessage().contains("Field required"));
     }
+
+    @Test
+    void healthModelsLivenessDiagnosticsAndDeleteEndpointsWorkOverHttp11() throws Exception {
+        server.createContext("/internal/v1/face/health", exchange -> {
+            exchange.getRequestBody().readAllBytes();
+            byte[] bytes = "{\"application\":\"SMART_ERP_FACE_AI\",\"status\":\"UP\",\"version\":\"1.0.0\",\"environment\":\"development\"}".getBytes(StandardCharsets.UTF_8);
+            exchange.getResponseHeaders().set("Content-Type", "application/json");
+            exchange.sendResponseHeaders(200, bytes.length);
+            try (OutputStream os = exchange.getResponseBody()) {
+                os.write(bytes);
+            }
+        });
+        server.createContext("/internal/v1/face/models/status", exchange -> {
+            exchange.getRequestBody().readAllBytes();
+            byte[] bytes = "{\"status\":\"READY\",\"device\":\"CPU\",\"readiness\":true,\"models\":{\"yunet\":\"LOADED\",\"sface\":\"LOADED\",\"minifasnet\":\"LOADED\",\"landmarks\":\"LOADED\"}}".getBytes(StandardCharsets.UTF_8);
+            exchange.getResponseHeaders().set("Content-Type", "application/json");
+            exchange.sendResponseHeaders(200, bytes.length);
+            try (OutputStream os = exchange.getResponseBody()) {
+                os.write(bytes);
+            }
+        });
+        server.createContext("/internal/v1/face/sessions/VS-1/liveness", exchange -> {
+            exchange.getRequestBody().readAllBytes();
+            byte[] bytes = "{\"session_id\":\"VS-1\",\"blink_observations\":2,\"head_movement_observations\":1,\"processing_status\":\"COMPLETED\"}".getBytes(StandardCharsets.UTF_8);
+            exchange.getResponseHeaders().set("Content-Type", "application/json");
+            exchange.sendResponseHeaders(200, bytes.length);
+            try (OutputStream os = exchange.getResponseBody()) {
+                os.write(bytes);
+            }
+        });
+        server.createContext("/internal/v1/face/sessions/VS-1", exchange -> {
+            exchange.getRequestBody().readAllBytes();
+            byte[] bytes = "{\"session_id\":\"VS-1\",\"status\":\"DELETED\"}".getBytes(StandardCharsets.UTF_8);
+            exchange.getResponseHeaders().set("Content-Type", "application/json");
+            exchange.sendResponseHeaders(200, bytes.length);
+            try (OutputStream os = exchange.getResponseBody()) {
+                os.write(bytes);
+            }
+        });
+        server.createContext("/internal/v1/face/analyze", exchange -> {
+            exchange.getRequestBody().readAllBytes();
+            byte[] bytes = "{\"face_detected\":true,\"face_count\":1,\"face_quality_passed\":true,\"status\":\"OK\"}".getBytes(StandardCharsets.UTF_8);
+            exchange.getResponseHeaders().set("Content-Type", "application/json");
+            exchange.sendResponseHeaders(200, bytes.length);
+            try (OutputStream os = exchange.getResponseBody()) {
+                os.write(bytes);
+            }
+        });
+
+        var health = client.getServiceHealthAndModels();
+        assertTrue(health.path("reachable").asBoolean());
+        assertTrue(health.path("readiness").asBoolean());
+        assertEquals("LOADED", health.path("models").path("yunet").asText());
+
+        var liveness = client.getLivenessEvidence("VS-1");
+        assertNotNull(liveness);
+        assertEquals(2, liveness.path("blink_observations").asInt());
+
+        var diag = client.analyzeFaceDiagnostics("img".getBytes(StandardCharsets.UTF_8), "check.jpg");
+        assertTrue(diag.path("face_detected").asBoolean());
+
+        assertTrue(client.deleteSession("VS-1"));
+    }
 }

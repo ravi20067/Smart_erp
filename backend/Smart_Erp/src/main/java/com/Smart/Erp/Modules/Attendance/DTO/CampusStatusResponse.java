@@ -21,5 +21,8 @@ public class CampusStatusResponse {
     private LocalDateTime openCheckInTime;
     private String fullName;
     private String primaryIdentifier;
+    private String departmentOrCourse;
+    private String sectionOrDesignation;
+    private String academicYearName;
     private List<CampusHistoryItemDto> recentHistory;
 }

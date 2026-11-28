@@ -270,7 +270,7 @@ class AttendanceEndpointsIntegrationTest {
 
         assertEquals(initialAttendanceCount, studentAttendanceRepository.count());
 
-        // 2. Teacher starts cryptographic classroom attendance session & refreshes QR
+        // 2. Teacher starts WebRTC P2P attendance session (no manual IP/port required — works on Wi-Fi & Hotspot)
         KeyPairGenerator edGen = KeyPairGenerator.getInstance("Ed25519");
         KeyPairGenerator xGen = KeyPairGenerator.getInstance("X25519");
         KeyPair teacherEd = edGen.generateKeyPair();
@@ -287,15 +287,12 @@ class AttendanceEndpointsIntegrationTest {
                                 "sectionId", section.getId(),
                                 "subjectId", subject.getId(),
                                 "roomNumber", "LH-402",
-                                "localServerIp", "10.20.30.40",
-                                "localServerPort", 8443,
                                 "teacherEd25519PublicKey", teacherEdPub,
-                                "teacherX25519PublicKey", teacherXPub,
-                                "allowedSubnets", "10.20.30.0/24"
+                                "teacherX25519PublicKey", teacherXPub
                         ))))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.status").value("ACTIVE"))
-                .andExpect(jsonPath("$.allowedSubnets").value("10.20.30.0/24"))
+                .andExpect(jsonPath("$.localServerIp").value("WEBRTC_P2P"))
                 .andReturn();
         JsonNode sessJson = objectMapper.readTree(sessRes.getResponse().getContentAsString());
         String sessionUuid = sessJson.get("sessionUuid").asText();
@@ -305,6 +302,13 @@ class AttendanceEndpointsIntegrationTest {
                         .header("Authorization", "Bearer " + teacherToken))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.sessionUuid").value(sessionUuid));
+
+        mockMvc.perform(get("/teacher/attendance/face-ai/health")
+                        .header("Authorization", "Bearer " + teacherToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.serviceUrl").isNotEmpty())
+                .andExpect(jsonPath("$.status").isNotEmpty())
+                .andExpect(jsonPath("$.matchThreshold").isNumber());
 
         mockMvc.perform(post("/teacher/attendance/sessions/" + sessionUuid + "/qr/refresh")
                         .header("Authorization", "Bearer " + teacherToken))
@@ -384,6 +388,50 @@ class AttendanceEndpointsIntegrationTest {
 
         String ticketId = ticketJson.get("ticketId").asText();
         String studentRef = ticketJson.get("studentRef").asText();
+        // 5a. Student discovers active eligible session and sees faceVerified=true after PASSED liveness & face match
+        mockMvc.perform(get("/student/attendance/active-sessions")
+                        .header("Authorization", "Bearer " + studentToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].sessionUuid").value(sessionUuid))
+                .andExpect(jsonPath("$[0].faceVerified").value(true))
+                .andExpect(jsonPath("$[0].alreadyMarked").value(false));
+
+        // 5b. Verify WebRTC STOMP HTTP signaling rejects STUN srflx/relay ICE candidates and relays local host hotspot + link-local IPv6 candidates
+        mockMvc.perform(post("/student/attendance/webrtc/signal")
+                        .header("Authorization", "Bearer " + studentToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(Map.of(
+                                "sessionUuid", sessionUuid,
+                                "ticketId", ticketId,
+                                "signalType", "ICE",
+                                "candidate", "candidate:1 1 udp 1686052607 203.0.113.5 51234 typ srflx"
+                        ))))
+                .andExpect(status().isConflict());
+
+        mockMvc.perform(post("/student/attendance/webrtc/signal")
+                        .header("Authorization", "Bearer " + studentToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(Map.of(
+                                "sessionUuid", sessionUuid,
+                                "ticketId", ticketId,
+                                "signalType", "ICE",
+                                "candidate", "candidate:1 1 udp 2122260223 fe80::1ff:fe23:4567:890a 51234 typ host"
+                        ))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.relayed").value(true));
+
+        mockMvc.perform(post("/student/attendance/webrtc/signal")
+                        .header("Authorization", "Bearer " + studentToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(Map.of(
+                                "sessionUuid", sessionUuid,
+                                "ticketId", ticketId,
+                                "signalType", "ICE",
+                                "candidate", "candidate:1 1 udp 2122260223 192.168.43.55 51234 typ host"
+                        ))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.relayed").value(true));
+
         String teacherNonce = cryptoService.generateNonce(24);
         long studentProofTs = System.currentTimeMillis();
         String proofMsg = cryptoService.canonicalStudentProofMessage(
@@ -403,7 +451,7 @@ class AttendanceEndpointsIntegrationTest {
         long receiptExpires = receiptIssued + 60_000L;
         String canonicalReceipt = cryptoService.canonicalCompanionReceiptMessage(
                 companionReceiptId, sessionUuid, qrObj.get("teacherId").asLong(), studentRef,
-                ticketId, teacherNonce, studentNonce, "10.20.30.55",
+                ticketId, teacherNonce, studentNonce, "192.168.43.55",
                 teacherEdPub, teacherXPub, studentEdPub, studentXPub,
                 receiptIssued, receiptExpires
         );
@@ -424,7 +472,8 @@ class AttendanceEndpointsIntegrationTest {
                 Map.entry("receiptIssuedAt", receiptIssued),
                 Map.entry("receiptExpiresAt", receiptExpires),
                 Map.entry("qrSignature", qrObj.get("signature").asText()),
-                Map.entry("clientIp", "10.20.30.55"),
+                Map.entry("clientIp", "192.168.43.55"),
+                Map.entry("iceCandidateType", "host"),
                 Map.entry("companionReceiptId", companionReceiptId),
                 Map.entry("teacherEd25519PublicKey", teacherEdPub),
                 Map.entry("teacherX25519PublicKey", teacherXPub),
@@ -443,39 +492,21 @@ class AttendanceEndpointsIntegrationTest {
                         .content(handshakeBody))
                 .andExpect(status().isConflict());
 
-        // Direct request succeeds (200 OK)
+        // Direct request with Teacher WebRTC Final Token succeeds (200 OK) AND directly marks StudentAttendance PRESENT
         mockMvc.perform(post("/student/attendance/handshake/verify")
                         .header("Authorization", "Bearer " + studentToken)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(handshakeBody))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.verified").value(true));
+                .andExpect(jsonPath("$.verified").value(true))
+                .andExpect(jsonPath("$.attendanceMarked").value(true))
+                .andExpect(jsonPath("$.attendanceStatus").value("PRESENT"));
 
-        // 6. Classroom Gate Check-In QR -> Security Guard Scan & Approve -> Attendance Marked
-        MvcResult checkInQrMvc = mockMvc.perform(get("/student/attendance/checkin/qr")
-                        .header("Authorization", "Bearer " + studentToken)
-                        .param("sessionUuid", sessionUuid))
+        // 6. Active sessions endpoint now shows alreadyMarked=true, and teacher stats immediately reflect 1 PRESENT student
+        mockMvc.perform(get("/student/attendance/active-sessions")
+                        .header("Authorization", "Bearer " + studentToken))
                 .andExpect(status().isOk())
-                .andReturn();
-        String classCheckInToken = objectMapper.readTree(checkInQrMvc.getResponse().getContentAsString()).get("checkInToken").asText();
-
-        mockMvc.perform(post("/security-guard/check-in/scan")
-                        .header("Authorization", "Bearer " + guardToken)
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(Map.of("checkInToken", classCheckInToken))))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.faceVerificationPassed").value(true))
-                .andExpect(jsonPath("$.handshakeVerified").value(true));
-
-        mockMvc.perform(post("/security-guard/check-in/decision")
-                        .header("Authorization", "Bearer " + guardToken)
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(Map.of(
-                                "checkInToken", classCheckInToken,
-                                "approved", true,
-                                "deviceDetails", "Classroom Gate"))))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.attendanceMarked").value(true));
+                .andExpect(jsonPath("$[0].alreadyMarked").value(true));
 
         mockMvc.perform(get("/teacher/attendance/sessions/" + sessionUuid + "/stats")
                         .header("Authorization", "Bearer " + teacherToken))

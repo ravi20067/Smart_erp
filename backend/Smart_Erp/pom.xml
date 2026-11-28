@@ -140,6 +140,13 @@
 			<version>2.5.0</version>
 		</dependency>
 
+		<!-- SQL AST Parser -->
+		<dependency>
+			<groupId>com.github.jsqlparser</groupId>
+			<artifactId>jsqlparser</artifactId>
+			<version>5.0</version>
+		</dependency>
+
 		<!-- Testing -->
 		<dependency>
 			<groupId>org.springframework.boot</groupId>

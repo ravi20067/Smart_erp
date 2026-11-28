@@ -412,11 +412,11 @@ export default function SecurityGuardCheckIn() {
                 </div>
               </div>
 
-              <div className="mt-6 flex gap-4 border-t border-slate-800 pt-4">
+              <div className="mt-6 flex flex-col gap-3 border-t border-slate-800 pt-4 sm:flex-row sm:gap-4">
                 <button
                   onClick={() => handleCampusDecision(true)}
                   disabled={decisionLoading}
-                  className="flex-1 flex items-center justify-center gap-2 rounded-xl bg-emerald-600 py-3 text-sm font-bold text-white shadow-lg shadow-emerald-500/20 transition hover:bg-emerald-700 disabled:opacity-50"
+                  className="flex min-h-[48px] flex-1 items-center justify-center gap-2 rounded-2xl bg-emerald-600 py-3 text-sm font-bold text-white shadow-lg shadow-emerald-500/20 transition hover:bg-emerald-700 disabled:opacity-50"
                 >
                   {decisionLoading ? <RefreshCw size={16} className="animate-spin" /> : <CheckCircle2 size={18} />}
                   APPROVE {campusDetail.direction.replace("_", " ")}
@@ -424,7 +424,7 @@ export default function SecurityGuardCheckIn() {
                 <button
                   onClick={() => setRejectModalOpen(true)}
                   disabled={decisionLoading}
-                  className="flex-1 flex items-center justify-center gap-2 rounded-xl bg-rose-600/90 py-3 text-sm font-bold text-white shadow-lg shadow-rose-500/20 transition hover:bg-rose-700 disabled:opacity-50"
+                  className="flex min-h-[48px] flex-1 items-center justify-center gap-2 rounded-2xl bg-rose-600/90 py-3 text-sm font-bold text-white shadow-lg shadow-rose-500/20 transition hover:bg-rose-700 disabled:opacity-50"
                 >
                   <XCircle size={18} />
                   REJECT {campusDetail.direction.replace("_", " ")}
@@ -531,11 +531,11 @@ export default function SecurityGuardCheckIn() {
               )}
 
               {/* Decision Action Buttons */}
-              <div className="mt-6 flex gap-4 pt-4 border-t border-slate-800">
+              <div className="mt-6 flex flex-col gap-3 pt-4 border-t border-slate-800 sm:flex-row sm:gap-4">
                 <button
                   onClick={handleApprove}
                   disabled={decisionLoading || studentDetail.alreadyDecided}
-                  className="flex-1 flex items-center justify-center gap-2 rounded-xl bg-emerald-600 py-3 text-sm font-bold text-white shadow-lg shadow-emerald-500/20 transition hover:bg-emerald-700 disabled:opacity-50"
+                  className="flex min-h-[48px] flex-1 items-center justify-center gap-2 rounded-2xl bg-emerald-600 py-3 text-sm font-bold text-white shadow-lg shadow-emerald-500/20 transition hover:bg-emerald-700 disabled:opacity-50"
                 >
                   {decisionLoading ? <RefreshCw size={16} className="animate-spin" /> : <CheckCircle2 size={18} />}
                   APPROVE CHECK-IN
@@ -544,7 +544,7 @@ export default function SecurityGuardCheckIn() {
                 <button
                   onClick={() => setRejectModalOpen(true)}
                   disabled={decisionLoading || studentDetail.alreadyDecided}
-                  className="flex-1 flex items-center justify-center gap-2 rounded-xl bg-rose-600/90 py-3 text-sm font-bold text-white shadow-lg shadow-rose-500/20 transition hover:bg-rose-700 disabled:opacity-50"
+                  className="flex min-h-[48px] flex-1 items-center justify-center gap-2 rounded-2xl bg-rose-600/90 py-3 text-sm font-bold text-white shadow-lg shadow-rose-500/20 transition hover:bg-rose-700 disabled:opacity-50"
                 >
                   <XCircle size={18} />
                   REJECT CHECK-IN
@@ -553,18 +553,24 @@ export default function SecurityGuardCheckIn() {
             </div>
           ) : (
             /* QR Scanner Card */
-            <div className="rounded-3xl border border-slate-800 bg-slate-900/60 p-6 text-center">
+            <div className="rounded-3xl border border-slate-800 bg-slate-900/70 p-5 sm:p-6 text-center shadow-xl">
               <div className="mb-4">
                 <span className="text-xs font-bold uppercase tracking-wider text-cyan-400">
-                  Step 1: Gate Scan
+                  Step 1: Gate &amp; Campus Scan
                 </span>
-                <h2 className="text-xl font-bold text-white">Scan Student Check-In QR</h2>
+                <h2 className="text-xl font-bold text-white">Scan Campus Pass or Classroom QR</h2>
                 <p className="mt-1 text-xs text-slate-400">
-                  Scan the short-lived Check-In QR code presented on the student's phone.
+                  Supports Student &amp; Teacher Campus Entry/Exit QRs (<code className="text-cyan-300">CAMPUS:...</code>) and Classroom Attendance Check-In QRs (<code className="text-cyan-300">CHECKIN:...</code>).
                 </p>
               </div>
 
-              <div className="relative mx-auto h-72 w-72 overflow-hidden rounded-2xl border-2 border-dashed border-cyan-500/40 bg-black/40">
+              {typeof window !== "undefined" && !window.isSecureContext && window.location.hostname !== "localhost" && window.location.hostname !== "127.0.0.1" && (
+                <div className="mb-4 rounded-2xl border border-amber-500/30 bg-amber-500/10 p-3 text-left text-xs text-amber-200">
+                  Camera QR scanner requires HTTPS on LAN IPs. On HTTP LAN URLs, paste or type the QR token manually below.
+                </div>
+              )}
+
+              <div className="relative mx-auto aspect-square w-full max-w-[280px] overflow-hidden rounded-2xl border-2 border-dashed border-cyan-500/40 bg-black/40">
                 <Scanner
                   onScan={(codes) => {
                     if (codes && codes.length > 0 && codes[0].rawValue) {
@@ -575,20 +581,20 @@ export default function SecurityGuardCheckIn() {
               </div>
 
               {/* Manual Input Fallback */}
-              <div className="mt-6 border-t border-slate-800 pt-4">
-                <p className="text-xs text-slate-400 mb-2">Or enter Check-In Token manually:</p>
-                <div className="flex gap-2">
+              <div className="mt-6 border-t border-slate-800 pt-4 text-left">
+                <p className="text-xs text-slate-400 mb-2">Or enter Campus / Check-In Token manually:</p>
+                <div className="flex flex-col gap-2 sm:flex-row">
                   <input
                     type="text"
                     value={tokenInput}
                     onChange={(e) => setTokenInput(e.target.value)}
-                    placeholder="Enter Check-In Token..."
-                    className="w-full rounded-xl border border-slate-700 bg-slate-800 px-3 py-2 text-xs font-mono text-white focus:border-cyan-500 focus:outline-none"
+                    placeholder="Enter CAMPUS:CMP-... or CHECKIN:..."
+                    className="min-h-[44px] w-full rounded-xl border border-slate-700 bg-slate-800 px-3 py-2 text-xs font-mono text-white focus:border-cyan-500 focus:outline-none"
                   />
                   <button
                     onClick={() => handleScan(tokenInput)}
                     disabled={!tokenInput.trim() || loading}
-                    className="rounded-xl bg-cyan-600 px-4 py-2 text-xs font-bold text-white hover:bg-cyan-700 disabled:opacity-50"
+                    className="min-h-[44px] rounded-xl bg-cyan-600 px-5 py-2 text-xs font-bold text-white hover:bg-cyan-700 disabled:opacity-50"
                   >
                     Lookup
                   </button>

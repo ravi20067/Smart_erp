@@ -1,22 +1,18 @@
 import { useState, useEffect, useRef } from "react";
 import QRCode from "react-qr-code";
 import {
-  Users,
   Play,
   Square,
   RefreshCw,
   Wifi,
   ShieldCheck,
-  Clock,
   CheckCircle2,
   AlertCircle,
-  Calendar,
-  BookOpen,
-  Layers,
-  Sparkles,
+  Copy,
   QrCode,
   Radio,
-  UserCheck
+  Cpu,
+  Activity,
 } from "lucide-react";
 import { useAuth } from "@/services/authContext";
 import {
@@ -26,9 +22,13 @@ import {
   refreshTeacherQr,
   getTeacherSessionStats,
   getAttendanceFilters,
+  getTeacherFaceAiHealth,
   type AttendanceSessionDto,
   type AttendanceStatsResponse,
+  type PythonFaceAiHealthReport,
 } from "@/services/attendanceService";
+import { generateEphemeralStudentKeys } from "@/services/handshakeCrypto";
+import { TeacherWebRtcHost } from "@/services/webrtcHandshake";
 import useAttendanceWebSocket, { type AttendanceSocketMessage } from "@/hooks/useAttendanceWebSocket";
 
 export default function TeacherAttendanceManager() {
@@ -58,17 +58,46 @@ export default function TeacherAttendanceManager() {
   const [selectedSection, setSelectedSection] = useState<string>("");
   const [selectedSubject, setSelectedSubject] = useState<string>("");
   const [roomNumber, setRoomNumber] = useState("LH-201");
-  const [localIp, setLocalIp] = useState("192.168.1.100");
-  const [localPort, setLocalPort] = useState(8443);
-  const [allowedSubnets, setAllowedSubnets] = useState("192.168.1.0/24");
-  const [companionAdminToken, setCompanionAdminToken] = useState("");
-  const [teacherEd25519PublicKey, setTeacherEd25519PublicKey] = useState("");
-  const [teacherX25519PublicKey, setTeacherX25519PublicKey] = useState("");
-  const [certFingerprint, setCertFingerprint] = useState("");
-  const [companionConnected, setCompanionConnected] = useState(false);
+  const [allowedSubnets, setAllowedSubnets] = useState("");
+  const [webrtcHostActive, setWebrtcHostActive] = useState(false);
+  const [webrtcPeersVerified, setWebrtcPeersVerified] = useState(0);
+  const [issuedTokens, setIssuedTokens] = useState<Array<{ studentRef: string; receiptId: string; issuedAt: string }>>([]);
+  const [faceAiHealth, setFaceAiHealth] = useState<PythonFaceAiHealthReport | null>(null);
+  const [healthLoading, setHealthLoading] = useState(false);
   const [actionLoading, setActionLoading] = useState(false);
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const webrtcHostRef = useRef<TeacherWebRtcHost | null>(null);
+
+  const loadFaceAiHealth = async () => {
+    setHealthLoading(true);
+    try {
+      const report = await getTeacherFaceAiHealth();
+      setFaceAiHealth(report);
+    } catch {
+      setFaceAiHealth({
+        serviceUrl: "http://127.0.0.1:8001",
+        checkedAt: new Date().toISOString(),
+        latencyMs: 0,
+        reachable: false,
+        status: "DOWN",
+        readiness: false,
+        error: "Unable to reach Spring Boot Face AI health proxy",
+      });
+    } finally {
+      setHealthLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadFaceAiHealth();
+    const healthTimer = setInterval(loadFaceAiHealth, 30000);
+    return () => {
+      clearInterval(healthTimer);
+      webrtcHostRef.current?.destroy();
+      webrtcHostRef.current = null;
+    };
+  }, []);
 
   // Countdown timer for QR refresh
   const [countdown, setCountdown] = useState(60);
@@ -97,11 +126,7 @@ export default function TeacherAttendanceManager() {
         if (active) {
           setActiveSession(active);
           setQrPayload(active.qrPayload || "");
-          if (active.localServerIp) setLocalIp(active.localServerIp);
-          if (active.localServerPort) setLocalPort(active.localServerPort);
           if (active.allowedSubnets) setAllowedSubnets(active.allowedSubnets);
-          if (active.teacherEd25519PublicKey) setTeacherEd25519PublicKey(active.teacherEd25519PublicKey);
-          if (active.teacherX25519PublicKey) setTeacherX25519PublicKey(active.teacherX25519PublicKey);
           loadStats(active.sessionUuid);
         }
       } catch (err: any) {
@@ -152,88 +177,58 @@ export default function TeacherAttendanceManager() {
     },
   });
 
-  const handleConnectCompanion = async () => {
-    setErrorMessage(null);
-    setStatusMessage(null);
-    if (!localIp.trim() || !companionAdminToken.trim()) {
-      setErrorMessage("Enter your Companion LAN IP and Admin Control Token printed by `npm run handshake:companion`.");
-      return;
-    }
-    try {
-      const res = await fetch(`https://${localIp.trim()}:${localPort}/companion/keys`, {
-        headers: {
-          Authorization: `Bearer ${companionAdminToken.trim()}`,
-        },
-      });
-      const data = await res.json();
-      if (!res.ok || !data.ok) {
-        throw new Error(data.error || "Failed to authenticate with local HTTPS companion");
-      }
-      setTeacherEd25519PublicKey(data.teacherEd25519PublicKey);
-      setTeacherX25519PublicKey(data.teacherX25519PublicKey);
-      setCertFingerprint(data.certFingerprint256 || "");
-      setCompanionConnected(true);
-      setStatusMessage("HTTPS Companion paired. Ephemeral Ed25519 & X25519 public keys loaded.");
-    } catch (err: any) {
-      setCompanionConnected(false);
-      setErrorMessage(
-        err.message?.includes("Failed to fetch")
-          ? `Could not connect to https://${localIp.trim()}:${localPort}. Ensure the HTTPS companion is running and open https://${localIp.trim()}:${localPort}/health in a browser tab once to trust its self-signed LAN certificate.`
-          : err.message || "Failed to pair HTTPS Companion"
-      );
-    }
-  };
-
   const handleStartSession = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedYear || !selectedCourse || !selectedSection || !selectedSubject) {
       setErrorMessage("Please select academic year, course, section, and subject.");
       return;
     }
-    if (!teacherEd25519PublicKey || !teacherX25519PublicKey || !companionAdminToken.trim()) {
-      setErrorMessage("Pair your local HTTPS Teacher Companion first so session cryptographic public keys are pinned.");
-      return;
-    }
 
     setActionLoading(true);
     setErrorMessage(null);
+    setStatusMessage(null);
     try {
+      // Generate fresh ephemeral Ed25519 & X25519 keys strictly in Teacher browser RAM
+      const ephemeralTeacherKeys = await generateEphemeralStudentKeys();
+
       const session = await startAttendanceSession({
         academicYearId: Number(selectedYear),
         courseId: Number(selectedCourse),
         sectionId: Number(selectedSection),
         subjectId: Number(selectedSubject),
         roomNumber,
-        localServerIp: localIp.trim(),
-        localServerPort: localPort,
-        teacherEd25519PublicKey,
-        teacherX25519PublicKey,
+        teacherEd25519PublicKey: ephemeralTeacherKeys.ed25519PublicKeyBase64,
+        teacherX25519PublicKey: ephemeralTeacherKeys.x25519PublicKeyBase64,
         allowedSubnets: allowedSubnets.trim() || undefined,
       });
 
-      const companionStart = await fetch(`https://${localIp.trim()}:${localPort}/companion/session/start`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${companionAdminToken.trim()}`,
+      webrtcHostRef.current?.destroy();
+      const parsedQr = session.qrPayload ? JSON.parse(session.qrPayload) : {};
+      webrtcHostRef.current = new TeacherWebRtcHost({
+        sessionUuid: session.sessionUuid,
+        teacherId: Number(parsedQr.teacherId || user?.userId || 0),
+        backendPublicKey: session.backendPublicKey || "",
+        teacherKeys: ephemeralTeacherKeys,
+        allowedSubnets: session.allowedSubnets || allowedSubnets.trim() || undefined,
+        onPeerVerified: (studentRef, companionReceiptId) => {
+          setWebrtcPeersVerified((n) => n + 1);
+          if (companionReceiptId) {
+            setIssuedTokens((prev) => [
+              { studentRef, receiptId: companionReceiptId, issuedAt: new Date().toLocaleTimeString() },
+              ...prev.slice(0, 7),
+            ]);
+          }
         },
-        body: JSON.stringify({
-          sessionUuid: session.sessionUuid,
-          teacherId: session.qrPayload ? JSON.parse(session.qrPayload).teacherId : user?.userId,
-          backendPublicKey: session.backendPublicKey,
-          allowedSubnets: session.allowedSubnets || allowedSubnets.trim(),
-        }),
+        onHostError: (err) => setErrorMessage(err),
       });
-      const companionJson = await companionStart.json();
-      if (!companionStart.ok || !companionJson.ok) {
-        throw new Error(companionJson.error || "Failed to arm local HTTPS companion session");
-      }
-
+      setWebrtcHostActive(true);
+      setWebrtcPeersVerified(0);
+      setIssuedTokens([]);
       setActiveSession(session);
       setQrPayload(session.qrPayload || "");
       setCountdown(60);
       loadStats(session.sessionUuid);
-      setStatusMessage("Attendance session active with Ed25519 + X25519/HKDF HTTPS Companion.");
+      setStatusMessage("Attendance session active — direct WebRTC P2P host (Wi-Fi & Teacher Hotspot ready).");
     } catch (err: any) {
       setErrorMessage(err.response?.data?.message || err.message || "Failed to start attendance session");
     } finally {
@@ -248,21 +243,13 @@ export default function TeacherAttendanceManager() {
     setActionLoading(true);
     try {
       await stopAttendanceSession(activeSession.sessionUuid);
-      if (companionAdminToken.trim()) {
-        await fetch(`https://${localIp.trim()}:${localPort}/companion/session/stop`, {
-          method: "POST",
-          headers: {
-            Authorization: `Bearer ${companionAdminToken.trim()}`,
-          },
-        }).catch(() => {});
-      }
+      webrtcHostRef.current?.destroy();
+      webrtcHostRef.current = null;
+      setWebrtcHostActive(false);
       setActiveSession(null);
       setQrPayload("");
       setStats(null);
-      setCompanionConnected(false);
-      setTeacherEd25519PublicKey("");
-      setTeacherX25519PublicKey("");
-      setStatusMessage("Attendance session closed and local companion session keys wiped.");
+      setStatusMessage("Attendance session closed and in-memory WebRTC cryptographic keys wiped.");
     } catch (err: any) {
       setErrorMessage(err.response?.data?.message || err.message || "Failed to close session");
     } finally {
@@ -279,6 +266,13 @@ export default function TeacherAttendanceManager() {
     } catch (err: any) {
       console.error("Failed to refresh QR:", err);
     }
+  };
+
+  const handleCopyQrPayload = () => {
+    if (!qrPayload) return;
+    navigator.clipboard.writeText(qrPayload);
+    setStatusMessage("Signed Teacher QR JSON copied to clipboard.");
+    setTimeout(() => setStatusMessage(null), 2500);
   };
 
   if (loading) {
@@ -303,7 +297,7 @@ export default function TeacherAttendanceManager() {
               Faculty Classroom Attendance
             </h1>
             <p className="mt-1 text-sm text-slate-300">
-              Time-limited, signed dynamic QR with biometric anti-spoof liveness & Security Guard check-in validation.
+              Live Python Face AI health diagnostics, rotating signed QR &amp; WebRTC Wi-Fi / Hotspot final token issuance.
             </p>
           </div>
 
@@ -334,6 +328,67 @@ export default function TeacherAttendanceManager() {
         </div>
       )}
 
+      {/* Python Face AI Microservice Health & Models Panel */}
+      <div className="rounded-3xl border border-slate-800 bg-slate-900/70 p-4 sm:p-5">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="flex items-center gap-3">
+            <div className={`flex h-10 w-10 items-center justify-center rounded-2xl border ${faceAiHealth?.reachable && faceAiHealth?.readiness ? "border-emerald-500/40 bg-emerald-500/10 text-emerald-400" : "border-rose-500/40 bg-rose-500/10 text-rose-400"}`}>
+              <Cpu size={18} />
+            </div>
+            <div>
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="text-sm font-bold text-white">Python Face AI Engine</span>
+                <span className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-[11px] font-bold ${faceAiHealth?.reachable && faceAiHealth?.readiness ? "bg-emerald-500/15 text-emerald-300 border border-emerald-500/30" : "bg-rose-500/15 text-rose-300 border border-rose-500/30"}`}>
+                  <Activity size={11} />
+                  {faceAiHealth ? (faceAiHealth.reachable ? `${faceAiHealth.status} • ${faceAiHealth.modelsStatus || "READY"}` : "OFFLINE") : "CHECKING..."}
+                </span>
+                {typeof faceAiHealth?.latencyMs === "number" && (
+                  <span className="font-mono text-[11px] text-slate-400">
+                    {faceAiHealth.latencyMs}ms
+                  </span>
+                )}
+                {typeof faceAiHealth?.matchThreshold === "number" && (
+                  <span className="font-mono text-[11px] text-cyan-300">
+                    SFace Threshold: {faceAiHealth.matchThreshold}
+                  </span>
+                )}
+              </div>
+              <p className="text-xs text-slate-400">
+                {faceAiHealth?.error
+                  ? faceAiHealth.error
+                  : `${faceAiHealth?.application || "Smart ERP Face AI"} v${faceAiHealth?.version || "1.0.0"} (${faceAiHealth?.device || "CPU"}) — Anti-Spoof, Liveness & 128-D Matching`}
+              </p>
+            </div>
+          </div>
+
+          <button
+            type="button"
+            onClick={loadFaceAiHealth}
+            disabled={healthLoading}
+            className="inline-flex min-h-[36px] items-center gap-1.5 rounded-xl border border-slate-700 bg-slate-800 px-3 py-1.5 text-xs font-semibold text-slate-200 hover:bg-slate-700"
+          >
+            <RefreshCw size={12} className={healthLoading ? "animate-spin" : ""} />
+            Check Health
+          </button>
+        </div>
+
+        {faceAiHealth?.models && (
+          <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
+            {Object.entries(faceAiHealth.models).map(([key, st]) => (
+              <div
+                key={key}
+                className="flex items-center justify-between rounded-xl border border-slate-800 bg-slate-950/60 px-3 py-2 text-xs"
+              >
+                <span className="font-mono uppercase text-slate-300">{key}</span>
+                <span className={`font-bold ${st === "LOADED" ? "text-emerald-400" : "text-amber-400"}`}>
+                  {st}
+                </span>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
       {/* Active Attendance Session Active Screen */}
       {activeSession ? (
         <div className="grid gap-6 lg:grid-cols-12">
@@ -346,28 +401,28 @@ export default function TeacherAttendanceManager() {
               <h2 className="text-lg font-bold text-white">Scan with Student App</h2>
             </div>
 
-            <div className="relative rounded-2xl bg-white p-4 shadow-2xl">
+            <div className="relative w-full max-w-[260px] rounded-2xl bg-white p-4 shadow-2xl">
               {qrPayload ? (
                 <QRCode
                   value={qrPayload}
-                  size={240}
+                  size={228}
                   level="M"
-                  className="rounded"
+                  className="h-auto w-full rounded"
                 />
               ) : (
-                <div className="flex h-60 w-60 items-center justify-center text-slate-400">
+                <div className="flex h-56 w-full items-center justify-center text-slate-400">
                   <RefreshCw className="h-8 w-8 animate-spin" />
                 </div>
               )}
             </div>
 
             {/* Countdown Progress */}
-            <div className="mt-4 w-full max-w-[240px]">
+            <div className="mt-4 w-full max-w-[260px]">
               <div className="flex justify-between text-xs text-slate-400">
                 <span>Rotating Security Signature</span>
                 <span className="font-mono text-emerald-400 font-bold">{countdown}s</span>
               </div>
-              <div className="mt-1 h-1.5 w-full overflow-hidden rounded-full bg-slate-800">
+              <div className="mt-1.5 h-1.5 w-full overflow-hidden rounded-full bg-slate-800">
                 <div
                   className="h-full bg-emerald-500 transition-all duration-1000"
                   style={{ width: `${(countdown / 60) * 100}%` }}
@@ -375,33 +430,59 @@ export default function TeacherAttendanceManager() {
               </div>
             </div>
 
-            <button
-              onClick={handleRefreshQr}
-              className="mt-4 inline-flex items-center gap-2 rounded-lg border border-slate-700 bg-slate-800 px-3 py-1.5 text-xs font-medium text-slate-300 hover:bg-slate-700"
-            >
-              <RefreshCw size={12} />
-              Manual Refresh
-            </button>
+            <div className="mt-4 flex flex-wrap items-center justify-center gap-2">
+              <button
+                onClick={handleRefreshQr}
+                className="inline-flex min-h-[36px] items-center gap-1.5 rounded-xl border border-slate-700 bg-slate-800 px-3 py-1.5 text-xs font-medium text-slate-200 hover:bg-slate-700"
+              >
+                <RefreshCw size={12} />
+                Manual Refresh
+              </button>
+              <button
+                onClick={handleCopyQrPayload}
+                disabled={!qrPayload}
+                className="inline-flex min-h-[36px] items-center gap-1.5 rounded-xl border border-cyan-500/30 bg-cyan-500/10 px-3 py-1.5 text-xs font-medium text-cyan-200 hover:bg-cyan-500/20 disabled:opacity-40"
+              >
+                <Copy size={12} />
+                Copy Signed QR JSON
+              </button>
+            </div>
 
-            {/* LAN Companion Info */}
-            <div className="mt-6 flex w-full items-center gap-3 rounded-xl border border-slate-800 bg-slate-950/40 p-3 text-xs text-slate-400">
-              <Wifi size={18} className="text-cyan-400 shrink-0" />
-              <div>
-                <span className="font-semibold text-slate-200">Local Handshake Server:</span>{" "}
-                <span className="font-mono text-cyan-300">
-                  {activeSession.localServerIp}:{activeSession.localServerPort}
-                </span>
-                <p className="text-[11px] text-slate-500">
-                  Proximity handshake verified over campus local network.
-                </p>
+            {/* WebRTC Local/Hotspot Host Info & Issued Final Tokens */}
+            <div className="mt-6 w-full space-y-2 rounded-xl border border-slate-800 bg-slate-950/40 p-3 text-xs text-slate-400">
+              <div className="flex items-center gap-3">
+                <Wifi size={18} className={webrtcHostActive ? "text-emerald-400 shrink-0" : "text-amber-400 shrink-0"} />
+                <div>
+                  <span className="font-semibold text-slate-200">
+                    {webrtcHostActive ? "WebRTC Direct P2P Host Active" : "Page Reloaded — Restart Session for WebRTC Keys"}
+                  </span>
+                  <p className="text-[11px] text-slate-500">
+                    {webrtcHostActive
+                      ? `Wi-Fi & Teacher Hotspot ready (ICE host-only, zero STUN/TURN) • ${webrtcPeersVerified} final attendance tokens issued`
+                      : "In-memory Ed25519/X25519 private keys reset on browser reload. Click End Attendance and start a fresh session."}
+                  </p>
+                </div>
               </div>
+              {issuedTokens.length > 0 && (
+                <div className="border-t border-slate-800/80 pt-2 space-y-1">
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-cyan-400">
+                    Recent WebRTC Final Tokens Sent
+                  </span>
+                  {issuedTokens.slice(0, 4).map((t) => (
+                    <div key={t.receiptId} className="flex items-center justify-between font-mono text-[11px] text-slate-300">
+                      <span>{t.studentRef}</span>
+                      <span className="text-emerald-400">{t.receiptId} • {t.issuedAt}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
 
           {/* Session Overview & Live Student Roster */}
           <div className="space-y-6 lg:col-span-7">
             {/* Stats Overview */}
-            <div className="grid grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-3 sm:gap-4">
               <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-4">
                 <span className="text-xs text-slate-400">Eligible Enrolled</span>
                 <p className="mt-1 text-2xl font-bold text-white">
@@ -471,8 +552,8 @@ export default function TeacherAttendanceManager() {
                 ) : (
                   <div className="py-12 text-center text-slate-500">
                     <QrCode size={36} className="mx-auto mb-2 opacity-30" />
-                    <p className="text-sm">Awaiting student scans...</p>
-                    <p className="text-xs">Students must complete face liveness and guard check-in to appear here.</p>
+                    <p className="text-sm">Awaiting verified student check-ins...</p>
+                    <p className="text-xs">Students must hold Campus Gate Check-In, pass Liveness &amp; Face Match, scan QR, and receive WebRTC Teacher Token.</p>
                   </div>
                 )}
               </div>
@@ -480,203 +561,165 @@ export default function TeacherAttendanceManager() {
           </div>
         </div>
       ) : (
-        /* Setup / Start Attendance Form */
-        <div className="mx-auto max-w-2xl rounded-3xl border border-slate-800 bg-slate-900/60 p-6 sm:p-8">
-          <div className="mb-6">
-            <h2 className="text-xl font-bold text-white">Start New Attendance Session</h2>
-            <p className="mt-1 text-sm text-slate-400">
-              Select class, section, and subject to generate the secure attendance session.
-            </p>
-          </div>
-
-          <form onSubmit={handleStartSession} className="space-y-4">
-            <div className="grid gap-4 sm:grid-cols-2">
-              <div>
-                <label className="mb-1 block text-xs font-medium text-slate-300">
-                  Academic Year
-                </label>
-                <select
-                  value={selectedYear}
-                  onChange={(e) => setSelectedYear(e.target.value)}
-                  className="w-full rounded-xl border border-slate-700 bg-slate-800 px-3.5 py-2.5 text-sm text-white focus:border-emerald-500 focus:outline-none"
-                >
-                  {filters.academicYears.map((y) => (
-                    <option key={y.id} value={y.id}>
-                      {y.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div>
-                <label className="mb-1 block text-xs font-medium text-slate-300">
-                  Course / Program
-                </label>
-                <select
-                  value={selectedCourse}
-                  onChange={(e) => setSelectedCourse(e.target.value)}
-                  className="w-full rounded-xl border border-slate-700 bg-slate-800 px-3.5 py-2.5 text-sm text-white focus:border-emerald-500 focus:outline-none"
-                >
-                  {filters.courses.map((c) => (
-                    <option key={c.id} value={c.id}>
-                      {c.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
+        /* Full Responsive Setup Grid: Start Attendance Session + WebRTC Security Overview */
+        <div className="grid grid-cols-1 gap-6 xl:grid-cols-12">
+          <div className="rounded-3xl border border-slate-800 bg-slate-900/70 p-5 sm:p-8 shadow-xl xl:col-span-7">
+            <div className="mb-6">
+              <h2 className="text-xl font-bold text-white">Start New Attendance Session</h2>
+              <p className="mt-1 text-sm text-slate-400">
+                Select class, section, and subject to issue a rotating signed QR and host direct WebRTC peer handshakes.
+              </p>
             </div>
 
-            <div className="grid gap-4 sm:grid-cols-2">
-              <div>
-                <label className="mb-1 block text-xs font-medium text-slate-300">
-                  Section
-                </label>
-                <select
-                  value={selectedSection}
-                  onChange={(e) => setSelectedSection(e.target.value)}
-                  className="w-full rounded-xl border border-slate-700 bg-slate-800 px-3.5 py-2.5 text-sm text-white focus:border-emerald-500 focus:outline-none"
-                >
-                  {filters.sections.map((s) => (
-                    <option key={s.id} value={s.id}>
-                      {s.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div>
-                <label className="mb-1 block text-xs font-medium text-slate-300">
-                  Subject / Module
-                </label>
-                <select
-                  value={selectedSubject}
-                  onChange={(e) => setSelectedSubject(e.target.value)}
-                  className="w-full rounded-xl border border-slate-700 bg-slate-800 px-3.5 py-2.5 text-sm text-white focus:border-emerald-500 focus:outline-none"
-                >
-                  {filters.subjects.map((sb) => (
-                    <option key={sb.id} value={sb.id}>
-                      {sb.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
-            </div>
-
-            <div className="grid gap-4 sm:grid-cols-3">
-              <div>
-                <label className="mb-1 block text-xs font-medium text-slate-300">
-                  Lecture Hall / Room
-                </label>
-                <input
-                  type="text"
-                  value={roomNumber}
-                  onChange={(e) => setRoomNumber(e.target.value)}
-                  placeholder="e.g. LH-201"
-                  className="w-full rounded-xl border border-slate-700 bg-slate-800 px-3.5 py-2.5 text-sm text-white focus:border-emerald-500 focus:outline-none"
-                />
-              </div>
-
-              <div>
-                <label className="mb-1 block text-xs font-medium text-slate-300">
-                  Companion LAN IP
-                </label>
-                <input
-                  type="text"
-                  value={localIp}
-                  onChange={(e) => setLocalIp(e.target.value)}
-                  placeholder="e.g. 192.168.1.100"
-                  className="w-full rounded-xl border border-slate-700 bg-slate-800 px-3.5 py-2.5 text-sm font-mono text-white focus:border-emerald-500 focus:outline-none"
-                />
-              </div>
-
-              <div>
-                <label className="mb-1 block text-xs font-medium text-slate-300">
-                  HTTPS Port
-                </label>
-                <input
-                  type="number"
-                  value={localPort}
-                  onChange={(e) => setLocalPort(Number(e.target.value))}
-                  className="w-full rounded-xl border border-slate-700 bg-slate-800 px-3.5 py-2.5 text-sm font-mono text-white focus:border-emerald-500 focus:outline-none"
-                />
-              </div>
-            </div>
-
-            <div className="rounded-2xl border border-cyan-500/30 bg-slate-950/60 p-4 space-y-3">
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-bold uppercase tracking-wider text-cyan-300">
-                  HTTPS Companion Cryptographic Pairing
-                </span>
-                {companionConnected && (
-                  <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/15 px-2.5 py-0.5 text-[11px] font-semibold text-emerald-300">
-                    <CheckCircle2 size={12} /> Keys Paired
-                  </span>
-                )}
-              </div>
-
-              <div className="grid gap-3 sm:grid-cols-2">
+            <form onSubmit={handleStartSession} className="space-y-5">
+              <div className="grid gap-4 sm:grid-cols-2">
                 <div>
-                  <label className="mb-1 block text-xs font-medium text-slate-300">
-                    Allowed Private Subnets (CIDR CSV)
+                  <label className="mb-1.5 block text-xs font-semibold text-slate-300">
+                    Academic Year
+                  </label>
+                  <select
+                    value={selectedYear}
+                    onChange={(e) => setSelectedYear(e.target.value)}
+                    className="min-h-[44px] w-full rounded-xl border border-slate-700 bg-slate-800 px-3.5 py-2.5 text-sm text-white focus:border-emerald-500 focus:outline-none"
+                  >
+                    {filters.academicYears.map((y) => (
+                      <option key={y.id} value={y.id}>
+                        {y.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="mb-1.5 block text-xs font-semibold text-slate-300">
+                    Course / Program
+                  </label>
+                  <select
+                    value={selectedCourse}
+                    onChange={(e) => setSelectedCourse(e.target.value)}
+                    className="min-h-[44px] w-full rounded-xl border border-slate-700 bg-slate-800 px-3.5 py-2.5 text-sm text-white focus:border-emerald-500 focus:outline-none"
+                  >
+                    {filters.courses.map((c) => (
+                      <option key={c.id} value={c.id}>
+                        {c.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div>
+                  <label className="mb-1.5 block text-xs font-semibold text-slate-300">
+                    Section
+                  </label>
+                  <select
+                    value={selectedSection}
+                    onChange={(e) => setSelectedSection(e.target.value)}
+                    className="min-h-[44px] w-full rounded-xl border border-slate-700 bg-slate-800 px-3.5 py-2.5 text-sm text-white focus:border-emerald-500 focus:outline-none"
+                  >
+                    {filters.sections.map((s) => (
+                      <option key={s.id} value={s.id}>
+                        {s.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="mb-1.5 block text-xs font-semibold text-slate-300">
+                    Subject / Module
+                  </label>
+                  <select
+                    value={selectedSubject}
+                    onChange={(e) => setSelectedSubject(e.target.value)}
+                    className="min-h-[44px] w-full rounded-xl border border-slate-700 bg-slate-800 px-3.5 py-2.5 text-sm text-white focus:border-emerald-500 focus:outline-none"
+                  >
+                    {filters.subjects.map((sb) => (
+                      <option key={sb.id} value={sb.id}>
+                        {sb.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div>
+                  <label className="mb-1.5 block text-xs font-semibold text-slate-300">
+                    Lecture Hall / Room
+                  </label>
+                  <input
+                    type="text"
+                    value={roomNumber}
+                    onChange={(e) => setRoomNumber(e.target.value)}
+                    placeholder="e.g. LH-201"
+                    className="min-h-[44px] w-full rounded-xl border border-slate-700 bg-slate-800 px-3.5 py-2.5 text-sm text-white focus:border-emerald-500 focus:outline-none"
+                  />
+                </div>
+
+                <div>
+                  <label className="mb-1.5 block text-xs font-semibold text-slate-300">
+                    Restrict Wi-Fi / Hotspot Subnets (Optional CIDR)
                   </label>
                   <input
                     type="text"
                     value={allowedSubnets}
                     onChange={(e) => setAllowedSubnets(e.target.value)}
-                    placeholder="192.168.1.0/24"
-                    className="w-full rounded-xl border border-slate-700 bg-slate-800 px-3 py-2 text-xs font-mono text-white focus:border-cyan-500 focus:outline-none"
-                  />
-                </div>
-                <div>
-                  <label className="mb-1 block text-xs font-medium text-slate-300">
-                    Companion Admin Control Token
-                  </label>
-                  <input
-                    type="password"
-                    value={companionAdminToken}
-                    onChange={(e) => setCompanionAdminToken(e.target.value)}
-                    placeholder="Paste ephemeral token from terminal..."
-                    className="w-full rounded-xl border border-slate-700 bg-slate-800 px-3 py-2 text-xs font-mono text-white focus:border-cyan-500 focus:outline-none"
+                    placeholder="Blank allows all RFC1918 Wi-Fi & Hotspots"
+                    className="min-h-[44px] w-full rounded-xl border border-slate-700 bg-slate-800 px-3.5 py-2.5 text-sm text-white placeholder:text-slate-500 focus:border-emerald-500 focus:outline-none"
                   />
                 </div>
               </div>
 
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <button
-                  type="button"
-                  onClick={handleConnectCompanion}
-                  className="inline-flex items-center gap-2 rounded-xl border border-cyan-500/40 bg-cyan-500/10 px-4 py-2 text-xs font-semibold text-cyan-200 hover:bg-cyan-500/20"
-                >
-                  <Wifi size={14} /> Connect &amp; Fetch Companion Keys
-                </button>
-                {certFingerprint && (
-                  <span className="font-mono text-[10px] text-slate-400">
-                    TLS SHA-256: {certFingerprint.slice(0, 29)}...
-                  </span>
+              <button
+                type="submit"
+                disabled={actionLoading}
+                className="flex min-h-[48px] w-full items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-emerald-500 to-teal-600 py-3.5 text-sm font-bold text-white shadow-lg shadow-emerald-500/20 transition hover:from-emerald-600 hover:to-teal-700 disabled:opacity-50"
+              >
+                {actionLoading ? (
+                  <RefreshCw size={18} className="animate-spin" />
+                ) : (
+                  <>
+                    <Play size={18} />
+                    Start Secure Attendance Session
+                  </>
                 )}
-              </div>
-              {teacherEd25519PublicKey && (
-                <p className="font-mono text-[11px] text-emerald-300 truncate">
-                  Ed25519 Pin: {teacherEd25519PublicKey}
-                </p>
-              )}
-            </div>
+              </button>
+            </form>
+          </div>
 
-            <button
-              type="submit"
-              disabled={actionLoading}
-              className="mt-6 flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-600 py-3 text-sm font-bold text-white shadow-lg shadow-emerald-500/20 transition hover:from-emerald-600 hover:to-teal-700 disabled:opacity-50"
-            >
-              {actionLoading ? (
-                <RefreshCw size={18} className="animate-spin" />
-              ) : (
-                <>
-                  <Play size={18} />
-                  Start Secure Attendance Session
-                </>
-              )}
-            </button>
-          </form>
+          <div className="space-y-4 rounded-3xl border border-slate-800 bg-slate-900/70 p-5 sm:p-8 shadow-xl xl:col-span-5">
+            <div className="inline-flex items-center gap-2 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-3 py-1 text-xs font-semibold text-emerald-300">
+              <Wifi size={14} />
+              Zero-Config Wi-Fi &amp; Hotspot P2P
+            </div>
+            <h3 className="text-lg font-bold text-white">Cryptographic Proximity Architecture</h3>
+            <p className="text-xs leading-relaxed text-slate-400">
+              Your browser acts directly as the local classroom peer over encrypted DTLS WebRTC DataChannels with zero external companion servers or IP setup required.
+            </p>
+
+            <div className="space-y-3 pt-2 text-xs">
+              <div className="rounded-2xl border border-slate-800 bg-slate-950/50 p-3.5">
+                <p className="font-semibold text-emerald-300">1. Ephemeral In-Browser Keys (Ed25519 + X25519)</p>
+                <p className="mt-1 text-slate-400">
+                  Fresh non-persisted keypairs are generated when you click Start and wiped immediately when attendance stops.
+                </p>
+              </div>
+              <div className="rounded-2xl border border-slate-800 bg-slate-950/50 p-3.5">
+                <p className="font-semibold text-cyan-300">2. Host-Only ICE (iceServers: [])</p>
+                <p className="mt-1 text-slate-400">
+                  Rejects public STUN/TURN relays so students must be on the same classroom Wi-Fi subnet or connected to your mobile/laptop Hotspot.
+                </p>
+              </div>
+              <div className="rounded-2xl border border-slate-800 bg-slate-950/50 p-3.5">
+                <p className="font-semibold text-amber-300">3. Mandatory Campus Check-In Prerequisite</p>
+                <p className="mt-1 text-slate-400">
+                  Students must already have an approved open Campus Gate Check-In and pass live 3-step anti-spoof face verification before shaking hands.
+                </p>
+              </div>
+            </div>
+          </div>
         </div>
       )}
     </div>

@@ -1,7 +1,9 @@
 package com.Smart.Erp.Modules.Attendance.Services;
 
+import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
@@ -14,6 +16,7 @@ import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
+import java.time.LocalDateTime;
 import java.util.*;
 
 @Slf4j
@@ -198,6 +201,147 @@ public class PythonFaceAiClient {
             log.error("Failed to extract enrollment embedding: {}", e.getMessage());
             throw new RuntimeException("Unable to communicate with Face AI service: " + e.getMessage(), e);
         }
+    }
+
+    public ObjectNode getServiceHealthAndModels() {
+        ObjectNode summary = objectMapper.createObjectNode();
+        summary.put("serviceUrl", faceAiUrl);
+        summary.put("checkedAt", LocalDateTime.now().toString());
+
+        long startMs = System.currentTimeMillis();
+        try {
+            HttpRequest healthReq = newRequestBuilder("/internal/v1/face/health")
+                    .timeout(Duration.ofSeconds(4))
+                    .GET()
+                    .build();
+            HttpResponse<String> healthResp = httpClient.send(healthReq, HttpResponse.BodyHandlers.ofString());
+            long latencyMs = System.currentTimeMillis() - startMs;
+            summary.put("latencyMs", latencyMs);
+
+            if (healthResp.statusCode() != 200) {
+                summary.put("reachable", false);
+                summary.put("status", "DOWN");
+                summary.put("readiness", false);
+                summary.put("error", "Health check returned HTTP " + healthResp.statusCode());
+                return summary;
+            }
+
+            JsonNode healthJson = objectMapper.readTree(healthResp.body());
+            summary.put("reachable", true);
+            summary.put("application", healthJson.path("application").asText("Smart ERP Face AI"));
+            summary.put("version", healthJson.path("version").asText("1.0.0"));
+            summary.put("environment", healthJson.path("environment").asText("unknown"));
+            summary.put("status", healthJson.path("status").asText("UP"));
+
+            HttpRequest modelsReq = newRequestBuilder("/internal/v1/face/models/status")
+                    .timeout(Duration.ofSeconds(4))
+                    .GET()
+                    .build();
+            HttpResponse<String> modelsResp = httpClient.send(modelsReq, HttpResponse.BodyHandlers.ofString());
+            if (modelsResp.statusCode() == 200) {
+                JsonNode modelsJson = objectMapper.readTree(modelsResp.body());
+                summary.put("modelsStatus", modelsJson.path("status").asText("UNKNOWN"));
+                summary.put("device", modelsJson.path("device").asText("CPU"));
+                summary.put("readiness", modelsJson.path("readiness").asBoolean(false));
+                if (modelsJson.has("models")) {
+                    summary.set("models", modelsJson.get("models"));
+                }
+                if (modelsJson.has("details")) {
+                    summary.set("details", modelsJson.get("details"));
+                }
+            } else {
+                summary.put("modelsStatus", "UNAVAILABLE");
+                summary.put("readiness", false);
+            }
+            return summary;
+        } catch (Exception e) {
+            summary.put("reachable", false);
+            summary.put("status", "DOWN");
+            summary.put("readiness", false);
+            summary.put("latencyMs", System.currentTimeMillis() - startMs);
+            summary.put("error", e.getMessage() != null ? e.getMessage() : "Unable to connect to Python Face AI");
+            return summary;
+        }
+    }
+
+    public JsonNode getSessionStatus(String sessionId) {
+        try {
+            HttpRequest request = newRequestBuilder("/internal/v1/face/sessions/" + sessionId)
+                    .GET()
+                    .build();
+            HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+            if (response.statusCode() == 200) {
+                return objectMapper.readTree(response.body());
+            }
+            return null;
+        } catch (Exception e) {
+            log.debug("Unable to query Face AI session status {}: {}", sessionId, e.getMessage());
+            return null;
+        }
+    }
+
+    public JsonNode getLivenessEvidence(String sessionId) {
+        try {
+            HttpRequest request = newRequestBuilder("/internal/v1/face/sessions/" + sessionId + "/liveness")
+                    .GET()
+                    .build();
+            HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+            if (response.statusCode() == 200) {
+                return objectMapper.readTree(response.body());
+            }
+            return null;
+        } catch (Exception e) {
+            log.debug("Unable to fetch Face AI liveness evidence {}: {}", sessionId, e.getMessage());
+            return null;
+        }
+    }
+
+    public boolean deleteSession(String sessionId) {
+        try {
+            HttpRequest request = newRequestBuilder("/internal/v1/face/sessions/" + sessionId)
+                    .DELETE()
+                    .build();
+            HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+            return response.statusCode() == 200;
+        } catch (Exception e) {
+            log.debug("Unable to cleanup Face AI session {}: {}", sessionId, e.getMessage());
+            return false;
+        }
+    }
+
+    public JsonNode analyzeFaceDiagnostics(byte[] imageBytes, String filename) {
+        try {
+            String safeFilename = sanitizeFilename(filename);
+            String imageContentType = inferImageContentType(safeFilename);
+            String boundary = "----Boundary" + UUID.randomUUID().toString().replace("-", "");
+            ByteArrayOutputStream byteStream = new ByteArrayOutputStream();
+
+            writeFileField(byteStream, boundary, "image", safeFilename, imageContentType, imageBytes);
+            byteStream.write(("--" + boundary + "--\r\n").getBytes(StandardCharsets.UTF_8));
+
+            HttpRequest request = newRequestBuilder("/internal/v1/face/analyze")
+                    .header("Content-Type", "multipart/form-data; boundary=" + boundary)
+                    .POST(HttpRequest.BodyPublishers.ofByteArray(byteStream.toByteArray()))
+                    .build();
+
+            HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+            if (response.statusCode() == 200) {
+                return objectMapper.readTree(response.body());
+            }
+            String errorDetail = extractErrorDetail(response.body(), response.statusCode());
+            throw new IllegalArgumentException(errorDetail);
+        } catch (RuntimeException e) {
+            throw e;
+        } catch (Exception e) {
+            throw new RuntimeException("Unable to run Face AI diagnostics: " + e.getMessage(), e);
+        }
+    }
+
+    public Map<String, Object> nodeToMap(JsonNode node) {
+        if (node == null || node.isNull()) {
+            return new LinkedHashMap<>();
+        }
+        return objectMapper.convertValue(node, new TypeReference<LinkedHashMap<String, Object>>() {});
     }
 
     private String sanitizeFilename(String filename) {

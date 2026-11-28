@@ -290,6 +290,9 @@ public class FaceVerificationService {
                     .build();
         }
 
+        // Retrieve Python liveness evidence summary before completing and cleaning up temporary session state
+        JsonNode livenessEvidence = pythonFaceAiClient.getLivenessEvidence(verificationSessionId);
+
         // All liveness challenges completed! Complete session and extract live embedding
         JsonNode completeNode = pythonFaceAiClient.completeSession(verificationSessionId);
         List<Float> capturedEmbedding = null;
@@ -343,6 +346,12 @@ public class FaceVerificationService {
                 verificationSessionId
         );
 
+        // Purge ephemeral frame/liveness state in Python microservice once embedding extraction & match complete
+        try {
+            pythonFaceAiClient.deleteSession(verificationSessionId);
+        } catch (Exception ignored) {
+        }
+
         fvs.setMatchedSimilarity(similarity);
 
         boolean matched = similarity != null && similarity >= matchThreshold;
@@ -351,6 +360,11 @@ public class FaceVerificationService {
                 ? fvs.getStudent().getUser().getBasicDetail().getFirstName() + " " + fvs.getStudent().getUser().getBasicDetail().getLastName()
                 : fvs.getStudent().getRegistrationNumber();
 
+        String evidenceNote = (livenessEvidence != null && livenessEvidence.has("blink_observations"))
+                ? ", blinks: " + livenessEvidence.path("blink_observations").asInt(0)
+                + ", headMoves: " + livenessEvidence.path("head_movement_observations").asInt(0)
+                : "";
+
         if (matched) {
             fvs.setStatus(VerificationState.PASSED);
             verificationSessionRepository.save(fvs);
@@ -358,7 +372,7 @@ public class FaceVerificationService {
             auditService.logEvent(
                     fvs.getAttendanceSession(), fvs.getStudent(), fvs.getStudent().getUser(), "STUDENT",
                     "IDENTITY_VERIFIED", "IN_PROGRESS", "PASSED",
-                    "Biometric identity verified successfully with cosine similarity " + similarity + " (threshold: " + matchThreshold + ")",
+                    "Biometric identity verified successfully with cosine similarity " + similarity + " (threshold: " + matchThreshold + evidenceNote + ")",
                     null
             );
 
@@ -470,5 +484,18 @@ public class FaceVerificationService {
             return true;
         }
         return false;
+    }
+
+    public Map<String, Object> getFaceAiHealthReport() {
+        var node = pythonFaceAiClient.getServiceHealthAndModels();
+        node.put("matchThreshold", matchThreshold);
+        return pythonFaceAiClient.nodeToMap(node);
+    }
+
+    public Map<String, Object> analyzeFrameDiagnostics(byte[] photoBytes, String filename) {
+        if (photoBytes == null || photoBytes.length == 0) {
+            throw new IllegalArgumentException("Image bytes cannot be empty for Face AI diagnostic check");
+        }
+        return pythonFaceAiClient.nodeToMap(pythonFaceAiClient.analyzeFaceDiagnostics(photoBytes, filename));
     }
 }

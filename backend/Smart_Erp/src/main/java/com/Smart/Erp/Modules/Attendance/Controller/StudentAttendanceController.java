@@ -1,12 +1,21 @@
 package com.Smart.Erp.Modules.Attendance.Controller;
 
 import com.Smart.Erp.Modules.Attendance.DTO.*;
+import com.Smart.Erp.Modules.Attendance.Entity.AttendanceSession;
+import com.Smart.Erp.Modules.Attendance.Entity.FaceVerificationSession;
 import com.Smart.Erp.Modules.Attendance.Entity.StudentAttendance;
+import com.Smart.Erp.Modules.Attendance.Enum.AttendanceSessionStatus;
+import com.Smart.Erp.Modules.Attendance.Enum.VerificationState;
+import com.Smart.Erp.Modules.Attendance.Repo.AttendanceSessionRepository;
+import com.Smart.Erp.Modules.Attendance.Repo.FaceVerificationSessionRepository;
+import com.Smart.Erp.Modules.Attendance.Repo.LocalHandshakeRecordRepository;
 import com.Smart.Erp.Modules.Attendance.Repo.StudentAttendanceRepository;
+import com.Smart.Erp.Modules.Attendance.Services.CampusCheckInService;
 import com.Smart.Erp.Modules.Attendance.Services.CheckInService;
 import com.Smart.Erp.Modules.Attendance.Services.FaceVerificationService;
 import com.Smart.Erp.Modules.Attendance.Services.LocalHandshakeService;
 import com.Smart.Erp.Modules.Student.Entity.Student;
+import com.Smart.Erp.Modules.Student.Repo.StudentEnrollmentRepo;
 import com.Smart.Erp.Modules.Student.Repo.StudentRepo;
 import com.Smart.Erp.Modules.User.Entity.User;
 import com.Smart.Erp.Modules.User.Repo.UserRepo;
@@ -18,10 +27,13 @@ import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.time.LocalDateTime;
 import java.util.Enumeration;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 @RestController
@@ -33,8 +45,71 @@ public class StudentAttendanceController {
     private final LocalHandshakeService localHandshakeService;
     private final CheckInService checkInService;
     private final StudentAttendanceRepository attendanceRepository;
+    private final AttendanceSessionRepository sessionRepository;
+    private final FaceVerificationSessionRepository verificationSessionRepository;
+    private final LocalHandshakeRecordRepository handshakeRecordRepository;
+    private final StudentEnrollmentRepo studentEnrollmentRepo;
+    private final CampusCheckInService campusCheckInService;
     private final StudentRepo studentRepo;
     private final UserRepo userRepo;
+
+    @GetMapping("/active-sessions")
+    public ResponseEntity<List<Map<String, Object>>> getActiveEligibleSessions(Authentication authentication) {
+        User user = userRepo.findByUsername(authentication.getName())
+                .orElseThrow(() -> new RuntimeException("User not found"));
+        Student student = studentRepo.findByUser(user)
+                .orElseThrow(() -> new RuntimeException("Student not found"));
+
+        Set<Long> enrolledSectionIds = studentEnrollmentRepo.findAllByStudent(student).stream()
+                .filter(e -> e.getSectionGroup() != null && e.getSectionGroup().getSection() != null)
+                .map(e -> e.getSectionGroup().getSection().getId())
+                .collect(Collectors.toSet());
+
+        if (enrolledSectionIds.isEmpty()) {
+            return ResponseEntity.ok(List.of());
+        }
+
+        LocalDateTime now = LocalDateTime.now();
+        boolean campusOpen = campusCheckInService.hasActiveOpenCampusCheckIn(student);
+
+        List<Map<String, Object>> activeSessions = sessionRepository.findAllByStatus(AttendanceSessionStatus.ACTIVE).stream()
+                .filter(s -> s.getSection() != null && enrolledSectionIds.contains(s.getSection().getId()))
+                .filter(s -> s.getExpiresAt() == null || !now.isAfter(s.getExpiresAt()))
+                .map(s -> {
+                    Optional<FaceVerificationSession> passedFace = verificationSessionRepository
+                            .findFirstByStudentAndAttendanceSessionAndStatus(student, s, VerificationState.PASSED);
+                    boolean alreadyMarked = attendanceRepository.existsByAttendanceSessionAndStudent(s, student);
+                    boolean handshakeVerified = handshakeRecordRepository
+                            .findFirstByAttendanceSessionAndStudent(s, student)
+                            .map(r -> "VERIFIED".equalsIgnoreCase(r.getStatus()))
+                            .orElse(false);
+
+                    String teacherName = "Faculty";
+                    if (s.getTeacher() != null && s.getTeacher().getUser() != null && s.getTeacher().getUser().getBasicDetail() != null) {
+                        teacherName = (s.getTeacher().getUser().getBasicDetail().getFirstName() + " "
+                                + s.getTeacher().getUser().getBasicDetail().getLastName()).trim();
+                    }
+
+                    Map<String, Object> item = new LinkedHashMap<>();
+                    item.put("sessionUuid", s.getSessionUuid());
+                    item.put("courseName", s.getCourse() != null ? s.getCourse().getName() : "N/A");
+                    item.put("sectionName", s.getSection() != null ? s.getSection().getName() : "N/A");
+                    item.put("subjectName", s.getSubject() != null ? s.getSubject().getName() : "N/A");
+                    item.put("teacherName", teacherName);
+                    item.put("roomNumber", s.getRoomNumber() != null ? s.getRoomNumber() : "");
+                    item.put("allowedSubnets", s.getAllowedSubnets() != null ? s.getAllowedSubnets() : "");
+                    item.put("expiresAt", s.getExpiresAt() != null ? s.getExpiresAt().toString() : null);
+                    item.put("campusCheckInOpen", campusOpen);
+                    item.put("faceVerified", passedFace.isPresent());
+                    item.put("matchedSimilarity", passedFace.map(FaceVerificationSession::getMatchedSimilarity).orElse(null));
+                    item.put("handshakeVerified", handshakeVerified);
+                    item.put("alreadyMarked", alreadyMarked);
+                    return item;
+                })
+                .collect(Collectors.toList());
+
+        return ResponseEntity.ok(activeSessions);
+    }
 
     @PostMapping("/verification/start")
     public ResponseEntity<StudentVerificationStartResponse> startVerification(

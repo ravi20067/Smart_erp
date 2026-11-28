@@ -117,7 +117,9 @@ public class AttendanceSessionService {
         LocalDateTime now = LocalDateTime.now();
         LocalDateTime expiresAt = now.plusMinutes(90);
 
-        String normalizedLanIp = localNetworkPolicy.normalizeIp(request.getLocalServerIp());
+        String normalizedLanIp = (request.getLocalServerIp() != null && !request.getLocalServerIp().isBlank())
+                ? localNetworkPolicy.normalizeIp(request.getLocalServerIp())
+                : "WEBRTC_P2P";
         List<String> normalizedSubnets = localNetworkPolicy.normalizeAndValidateSubnets(
                 request.getAllowedSubnets(), normalizedLanIp);
         String allowedSubnetsCsv = String.join(",", normalizedSubnets);
@@ -125,11 +127,11 @@ public class AttendanceSessionService {
         cryptographicHandshakeService.validateEd25519AndX25519Keys(
                 request.getTeacherEd25519PublicKey(),
                 request.getTeacherX25519PublicKey(),
-                "teacher companion"
+                "teacher"
         );
         int companionPort = request.getLocalServerPort() != null && request.getLocalServerPort() > 0
                 ? request.getLocalServerPort()
-                : 8443;
+                : 0;
 
         AttendanceSession session = AttendanceSession.builder()
                 .sessionUuid(sessionUuid)

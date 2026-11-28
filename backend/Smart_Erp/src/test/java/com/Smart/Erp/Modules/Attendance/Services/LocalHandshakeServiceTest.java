@@ -10,6 +10,7 @@ import com.Smart.Erp.Modules.Attendance.DTO.TeacherQRPayload;
 import com.Smart.Erp.Modules.Attendance.Entity.AttendanceSession;
 import com.Smart.Erp.Modules.Attendance.Entity.FaceVerificationSession;
 import com.Smart.Erp.Modules.Attendance.Entity.LocalHandshakeRecord;
+import com.Smart.Erp.Modules.Attendance.Entity.StudentAttendance;
 import com.Smart.Erp.Modules.Attendance.Enum.AttendanceSessionStatus;
 import com.Smart.Erp.Modules.Attendance.Enum.VerificationState;
 import com.Smart.Erp.Modules.Attendance.Repo.AttendanceSessionRepository;
@@ -21,6 +22,7 @@ import com.Smart.Erp.Modules.Student.Entity.StudentEnrollment;
 import com.Smart.Erp.Modules.Student.Repo.StudentEnrollmentRepo;
 import com.Smart.Erp.Modules.Student.Repo.StudentRepo;
 import com.Smart.Erp.Modules.Teacher.Entity.Teacher;
+import com.Smart.Erp.Modules.Teacher.Enum.AttendanceStatus;
 import com.Smart.Erp.Modules.User.Entity.BasicDetail;
 import com.Smart.Erp.Modules.User.Entity.User;
 import com.Smart.Erp.Modules.User.Repo.UserRepo;
@@ -71,6 +73,7 @@ class LocalHandshakeServiceTest {
     @Mock private AttendanceWebSocketPublisher webSocketPublisher;
     @Mock private AttendanceAuditService auditService;
     @Mock private CampusCheckInService campusCheckInService;
+    @Mock private AttendanceDecisionService attendanceDecisionService;
     @Mock private StringRedisTemplate redisTemplate;
     @Mock private ValueOperations<String, String> valueOperations;
 
@@ -138,8 +141,11 @@ class LocalHandshakeServiceTest {
                 redisTemplate,
                 campusCheckInService,
                 localNetworkPolicy,
-                cryptoService
+                cryptoService,
+                attendanceDecisionService
         );
+        when(attendanceDecisionService.evaluateAndMarkAttendanceViaWebRtcHandshake(any(), any(), any(), any()))
+                .thenReturn(StudentAttendance.builder().id(999L).status(AttendanceStatus.PRESENT).build());
 
         KeyPairGenerator edGen = KeyPairGenerator.getInstance("Ed25519");
         KeyPairGenerator xGen = KeyPairGenerator.getInstance("X25519");
@@ -269,6 +275,7 @@ class LocalHandshakeServiceTest {
         req.setReceiptExpiresAt(receiptExpires);
         req.setQrSignature(qr.getSignature());
         req.setClientIp(clientIp);
+        req.setIceCandidateType("host");
         req.setCompanionReceiptId(companionReceiptId);
         req.setTeacherEd25519PublicKey(teacherEdPubB64);
         req.setTeacherX25519PublicKey(teacherXPubB64);
@@ -288,6 +295,8 @@ class LocalHandshakeServiceTest {
         assertTrue(res.isVerified());
         assertEquals("VERIFIED", res.getStatus());
         assertEquals(req.getCompanionReceiptId(), res.getReceiptId());
+        assertTrue(res.isAttendanceMarked());
+        assertEquals("PRESENT", res.getAttendanceStatus());
         assertNotNull(savedRecord.get());
         assertEquals("192.168.1.45", savedRecord.get().getClientIp());
     }
@@ -384,7 +393,7 @@ class LocalHandshakeServiceTest {
 
         RuntimeException ex = assertThrows(RuntimeException.class, () ->
                 localHandshakeService.verifyHandshake(req, "student1", Map.of()));
-        assertTrue(ex.getMessage().contains("outside allowlisted classroom LAN subnets"));
+        assertTrue(ex.getMessage().contains("outside allowlisted classroom LAN/hotspot subnets"));
     }
 
     @Test
@@ -445,5 +454,43 @@ class LocalHandshakeServiceTest {
 
         assertEquals(1, successes);
         assertEquals(1, rejections);
+    }
+
+    @Test
+    void acceptsHotspotSubnetsAndRejectsRelayOrSrflxWebRtcCandidates() throws Exception {
+        // Teacher Hotspot default subnets (allows 192.168.43.x / 172.20.10.x / 10.x and WEBRTC_MDNS_LOCAL)
+        session.setLocalServerIp("WEBRTC_P2P");
+        session.setLocalServerPort(0);
+        session.setAllowedSubnets("10.0.0.0/8,172.16.0.0/12,192.168.0.0/16");
+
+        LocalHandshakeRequest hotspotReq = buildValidHandshakeRequest("192.168.43.25");
+        hotspotReq.setIceCandidateType("prflx");
+        LocalHandshakeResponse ok = localHandshakeService.verifyHandshake(hotspotReq, "student1", Map.of());
+        assertTrue(ok.isVerified());
+
+        // Reject STUN srflx / TURN relay candidate type
+        LocalHandshakeRequest relayReq = buildValidHandshakeRequest("192.168.43.26");
+        relayReq.setIceCandidateType("relay");
+        savedRecord.set(null);
+        RuntimeException ex = assertThrows(RuntimeException.class, () ->
+                localHandshakeService.verifyHandshake(relayReq, "student1", Map.of()));
+        assertTrue(ex.getMessage().contains("relay/STUN remote NAT traversal is blocked"));
+    }
+
+    @Test
+    void decodesRawEd25519AndX25519WithRfc8410SpkiHeadersMatchingFrontendNobleCrypto() throws Exception {
+        // Verify Java 21 JCA SPKI DER headers match handshakeCrypto.ts ED25519_SPKI_PREFIX & X25519_SPKI_PREFIX byte-for-byte
+        byte[] edDer = teacherEdPair.getPublic().getEncoded();
+        byte[] xDer = teacherXPair.getPublic().getEncoded();
+        assertEquals(44, edDer.length);
+        assertEquals(44, xDer.length);
+
+        byte[] expectedEdPrefix = new byte[]{0x30, 0x2a, 0x30, 0x05, 0x06, 0x03, 0x2b, 0x65, 0x70, 0x03, 0x21, 0x00};
+        byte[] expectedXPrefix = new byte[]{0x30, 0x2a, 0x30, 0x05, 0x06, 0x03, 0x2b, 0x65, 0x6e, 0x03, 0x21, 0x00};
+        for (int i = 0; i < 12; i++) {
+            assertEquals(expectedEdPrefix[i], edDer[i]);
+            assertEquals(expectedXPrefix[i], xDer[i]);
+        }
+        assertDoesNotThrow(() -> cryptoService.validateEd25519AndX25519Keys(teacherEdPubB64, teacherXPubB64, "noble-spki"));
     }
 }

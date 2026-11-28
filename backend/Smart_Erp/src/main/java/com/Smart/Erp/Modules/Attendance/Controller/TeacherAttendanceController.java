@@ -4,11 +4,15 @@ import com.Smart.Erp.Modules.Attendance.DTO.AttendanceSessionResponse;
 import com.Smart.Erp.Modules.Attendance.DTO.AttendanceStatsResponse;
 import com.Smart.Erp.Modules.Attendance.DTO.StartAttendanceRequest;
 import com.Smart.Erp.Modules.Attendance.Services.AttendanceSessionService;
+import com.Smart.Erp.Modules.Attendance.Services.FaceVerificationService;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
 
+import java.io.IOException;
 import java.util.Map;
 
 @RestController
@@ -17,6 +21,19 @@ import java.util.Map;
 public class TeacherAttendanceController {
 
     private final AttendanceSessionService sessionService;
+    private final FaceVerificationService faceVerificationService;
+
+    @GetMapping("/face-ai/health")
+    public ResponseEntity<Map<String, Object>> getFaceAiHealth() {
+        return ResponseEntity.ok(faceVerificationService.getFaceAiHealthReport());
+    }
+
+    @PostMapping(value = "/face-ai/analyze", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public ResponseEntity<Map<String, Object>> analyzeFaceDiagnostics(@RequestPart("image") MultipartFile image) throws IOException {
+        return ResponseEntity.ok(
+                faceVerificationService.analyzeFrameDiagnostics(image.getBytes(), image.getOriginalFilename())
+        );
+    }
 
     @PostMapping("/sessions/start")
     public ResponseEntity<AttendanceSessionResponse> startSession(

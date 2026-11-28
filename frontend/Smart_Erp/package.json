@@ -4,7 +4,6 @@
   "type": "module",
   "scripts": {
     "dev": "node scripts/maybe-migrate.mjs && vite",
-    "handshake:companion": "node scripts/start-handshake-companion.mjs",
     "build": "vite build",
     "build:client": "vite build",
     "build:server": "vite build --config vite.config.server.ts",
@@ -18,6 +17,8 @@
   },
   "dependencies": {
     "@neondatabase/serverless": "^1.0.2",
+    "@noble/curves": "^2.4.0",
+    "@noble/hashes": "^2.4.0",
     "@stomp/stompjs": "^7.3.0",
     "@yudiel/react-qr-scanner": "^2.6.0",
     "axios": "^1.18.1",

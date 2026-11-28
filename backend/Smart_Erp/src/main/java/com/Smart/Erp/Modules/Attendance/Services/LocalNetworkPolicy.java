@@ -15,19 +15,30 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
+import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 /**
- * Enforces strict LAN-only IP validation, private classroom CIDR allowlisting,
- * and anti-proxy/forwarding header checks for local attendance handshakes.
+ * Enforces strict local-network / Teacher Hotspot validation for WebRTC peer-to-peer handshakes:
+ * - Rejects STUN server-reflexive (srflx) and TURN relay candidates
+ * - Enforces RFC 1918 private IPv4 (10/8, 172.16/12, 192.168/16 — covers campus Wi-Fi & mobile hotspots)
+ *   or IPv6 ULA (fc00::/7), or local-only mDNS host candidates on the same L2 hotspot/LAN broadcast domain
+ * - Rejects public/internet IPs and forwarding/proxy headers
  */
 @Service
 public class LocalNetworkPolicy {
+
+    public static final String DEFAULT_LAN_HOTSPOT_SUBNETS = "10.0.0.0/8,172.16.0.0/12,192.168.0.0/16";
+    public static final String WEBRTC_MDNS_LOCAL_TOKEN = "WEBRTC_MDNS_LOCAL";
 
     private static final Pattern IPV4_LITERAL = Pattern.compile(
             "^((25[0-5]|2[0-4]\\d|1\\d\\d|[1-9]?\\d)\\.){3}(25[0-5]|2[0-4]\\d|1\\d\\d|[1-9]?\\d)$"
     );
     private static final Pattern IPV6_LITERAL = Pattern.compile("^[0-9a-fA-F:]+$");
+    private static final Pattern ICE_CANDIDATE_PATTERN = Pattern.compile(
+            "candidate:\\S+\\s+\\d+\\s+\\S+\\s+\\d+\\s+(\\S+)\\s+\\d+\\s+typ\\s+(\\S+)",
+            Pattern.CASE_INSENSITIVE
+    );
 
     private static final Set<String> FORBIDDEN_PROXY_HEADERS = Set.of(
             "x-forwarded-for",
@@ -76,7 +87,7 @@ public class LocalNetworkPolicy {
     }
 
     /**
-     * Checks whether the address belongs strictly to RFC 1918 private IPv4 LAN space
+     * Checks whether the address belongs strictly to RFC 1918 private IPv4 LAN/Hotspot space
      * (10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16) or IPv6 Unique Local Address (fc00::/7).
      * Rejects public/internet IPs, loopback, unspecified (0.0.0.0), link-local, and multicast.
      */
@@ -119,40 +130,18 @@ public class LocalNetworkPolicy {
         }
     }
 
-    public String deriveDefaultCidr(String lanIp) {
-        String ip = normalizeIp(lanIp);
-        if (!isPrivateLanIp(ip)) {
-            throw new OperationNotAllowedException("Teacher companion IP must be a valid private LAN address (RFC 1918 or IPv6 ULA): " + lanIp);
-        }
-        if (IPV4_LITERAL.matcher(ip).matches()) {
-            String[] parts = ip.split("\\.");
-            return parts[0] + "." + parts[1] + "." + parts[2] + ".0/24";
-        }
-        try {
-            byte[] b = InetAddress.getByName(ip).getAddress();
-            return String.format("%02x%02x:%02x%02x:%02x%02x:%02x%02x::/64",
-                    b[0], b[1], b[2], b[3], b[4], b[5], b[6], b[7]);
-        } catch (UnknownHostException e) {
-            throw new OperationNotAllowedException("Invalid LAN IP for CIDR derivation: " + lanIp);
-        }
-    }
-
     /**
-     * Parses, validates, and normalizes allowed classroom subnets.
-     * Every CIDR must sit inside private LAN address space and include the teacher's LAN IP.
+     * Parses, validates, and normalizes allowed classroom/hotspot subnets.
+     * When blank, defaults to RFC 1918 private LAN & hotspot ranges so both campus Wi-Fi
+     * and Teacher mobile/laptop hotspots work seamlessly while public networks remain blocked.
      */
     public List<String> normalizeAndValidateSubnets(String rawSubnetsCsv, String teacherLanIp) {
-        String cleanTeacherIp = normalizeIp(teacherLanIp);
-        if (!isPrivateLanIp(cleanTeacherIp)) {
-            throw new OperationNotAllowedException("Invalid teacher LAN IP (public, loopback, or non-LAN addresses are blocked): " + teacherLanIp);
-        }
-
-        if (rawSubnetsCsv == null || rawSubnetsCsv.isBlank()) {
-            return List.of(deriveDefaultCidr(cleanTeacherIp));
-        }
+        String sourceCsv = (rawSubnetsCsv == null || rawSubnetsCsv.isBlank())
+                ? DEFAULT_LAN_HOTSPOT_SUBNETS
+                : rawSubnetsCsv;
 
         List<String> validated = new ArrayList<>();
-        for (String entry : rawSubnetsCsv.split(",")) {
+        for (String entry : sourceCsv.split(",")) {
             String trimmed = entry.trim();
             if (trimmed.isEmpty()) {
                 continue;
@@ -162,11 +151,18 @@ public class LocalNetworkPolicy {
         }
 
         if (validated.isEmpty()) {
-            validated.add(deriveDefaultCidr(cleanTeacherIp));
+            return List.of("10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16");
         }
 
-        if (!isIpInAnyCidr(cleanTeacherIp, validated)) {
-            throw new OperationNotAllowedException("Teacher companion LAN IP (" + cleanTeacherIp + ") must fall within the configured allowed classroom subnets");
+        if (teacherLanIp != null && !teacherLanIp.isBlank()
+                && !"WEBRTC_P2P".equalsIgnoreCase(teacherLanIp.trim())) {
+            String cleanTeacherIp = normalizeIp(teacherLanIp);
+            if (!isPrivateLanIp(cleanTeacherIp)) {
+                throw new OperationNotAllowedException("Invalid teacher LAN IP (public or loopback addresses are blocked): " + teacherLanIp);
+            }
+            if (!isIpInAnyCidr(cleanTeacherIp, validated)) {
+                throw new OperationNotAllowedException("Teacher IP (" + cleanTeacherIp + ") must fall within allowed classroom/hotspot subnets");
+            }
         }
         return validated;
     }
@@ -198,7 +194,7 @@ public class LocalNetworkPolicy {
         }
         if (ipv4) {
             if (!isPrivateIpv4Cidr(networkIp, prefix)) {
-                throw new OperationNotAllowedException("Subnet must remain strictly inside RFC 1918 private LAN ranges: " + cidr);
+                throw new OperationNotAllowedException("Subnet must remain strictly inside RFC 1918 private LAN/hotspot ranges: " + cidr);
             }
         } else if (!isPrivateLanIp(networkIp)) {
             throw new OperationNotAllowedException("IPv6 subnet must remain inside Unique Local Address space (fc00::/7): " + cidr);
@@ -278,13 +274,74 @@ public class LocalNetworkPolicy {
         }
     }
 
+    public boolean isLinkLocalIpv6(String rawIp) {
+        String ip = normalizeIp(rawIp);
+        if (!ip.contains(":") || !IPV6_LITERAL.matcher(ip).matches()) {
+            return false;
+        }
+        try {
+            InetAddress addr = InetAddress.getByName(ip);
+            return (addr instanceof Inet6Address) && addr.isLinkLocalAddress();
+        } catch (UnknownHostException e) {
+            return false;
+        }
+    }
+
     /**
-     * Validates that a participant IP is a valid private LAN address and falls within the session's allowlisted subnets.
+     * Validates a signaled ICE candidate string: only direct local `typ host` candidates
+     * (RFC1918 private IPv4, ULA IPv6 fc00::/7, link-local IPv6 fe80::/10, or mDNS `.local`)
+     * are permitted. `srflx` and `relay` are rejected.
+     */
+    public void validateSignaledIceCandidate(String candidateLine, String allowedSubnetsCsv) {
+        if (candidateLine == null || candidateLine.isBlank()) {
+            return;
+        }
+        Matcher m = ICE_CANDIDATE_PATTERN.matcher(candidateLine);
+        if (!m.find()) {
+            throw new OperationNotAllowedException("Malformed WebRTC ICE candidate rejected");
+        }
+        String address = m.group(1).trim();
+        String typ = m.group(2).trim().toLowerCase(Locale.ROOT);
+        if (!"host".equals(typ)) {
+            throw new OperationNotAllowedException(
+                    "Non-local WebRTC ICE candidate type '" + typ + "' rejected; only direct local/hotspot host candidates are allowed."
+            );
+        }
+        if (address.toLowerCase(Locale.ROOT).endsWith(".local") || isLinkLocalIpv6(address)) {
+            return;
+        }
+        validateLanAndSubnet(address, allowedSubnetsCsv, "WebRTC ICE candidate");
+    }
+
+    /**
+     * Validates WebRTC peer transport metadata received during handshake verification.
+     * Direct P2P with iceServers=[] produces `host` or `prflx` (peer-reflexive LAN binding check).
+     * STUN `srflx` and TURN `relay` are strictly rejected, and concrete IPs must match RFC 1918 / allowedSubnets.
+     */
+    public void validateWebRtcPeer(String rawPeerAddress, String iceCandidateType, String allowedSubnetsCsv, String actorLabel) {
+        String cleanType = iceCandidateType == null ? "" : iceCandidateType.trim().toLowerCase(Locale.ROOT);
+        if (!cleanType.isEmpty() && !"host".equals(cleanType) && !"prflx".equals(cleanType)) {
+            throw new OperationNotAllowedException(
+                    actorLabel + " WebRTC candidate type '" + iceCandidateType + "' rejected: relay/STUN remote NAT traversal is blocked."
+            );
+        }
+        if (WEBRTC_MDNS_LOCAL_TOKEN.equalsIgnoreCase(rawPeerAddress == null ? "" : rawPeerAddress.trim())
+                || isLinkLocalIpv6(rawPeerAddress)) {
+            if (!"host".equals(cleanType) && !"prflx".equals(cleanType)) {
+                throw new OperationNotAllowedException(actorLabel + " local link/mDNS candidate must declare direct local iceCandidateType ('host' or 'prflx')");
+            }
+            return;
+        }
+        validateLanAndSubnet(rawPeerAddress, allowedSubnetsCsv, actorLabel);
+    }
+
+    /**
+     * Validates that a participant IP is a valid private LAN/hotspot address and falls within the session's allowlisted subnets.
      */
     public void validateLanAndSubnet(String rawIp, String allowedSubnetsCsv, String actorLabel) {
         String cleanIp = normalizeIp(rawIp);
         if (!isPrivateLanIp(cleanIp)) {
-            throw new OperationNotAllowedException(actorLabel + " IP (" + rawIp + ") rejected: must be a private RFC 1918 / ULA LAN address");
+            throw new OperationNotAllowedException(actorLabel + " IP (" + rawIp + ") rejected: must be a private RFC 1918 / ULA LAN or hotspot address");
         }
         if (allowedSubnetsCsv == null || allowedSubnetsCsv.isBlank()) {
             throw new OperationNotAllowedException("Classroom session has no configured private LAN allowlist");
@@ -297,7 +354,7 @@ public class LocalNetworkPolicy {
             validatePrivateCidr(cidr);
         }
         if (!isIpInAnyCidr(cleanIp, cidrs)) {
-            throw new OperationNotAllowedException(actorLabel + " IP (" + cleanIp + ") is outside allowlisted classroom LAN subnets [" + allowedSubnetsCsv + "]");
+            throw new OperationNotAllowedException(actorLabel + " IP (" + cleanIp + ") is outside allowlisted classroom LAN/hotspot subnets [" + allowedSubnetsCsv + "]");
         }
     }
 
